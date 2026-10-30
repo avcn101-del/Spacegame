@@ -1,5 +1,5 @@
 # STATUS
 
-- Playable: nothing yet.
-- Owner said last: brief approved; mirror Tachi vs Tachi, 6 pieces, one torpedo type, active pause, tactical strip with tracers, epic impacts.
-- Being changed: building prototype 0 (waiting for go).
+- Playable: prototype 0 on branch `p0`: Rocinante vs Pella, six orders, active pause, tactical strip, impact FX.
+- Owner said last: brief approved; go.
+- Being changed: waiting for the owner to play five battles and write three lines.
