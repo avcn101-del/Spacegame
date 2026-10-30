@@ -1,0 +1,10 @@
+// Cloudflare Workers config: serve the repository root as static assets.
+// Deploy-only. The game itself needs no npm and no build step.
+{
+  "name": "spacegame",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./",
+    "not_found_handling": "404-page"
+  }
+}
