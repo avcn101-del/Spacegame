@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Rocinante</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game">
+  <header>
+    <div class="num"><span class="l" id="l-clock"></span><span class="v" id="n-clock">0:00</span></div>
+    <div class="num"><span class="l" id="l-range"></span><span class="v" id="n-range">0.0</span></div>
+    <div id="title"></div>
+    <div id="phase"></div>
+    <button id="pause"></button>
+  </header>
+  <main>
+    <section class="panel me">
+      <div class="name" id="name-me"></div>
+      <canvas id="sil-me"></canvas>
+      <div class="nums">
+        <div class="num"><span class="l" id="l-torps"></span><span class="v" id="n-torps">0</span></div>
+        <div class="num"><span class="l" id="l-burns"></span><span class="v" id="n-burns">0</span></div>
+      </div>
+    </section>
+    <canvas id="tactical"></canvas>
+    <section class="panel them">
+      <div class="name" id="name-them"></div>
+      <canvas id="sil-them"></canvas>
+    </section>
+  </main>
+  <div id="order"></div>
+  <nav id="orders">
+    <div class="group">
+      <button id="btn-close"><span class="label"></span><span class="sub"></span></button>
+      <button id="btn-hold"><span class="label"></span><span class="sub"></span></button>
+      <button id="btn-open"><span class="label"></span><span class="sub"></span></button>
+    </div>
+    <div class="group">
+      <button id="btn-guard"><span class="label"></span><span class="sub"></span></button>
+      <button id="btn-rake"><span class="label"></span><span class="sub"></span></button>
+    </div>
+    <div class="group">
+      <button id="btn-torps" class="progress"><span class="label"></span><span class="sub"></span></button>
+      <button id="btn-rail" class="progress"><span class="label"></span><span class="sub"></span></button>
+      <button id="btn-burn"><span class="label"></span><span class="sub"></span></button>
+    </div>
+    <div class="group">
+      <button id="btn-run" class="danger"><span class="label"></span><span class="sub"></span></button>
+    </div>
+  </nav>
+  <div id="result">
+    <div id="result-text"></div>
+    <div id="result-seed"></div>
+    <div class="row"><button id="again"></button><button id="same"></button></div>
+  </div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
