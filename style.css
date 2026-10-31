@@ -30,12 +30,12 @@ header { position: absolute; top: 0; left: 0; right: 0; height: var(--top); disp
 #order.warn { color: var(--warn); animation: blink 0.5s steps(2) infinite; }
 #order.toast { color: var(--ok); } #order.paused { color: var(--dim); }
 @keyframes blink { to { opacity: 0.4; } }
-nav#orders { position: absolute; left: 0; right: 0; bottom: 0; height: var(--bottom); display: grid; grid-template-columns: 3fr 2fr 3fr 1fr; gap: 8px; padding: 0 8px 4px; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); background: linear-gradient(rgba(5,7,12,0), rgba(5,7,12,0.9) 40%); }
+nav#orders { position: absolute; left: 0; right: 0; bottom: 0; height: var(--bottom); display: grid; grid-template-columns: 3fr 3fr 2fr 3fr 1fr; gap: 6px; padding: 0 8px 4px; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); background: linear-gradient(rgba(5,7,12,0), rgba(5,7,12,0.9) 40%); }
 .group { display: grid; grid-auto-flow: column; gap: 4px; }
 button { font: inherit; color: var(--text); background: #0e1621; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; touch-action: manipulation; }
 nav button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0; padding: 0 2px; overflow: hidden; }
-nav button .label { font-size: 12px; letter-spacing: 0.12em; }
-nav button .hint { font-size: 8.5px; color: var(--dim); letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+nav button .label { font-size: 11px; letter-spacing: 0.1em; }
+nav button .hint { font-size: 8px; color: var(--dim); letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 nav button .sub { position: absolute; top: 3px; right: 5px; font-size: 10px; color: var(--text); }
 nav button.active { border-color: var(--me); background: #10243a; }
 nav button.ready { border-color: var(--ok); color: var(--ok); }
@@ -49,7 +49,7 @@ nav button.progress::after { content: ""; position: absolute; left: 0; bottom: 0
 .overlay.show { display: flex; }
 .overlay .box { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; max-width: 720px; }
 .overlay .h { font-size: 14px; letter-spacing: 0.2em; color: var(--dim); }
-#legend { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px 18px; font-size: 11px; text-align: left; }
+#legend { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px 14px; font-size: 9.5px; text-align: left; max-height: 200px; overflow-y: auto; }
 #legend li b { color: var(--me); letter-spacing: 0.1em; font-weight: normal; display: inline-block; width: 52px; }
 #legend li span { color: var(--text); }
 #result-text { font-size: 20px; letter-spacing: 0.1em; }

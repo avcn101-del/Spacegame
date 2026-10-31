@@ -20,9 +20,14 @@ export const N = {
   LATERAL_DAMP: 1.0,     // per second; autopilot bleeds off sideways drift
 
   // --- ship ---
-  PIECE_HP: 10,          // every piece dies to one torpedo or one slug
-  BRIDGE_WEIGHT: 0.5,    // bridge is buried in the hull: half as likely to be the piece hit
-  BRIDGE_HP_MULT: 2,     // bridge takes two torpedoes, not one; one lucky hit should not end it
+  ROOM_HP: 10,           // a room dies to one torpedo or one slug
+  BRIDGE_WEIGHT: 0.5,    // broadside: bridge is buried in the hull, half as likely to be the room hit
+  BRIDGE_HP_MULT: 2,     // bridge takes two hits, not one; one lucky hit should not end it
+  FACE_TURN_TIME: 4,     // seconds to swing the ship; while turning everything is exposed, like broadside
+  OFF_AXIS_ACCEL: 0.5,   // thrusters push half as hard as the main drive; facing the wrong way is slow
+  SPILL: 0.5,            // torpedo and rail: share of damage that carries into the next room in line
+  SENSORS_DEAD_HIT: 0.5, // with sensors gone, PDC and torpedoes hit this fraction as often
+  CREW_DEAD_SPEED: 0.5,  // with crew gone, reload and recharge run at this speed
 
   // --- PDC ---
   PDC_RANGE: 3,          // short; "stopped by distance"

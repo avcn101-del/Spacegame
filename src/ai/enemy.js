@@ -1,7 +1,7 @@
 // The enemy: same orders as the player, from a small rule table shaped by a preset.
 // Thinks once per AI_TICK seconds. Uses the battle's seeded rng.
 import { N } from '../numbers.js';
-import { alivePieces, alive, pdcCount } from '../sim/ship.js';
+import { alivePieces, alive, canAimRail } from '../sim/ship.js';
 import { PRESETS, DEFAULT_PRESET } from './presets.js';
 import { makeRng } from '../rng.js';
 
@@ -37,6 +37,12 @@ function think(b, P, me, you, give, rng) {
   // Run: losing badly and few pieces left.
   if (!me.orders.run && P.runAt > 0 && mine <= P.runAt && mine < yours) { give('run'); return; }
 
+  // Face: bow for the approach and the railgun, broadside for both PDCs. Run handles tail itself.
+  if (!me.orders.run) {
+    const want = P.face === 'auto' ? (b.range() > N.PDC_RANGE ? 'bow' : 'side') : P.face;
+    if (me.faceTarget !== want) give(want);
+  }
+
   // Burn: their railgun is aiming at us.
   if (you.railAim >= 0 && me.burns > 0 && rng.chance(P.burnChance)) give('burn');
 
@@ -47,13 +53,13 @@ function think(b, P, me, you, give, rng) {
   } else give(P.pdc);
 
   // Torpedoes.
-  if (P.torps === 'always' || (P.torps === 'guardDown' && pdcCount(you) === 0)) give('torps');
+  if (P.torps === 'always' || (P.torps === 'guardDown' && !alive(you, 'pdc'))) give('torps');
 
   // Railgun: sure shot when they cannot dodge (no burns, or aiming themselves); otherwise a gamble.
-  if (you.burns === 0 || you.railAim >= 0 || rng.chance(P.railGamble)) give('rail');
+  if (canAimRail(me) && (you.burns === 0 || you.railAim >= 0 || rng.chance(P.railGamble))) give('rail');
 
   // Range.
-  if (P.openWhenNoPdc && pdcCount(me) === 0 && (alive(me, 'rail') || me.torps > 0)) give('open');
+  if (P.openWhenNoPdc && !alive(me, 'pdc') && (alive(me, 'rail') || me.torps > 0)) give('open');
   else if (mine < yours - 2 && P.openWhenNoPdc) give('open');
   else give(P.range);
 }

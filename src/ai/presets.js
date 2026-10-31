@@ -4,6 +4,7 @@ export const PRESETS = {
   // The default enemy: closes, rakes, fires everything, gambles on the railgun.
   brawler: {
     range: 'close',         // where it wants to be
+    face: 'auto',           // 'auto' = bow while approaching, side in the knife fight; or 'bow' | 'side'
     pdc: 'auto',            // 'auto' = guard when torpedoes are coming, rake otherwise
     torps: 'always',        // 'always' | 'guardDown' (only when their PDCs are gone) | 'never'
     railGamble: 0.3,        // chance per tick to fire at a target that can still dodge
@@ -13,17 +14,17 @@ export const PRESETS = {
   },
   // Stays out at torpedo range, lets the railgun do the work.
   sniper: {
-    range: 'open', pdc: 'guard', torps: 'always',
+    range: 'open', face: 'bow', pdc: 'guard', torps: 'always',
     railGamble: 0.1, burnChance: 0.6, runAt: 2, openWhenNoPdc: true,
   },
   // Closes, keeps PDCs on guard, saves torpedoes until their PDCs are down.
   turtle: {
-    range: 'close', pdc: 'guard', torps: 'guardDown',
+    range: 'close', face: 'side', pdc: 'guard', torps: 'guardDown',
     railGamble: 0.0, burnChance: 0.6, runAt: 3, openWhenNoPdc: true,
   },
   // Fights until the end, never runs, never dodges.
   berserker: {
-    range: 'close', pdc: 'rake', torps: 'always',
+    range: 'close', face: 'side', pdc: 'rake', torps: 'always',
     railGamble: 1.0, burnChance: 0.0, runAt: 0, openWhenNoPdc: false,
   },
 };
