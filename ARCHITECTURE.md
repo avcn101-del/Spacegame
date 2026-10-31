@@ -12,8 +12,8 @@ src/main.js           game loop, active pause, slow-mo, wires modules
 src/numbers.js        every tunable number, one-line reason each
 src/rng.js            seeded random, the only random source
 src/text.js           all player-facing English strings
-src/ships/tachi.js    a ship as data: rooms bow to stern; armor (plated, double hp), bulkhead (aft wall spill does not cross)
-src/sim/ship.js       rooms, facing, exposure, line of fire, damage, "is beaten"
+src/ships/tachi.js    a ship as data: rooms bow to stern, bridge in the middle; kind per slot; armor (plated, double hp), bulkhead (aft wall spill does not cross)
+src/sim/ship.js       rooms, facing, exposure, line of fire, damage, the tear rule, "is beaten"
 src/sim/orders.js     the orders: refusal() and apply(); 'move' carries {heading, speed}
 src/input/drag.js     drag on the map -> move order; input only
 src/input/tap.js      tap on a silhouette panel -> target order or room info; input only
@@ -40,9 +40,10 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
 - `ships[0]` is `'me'` (Rocinante, facing +1, starts at negative x),
   `ships[1]` is `'them'` (Pella, facing -1). Each ship: `x, y, vx, vy`
   in km (the fight line starts as the x axis, y is lateral), `facing`,
-  `roomOrder` (bow to stern) and `pieces` map of room id to
-  `{hp, maxHp, alive}`, `armor` and `bulkheadAft` maps of room id to true
-  (plated rooms; walls that stop spill, the hull's tear lines); `heading` / `headingTarget` radians on the map (0 is
+  `roomOrder` (bow to stern: rail, sensors, pdc, bridge, crew, tubes, drive)
+  and `pieces` map of room id to `{hp, maxHp, alive, torn?}` (`torn`: it broke
+  off and drifts), `armor` and `bulkheadAft` maps of room id to true
+  (plated rooms; walls that stop spill); `heading` / `headingTarget` radians on the map (0 is
   +x), `turnLeft` seconds of swing left, `face` (`bow | side | tail`: what the
   enemy sees, derived every step from heading versus bearing, `BOW_CONE`);
   `move {speed, coast}`; `orders {pdc, run}`,
@@ -53,6 +54,12 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   (`lineOfFire`). Bow-on: rail first. Tail-on: drive first. Broadside or
   turning: a random room, spill into its neighbour. PDC chews the first
   room; torpedo and rail kill the first and wound the next.
+- The tear rule: when a room dies, every living room with no path to the
+  bridge through living rooms tears off (`tornRooms`, `tearOff`): hp 0, not
+  alive, `torn` true, the tubes take the torpedo stock with them. One
+  `pieceDead {cause: 'tear'}` per room, then one `tear {ship, end: 'bow'|'stern',
+  pieces}` per end. The bridge is in the middle, so a cut loses at most three
+  rooms: pdc dead loses rail and sensors, crew dead loses tubes and drive.
 - Tap-a-room: a `target` order names an enemy room. A torpedo carries the
   room it was sent at (`room`); if that room is not the exposed end it slows
   to `TORP_FLANK_SPEED`, swings out `TORP_FLANK` beside the target on its
@@ -69,7 +76,8 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   `pdcHit {x,y,ship,piece}`, `torpLaunch {x,y,by,count}`,
   `torpKilled {x,y,by}`, `torpHit {x,y,ship,piece}`, `railFire {x,y,by}`,
   `railHit {x,y,ship,piece}`, `railMiss {x,y,ship}`, `burn {x,y,by,dir}`,
-  `pieceDead {x,y,ship,piece,cause}`, `turn {x,y,by,to}`, `torpMiss {x,y,ship}`,
+  `pieceDead {x,y,ship,piece,cause}` (cause `torp | rail | tear`),
+  `tear {x,y,ship,end,pieces}`, `turn {x,y,by,to}`, `torpMiss {x,y,ship}`,
   `end {result}`. `torpHit` and `railHit` carry `piece` and `spill`.
 - `battle.emit(ev)` is the only way the sim publishes an event; it also feeds
   `battle.stats`. `battle.log` holds every accepted order with its exact `t`;

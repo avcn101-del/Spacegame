@@ -104,18 +104,22 @@ now beats berserker 28/2. TORP_DAMAGE 5 stays in the pocket if the owner still
 says the first salvo wins. The owner's replays: 46641, 7852 (tap bridge, salvo,
 stern: win in 24 s with no room lost).
 
-## After that, agreed in principle (ask go, give the estimate first)
+## Done this chat: ships break with consequences (PR 16)
 
-Ships break with consequences, one PR, about 1.5 hours: a dead room is a
-hole; any room with no path to the bridge through living rooms detaches and
-drifts away as debris (its drive stops pushing, its tubes and torpedoes are
-lost). Bulkheads are already in place as the tear lines. Move the bridge to
-the middle of the chain (rail, sensors, pdc, bridge, crew, tubes, drive) so
-a cut loses at most three rooms; the silhouette art must swap the two rooms.
-Add a `kind` per slot in the design for later variants, no UI. Risk flagged
-to the owner: the room next to the bridge becomes the obvious tap, and
-battles get shorter still. Open: should a drive-dead ship drifting past 16
-km be a win for the other side rather than a draw.
+The tear rule, as agreed: a dead room is a hole; any living room with no path
+to the bridge through living rooms tears off (hp 0, `torn` for the renderer,
+the tubes take the torpedo stock). The bridge moved to the middle of the chain
+(rail, sensors, pdc, bridge, crew, tubes, drive); bulkheads stay aft of
+sensors, pdc, tubes, so the pdc is its own cell and the bridge spills into
+crew. The silhouette art swapped bridge and pdc; a torn room is drawn adrift
+past its end, the hull base shrinks to what is attached; one event `tear
+{end, pieces}` per end, one toast line. `kind` per slot in `tachi.js`, no UI.
+Measured (arena 30 seeds): brawler vs brawler 40 s avg (44 before), rooms lost
+per battle 6.2 (5.4), brawler vs berserker 23 s. Risks said out loud: crew
+(10 hp, unplated, next to the bridge) is the obvious tap, one torpedo or slug
+there loses tubes, torpedoes and drive; more "broke off" draws, because a
+drive-dead ship drifts past 16 km (open: should that be a win for the other
+side; in NOTES). Bulkheads no longer claim to be tear lines in the text.
 
 After that, in this order, each only if the owner says a battle was boring
 without it: a second ship as data (Belter gunship), slot variants from a

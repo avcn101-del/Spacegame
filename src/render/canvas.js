@@ -746,6 +746,12 @@ export function makeTactical(canvas, opts = {}) {
         fx.debris(a, 10, { speedMin: 30, speedMax: 120 });
         pending.push({ ax: ev.x, ay: ev.y, delay: 0.15 });
         break;
+      case 'tear':
+        // a section breaks away: big slow chunks that linger, drifting off the mark
+        fx.flash(a, { r: 18, grow: 24, life: 0.4, col: C.white, col2: C.fire });
+        fx.debris(a, 6 * ev.pieces.length, { speedMin: 8, speedMax: 40, lifeMin: 3, lifeMax: 6, sizeMin: 3, sizeMax: 7 });
+        fx.shakeIt(4, 0.4);
+        break;
       case 'torpKilled':
         fx.flash(a, { r: 11, grow: 25, life: 0.3, col: C.white, col2: C.fire });
         fx.sparks(a, 10, { speedMin: 60, speedMax: 180, lifeMin: 0.15, lifeMax: 0.35, col: C.hot });
@@ -1037,6 +1043,18 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
         fx.debris(a, 8, { speedMin: 30 * k, speedMax: 110 * k });
         fx.smoke(a, 4, {});
         pending.push({ kind: 'death', piece: ev.piece, delay: 0.15 });
+        break;
+      }
+      case 'tear': {
+        if (!mine) break;
+        // the section parts from the hull: a flash along the tear and heavy debris flying out the end
+        const endName = ev.end === 'bow' ? 'bow' : 'nozzle';
+        const a = mark(endName);
+        const dir = ev.end === 'bow' ? fwd() : aft();
+        fx.flash(a, { r: 24 * k, grow: 30 * k, life: 0.5, col: C.white, col2: C.fire });
+        fx.debris(a, 18, { dir, spread: 1.2, speedMin: 40 * k, speedMax: 160 * k, lifeMin: 1.5, lifeMax: 3, sizeMin: 2.5 * k, sizeMax: 6 * k });
+        fx.smoke(a, 10, {});
+        fx.shakeIt(12 * k, 0.6);
         break;
       }
       case 'railMiss':
