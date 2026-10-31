@@ -40,6 +40,9 @@ function think(b, P, me, you, give, rng) {
   // Burn: their railgun is aiming at us.
   if (you.railAim >= 0 && me.burns > 0 && rng.chance(P.burnChance)) give('burn');
 
+  // Target room, by preset. Dropped by the sim when that room dies; then the exposed end.
+  if (P.target && alive(you, P.target) && me.target !== P.target) give('target', { room: P.target });
+
   // PDC mode.
   if (P.pdc === 'auto') {
     const incoming = b.projectiles.some((p) => p.kind === 'torp' && p.target === me.id);

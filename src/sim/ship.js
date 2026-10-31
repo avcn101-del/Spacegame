@@ -30,6 +30,7 @@ export function makeShip(id, name, x, facing, design) {
     railAimStart: -1,   // game time the current aim began
     thrust: 0,          // -1..1 along x, what the drive is doing right now (for the renderer)
     rakeTarget: null,   // room the PDCs are chewing on
+    target: null,       // the enemy room this ship's weapons are told to go for, or null
     tracerAcc: 0,       // accumulates tracer spawns
   };
 }
@@ -47,6 +48,27 @@ export const isBeaten = (ship) => !alive(ship, 'bridge') || !hasWeapons(ship);
 // Hit chance multiplier from sensors; reload and recharge speed from crew.
 export const aimFactor = (ship) => (alive(ship, 'sensors') ? 1 : N.SENSORS_DEAD_HIT);
 export const crewSpeed = (ship) => (alive(ship, 'crew') ? 1 : N.CREW_DEAD_SPEED);
+// The room at the exposed end, or null when broadside (every room is exposed).
+export function exposedEnd(ship) {
+  const living = alivePieces(ship);
+  const e = exposure(ship);
+  if (living.length === 0 || e === 'side') return null;
+  return e === 'bow' ? living[0] : living[living.length - 1];
+}
+// Where damage spills from a room: the nearest living neighbour along the hull, sternward first.
+export function spillNeighbour(ship, room) {
+  const order = ship.roomOrder, i = order.indexOf(room);
+  for (let k = 1; k < order.length; k++) {
+    if (order[i + k] && ship.pieces[order[i + k]].alive) return order[i + k];
+    if (order[i - k] && ship.pieces[order[i - k]].alive) return order[i - k];
+  }
+  return null;
+}
+// The rooms a shot aimed at one room meets: that room, then its neighbour.
+export function lineOfFireAt(ship, room) {
+  const next = spillNeighbour(ship, room);
+  return next ? [room, next] : [room];
+}
 // The rooms a shot meets, in order, given where the enemy is.
 // Bow-on: from the bow. Tail-on: from the stern. Broadside: a random alive room, then another.
 export function lineOfFire(ship, rng) {
@@ -56,15 +78,7 @@ export function lineOfFire(ship, rng) {
   if (e === 'bow') return living;
   if (e === 'tail') return living.slice().reverse();
   const items = living.map((r) => ({ name: r, weight: r === 'bridge' ? N.BRIDGE_WEIGHT : 1 }));
-  const first = rng.weighted(items).name;
-  // spill goes into the nearest living neighbour along the hull, sternward first
-  const order = ship.roomOrder, i = order.indexOf(first);
-  let next = null;
-  for (let k = 1; k < order.length && !next; k++) {
-    if (order[i + k] && ship.pieces[order[i + k]].alive) next = order[i + k];
-    else if (order[i - k] && ship.pieces[order[i - k]].alive) next = order[i - k];
-  }
-  return next ? [first, next] : [first];
+  return lineOfFireAt(ship, rng.weighted(items).name);
 }
 
 // Apply damage to a room. Returns {room, died}.

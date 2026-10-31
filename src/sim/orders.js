@@ -3,8 +3,9 @@
 import { N } from '../numbers.js';
 import { alive, canAimRail, canFireTubes } from './ship.js';
 
-export const ORDERS = ['move', 'hold', 'guard', 'rake', 'torps', 'rail', 'burn', 'run'];
+export const ORDERS = ['move', 'hold', 'guard', 'rake', 'torps', 'rail', 'burn', 'run', 'target'];
 // 'move' takes an argument {face: 'bow'|'side'|'tail', speed: km/s >= 0, dir: 1|-1}.
+// 'target' takes {room: an enemy room id, or null to clear}: torpedoes go for that room, PDCs chew it when broadside.
 
 // Returns null if allowed, else a short reason key (see text.js).
 export function refusal(ship, order, ctx, arg) {
@@ -48,6 +49,14 @@ export function refusal(ship, order, ctx, arg) {
       if (!drive) return 'noDrive';
       if (ship.orders.run) return 'running';
       return null;
+    case 'target': {
+      const room = arg && arg.room;
+      if (room === null || room === undefined) return ship.target === null ? 'noTarget' : null;
+      if (!ctx.enemy || !(room in ctx.enemy.pieces)) return 'badTarget';
+      if (!alive(ctx.enemy, room)) return 'roomDead';
+      if (ship.target === room) return 'sameTarget';
+      return null;
+    }
   }
   return 'unknown';
 }
@@ -75,6 +84,8 @@ export function apply(ship, order, battle, arg) {
       ship.move = { speed: N.MAX_SPEED, dir: ship.move.dir, holdRange: null };
       setFace(ship, 'tail', battle);
       break;
+    case 'target':
+      ship.target = arg && arg.room ? arg.room : null; break;
   }
 }
 

@@ -702,3 +702,56 @@ export function drawShipMark(ctx, ship, x, y, scale, angle) {
   }
   ctx.restore();
 }
+
+// --- public: tap-a-room ---------------------------------------------------------
+
+// Canvas point -> ship-local (u, v); the inverse of shipPoint.
+function localPoint(x, y, box, facing, orientation) {
+  if (orientation === 'vertical') {
+    const vv = ((x - box.x) / box.w) * 2 - 1;
+    return { u: 1 - (y - box.y) / box.h, v: facing === -1 ? -vv : vv };
+  }
+  const uu = (x - box.x) / box.w;
+  return { u: facing === -1 ? 1 - uu : uu, v: ((y - box.y) / box.h) * 2 - 1 };
+}
+
+// The room under a canvas point, or null when the point is clearly off the hull.
+// Generous across the hull (a thumb is wide); along the hull a little past each end.
+export function roomAtPoint(x, y, box, facing, orientation = 'horizontal') {
+  const { u, v } = localPoint(x, y, box, facing, orientation);
+  if (u < -0.15 || u > 1.15 || Math.abs(v) > 1.6) return null;
+  const uu = Math.max(ROOM_DEFS.drive.span[0] + 1e-6, Math.min(1 - 1e-6, u));
+  for (const name of BOW_TO_STERN) {
+    const [a, b] = ROOM_DEFS[name].span;
+    if (uu >= a && uu <= b) return name;
+  }
+  return null;
+}
+
+// A bracket around a room: four corner ticks just outside the hull, in `color`.
+// The room one side's weapons are going for.
+export function drawRoomBracket(ctx, room, box, facing, orientation = 'horizontal', color = '#ffffff', t = 0) {
+  const def = ROOM_DEFS[room];
+  if (!def) return;
+  const [u0, u1] = def.span;
+  const uA = u0 - 0.012, uB = u1 + 0.012;
+  const vv = Math.max(halfH(u0), halfH(u1)) + 0.34; // outside the turret bumps and the mast
+  const du = (uB - uA) * 0.3, dv = 0.2;
+  const P = (u, v) => shipPoint(u, v, box, facing, orientation);
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.8 + 0.2 * Math.sin(t * 5);
+  ctx.lineWidth = 2;
+  ctx.shadowBlur = 6;
+  ctx.shadowColor = color;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (const [u, su] of [[uA, 1], [uB, -1]]) {
+    for (const [v, sv] of [[-vv, 1], [vv, -1]]) {
+      const c = P(u, v), a = P(u + su * du, v), b = P(u, v + sv * dv);
+      ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.lineTo(b.x, b.y);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+}

@@ -1,6 +1,6 @@
 // Replays: a battle is its seed plus the list of accepted orders.
 // exportReplay(battle) gives a small JSON object; makeReplayer feeds the orders back in.
-export const REPLAY_VERSION = 3; // 3: move orders with {face, speed, dir}
+export const REPLAY_VERSION = 4; // 3: move orders with {face, speed, dir}; 4: target orders with {room}
 
 export function exportReplay(battle, extra = {}) {
   return {
