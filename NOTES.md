@@ -21,3 +21,10 @@ Ideas go here. They are not built until the owner asks.
 - Burn as a torpedo dodge (today it only beats the railgun).
 - PDC ammo: Guard spends rounds, a decision between Guard now and Rake later.
 - Lock time for tap-a-room: the sensors need a few seconds to lock a room, like the rail aim; moving or losing sensors drops it.
+- Flares or decoys against torpedoes (the owner asked after battle 20531, where
+  Guard killed 8 of 8). Decision it creates: pop a flare before their salvo
+  and keep Raking instead of switching to Guard. What stops it: a small stock,
+  like Burns; their living sensors see through part of it. What it costs: an
+  eighth button, one more number, torpedoes weaker still. Worth a look only
+  after a battle lost because Guard was forced all the way and Rake never got
+  its turn, or when a sniper's torpedoes reach the drive too easily.
