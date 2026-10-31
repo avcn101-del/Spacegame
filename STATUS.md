@@ -1,5 +1,5 @@
 # STATUS
 
-- Playable: rooms layer 1: seven rooms bow to stern, FACE orders (bow / side / tail), shots hit the exposed end first; sensors and crew rooms; plus replay, stats, presets, arena.
-- Owner said last: go on layer 1 with sensors as a room; shields and jammer parked.
-- Being changed: waiting for the owner to play five battles and write three lines.
+- Playable: https://spacegame.avcn101.workers.dev/ (Cloudflare Workers, deploys from `main`). Rooms layer 1: seven rooms, FACE orders, shots hit the exposed end first; replay, stats, presets, arena.
+- Owner said last: buttons are confusing without groups; tap-to-target on the enemy ship is expected.
+- Being changed: proposal for grouped buttons (Maneuver / Attack / Defend) and tap-a-room targeting when the enemy is broadside; waiting for go.
