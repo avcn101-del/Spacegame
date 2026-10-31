@@ -63,8 +63,8 @@ src/render/hud.js     four numbers, current order, buttons, pause, result, the h
 - The one geometry rule: a shot is a ray through the form from where it really
   comes from (`shotFrom`, `lineOfFire`, `lineOfFireAt`): along a row from the
   bow or the stern, along a column from a side. The first living cell's room
-  takes the hit; `SPILL` into the next room on the ray unless the first is
-  frame, which soaks it. PDC chews the first room of its ray; torpedo and rail
+  takes the hit; `SPILL` into the next room on the ray; from frame, the part its
+  hp did not absorb carries instead. PDC chews the first room of its ray; torpedo and rail
   kill the first and wound the next.
 - The tear rule: when a room dies, flood from the bridge over living cells;
   cells not reached are `cut`, a room with no living cell left tears off
@@ -79,10 +79,11 @@ src/render/hud.js     four numbers, current order, buttons, pause, result, the h
   launch side, then turns in; on impact it takes the ray with the least cover
   to that room, and the cover takes the hit first: longer and slower inside PDC
   range, so more are shot down. PDCs chew the chosen room while a ray from
-  the shooter meets it first. The railgun ignores it. Torpedoes have a
+  the shooter meets it first. The railgun aims the same way (since the form;
+  on the chain it ignored the tap). Torpedoes have a
   proximity fuse (`TORP_FUSE`): they go off at closest approach.
 - `projectiles`: `{kind: 'torp', owner, target, x, y, vx, vy, room, side, dove}`
-  and `{kind: 'slug', owner, target, x, y, tx, ty, hit}`.
+  and `{kind: 'slug', owner, target, x, y, tx, ty, hit, room}`.
 - `tracers`: `{x1, y1, x2, y2, ttl, owner}` short-lived PDC lines.
 - `events`: pushed by the sim each step, drained by `main.js` and handed
   to every renderer's `onEvent(ev)`. Types:
@@ -131,10 +132,11 @@ What the sim exposes (render reads, never writes):
   rows) from the sign of the bearing. Unaimed: the ray is drawn uniformly from the rows or
   columns that show a living cell to the shooter. Aimed at a room (tap-a-room): among the
   rays from that direction through a living cell of that room, the one with the fewest
-  living cells in front (ties by the seeded rng). The rail ignores the aim, as decided.
+  living cells in front (ties by the seeded rng). The rail aims the same way as a torpedo.
   Diagonal rays are not built (NOTES).
 - Resolution: the first living cell's room takes the hit; `SPILL` carries into the next
-  distinct room along the ray unless the hit room is frame: frame soaks and stops it.
+  distinct room along the ray. When the hit room is frame, what its hp did not absorb
+  carries instead: frame is cover, not a wall.
   PDC Rake chews the first room of its ray, re-drawn when that room dies, as today.
   "Exposed" (torpedo flank, HUD): a room with a zero-cover ray from that direction; a
   torpedo sent at a covered room flanks to the side as today and resolves from there.

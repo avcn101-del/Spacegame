@@ -21,6 +21,9 @@ Ideas go here. They are not built until the owner asks.
 - Burn as a torpedo dodge (today it only beats the railgun).
 - PDC ammo: Guard spends rounds, a decision between Guard now and Rake later.
 - Lock time for tap-a-room: the sensors need a few seconds to lock a room, like the rail aim; moving or losing sensors drops it.
+- PDC mounts fire by their side: a mount on the top edge shoots only when the enemy is above.
+  Needs per-mount exposure; today the pdc room's turret count is one number. After the six
+  mounts are cells.
 - Stalemate after the form: two hulks, drives dead, tubes alive but tail-on, 200 s of nothing
   (brawler mirror seeds 2, 6, 20, 30). Candidates: tail-on tubes may fire at half rate; a
   drive-dead ship is beaten when it cannot bring a weapon to bear; the AI stops turning stern

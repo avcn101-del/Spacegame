@@ -9,16 +9,18 @@ const pdcFactor = (dist) => clamp01(1 - dist / N.PDC_RANGE);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 const isFrame = (room) => room.startsWith('frame:');
-// Full damage to the first room on the ray from (fromX, fromY), SPILL of it to the next, unless the
-// first is frame: frame soaks the blast. A chosen room (alive) picks the ray with the least cover in
-// front of it; the cover still takes the hit first. Emits hit and death events.
+// Full damage to the first room on the ray from (fromX, fromY), SPILL of it to the next. When the
+// first is frame it is cover, not a wall: it takes what it can and the rest of the blow carries into
+// the room behind (a slug does not stop at a girder). A chosen room (alive) picks the ray with the
+// least cover in front of it; the cover still takes the hit first. Emits hit and death events.
 function strike(battle, target, kind, amount, fromX, fromY, room = null) {
   const dir = shotFrom(target, fromX, fromY);
   let rooms = room && alive(target, room) ? lineOfFireAt(target, room, dir, battle.rng) : [];
   if (rooms.length === 0) rooms = lineOfFire(target, battle.rng, dir);
   if (rooms.length === 0) return;
-  const spill = rooms[1] && !isFrame(rooms[0]) ? rooms[1] : null;
-  const hits = [[rooms[0], amount], [spill, amount * N.SPILL]].filter(([r]) => r);
+  const carry = isFrame(rooms[0]) ? Math.max(0, amount - target.pieces[rooms[0]].hp) : amount * N.SPILL;
+  const spill = rooms[1] && carry > 0 ? rooms[1] : null;
+  const hits = [[rooms[0], amount], [spill, carry]].filter(([r]) => r);
   battle.emit({ type: kind, x: target.x, y: target.y, ship: target.id, piece: rooms[0], spill });
   for (const [room, dmg] of hits) {
     const r = damage(target, room, dmg);
@@ -163,6 +165,7 @@ export function stepRail(battle, ship, enemy, dt) {
   const hit = enemy.lastBurnT < ship.railAimStart;
   battle.projectiles.push({
     kind: 'slug', owner: ship.id, target: enemy.id, hit,
+    room: ship.target && alive(enemy, ship.target) ? ship.target : null, // the room it was aimed at, like a torpedo
     x: ship.x, y: ship.y,
     tx: enemy.x, ty: hit ? enemy.y : enemy.y - Math.sign(enemy.vy || 1) * 0.6, aimStart: ship.railAimStart,
     dead: false, age: 0,
@@ -178,7 +181,7 @@ export function stepSlug(battle, s, dt) {
     s.x = s.tx; s.y = s.ty; s.dead = true;
     const target = battle.shipById(s.target);
     const shooter = battle.shipById(s.owner);
-    if (s.hit) strike(battle, target, 'railHit', N.ROOM_HP, shooter.x, shooter.y); // the rail ignores ship.target
+    if (s.hit) strike(battle, target, 'railHit', N.ROOM_HP, shooter.x, shooter.y, s.room); // the least-covered ray to the aimed room
     else battle.emit({ type: 'railMiss', x: s.x, y: s.y, ship: target.id });
     return;
   }
