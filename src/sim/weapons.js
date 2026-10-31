@@ -1,7 +1,7 @@
 // PDC, torpedo, railgun. Each function advances one ship's weapon by dt.
 // Hits land on the rooms the shot meets (ship.lineOfFire): the exposed end first.
 import { N } from '../numbers.js';
-import { alive, pdcCount, damage, lineOfFire, exposure, aimFactor, crewSpeed, canAimRail } from './ship.js';
+import { alive, pdcCount, damage, lineOfFire, lineOfFireAt, exposedEnd, exposure, aimFactor, crewSpeed, canAimRail } from './ship.js';
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // 1 at point blank, 0 at PDC_RANGE and beyond.
@@ -9,8 +9,9 @@ const pdcFactor = (dist) => clamp01(1 - dist / N.PDC_RANGE);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 // Full damage to the first room in line, SPILL of it to the next. Emits hit and death events.
-function strike(battle, target, kind, amount) {
-  const rooms = lineOfFire(target, battle.rng);
+// A chosen room (alive) is first in line instead of the exposed end.
+function strike(battle, target, kind, amount, room = null) {
+  const rooms = room && alive(target, room) ? lineOfFireAt(target, room) : lineOfFire(target, battle.rng);
   if (rooms.length === 0) return;
   const hits = [[rooms[0], amount], [rooms[1], amount * N.SPILL]].filter(([r]) => r);
   battle.emit({ type: kind, x: target.x, y: target.y, ship: target.id, piece: rooms[0], spill: rooms[1] || null });
@@ -45,8 +46,10 @@ export function stepPdc(battle, ship, enemy, dt) {
   const d = dist(ship, enemy);
   if (d > N.PDC_RANGE) return;
   spawnTracers(battle, ship, enemy, dt, turrets);
-  // End-on: the exposed room, always. Broadside: pick one room and chew on it until it dies.
-  if (exposure(enemy) !== 'side' || !ship.rakeTarget || !alive(enemy, ship.rakeTarget)) {
+  // End-on: the exposed room, always. Broadside: the chosen room if there is one, else pick one
+  // room and chew on it until it dies.
+  if (exposure(enemy) === 'side' && ship.target && alive(enemy, ship.target)) ship.rakeTarget = ship.target;
+  else if (exposure(enemy) !== 'side' || !ship.rakeTarget || !alive(enemy, ship.rakeTarget)) {
     ship.rakeTarget = lineOfFire(enemy, battle.rng)[0] || null;
   }
   if (!ship.rakeTarget) return;
@@ -83,6 +86,8 @@ export function launchTorps(battle, ship, enemy) {
       x: ship.x, y: ship.y + side * 0.15,
       vx: ship.vx + ship.facing * 0.3, vy: ship.vy + side * 0.4,
       aim: aimFactor(ship), // the shooter's sensors at launch decide whether it finds its mark
+      room: ship.target && alive(enemy, ship.target) ? ship.target : null, // the room it goes for, else the exposed end
+      side, dove: false,    // a buried room: swing wide on this side, then dive in; dove once past the shoulder
       dead: false, age: 0,
     });
   }
@@ -91,24 +96,46 @@ export function launchTorps(battle, ship, enemy) {
   battle.emit({ type: 'torpLaunch', x: ship.x, y: ship.y, by: ship.id, count: n });
 }
 
+// A torpedo sent at a room that is not the exposed end slows to TORP_FLANK_SPEED, swings wide to
+// a point TORP_FLANK beside the target (across the line from the shooter), then turns in: slow
+// enough to make the turn, a longer and slower flight inside PDC range, so more of them die.
+// Returns {x, y, speed}: the point it homes on right now and its speed cap.
+function torpAim(battle, t, target) {
+  const buried = t.room && alive(target, t.room) && exposedEnd(target) !== null && exposedEnd(target) !== t.room;
+  if (!buried) return { x: target.x, y: target.y, speed: N.TORP_SPEED };
+  const slow = N.TORP_SPEED * N.TORP_FLANK_SPEED;
+  if (t.dove) return { x: target.x, y: target.y, speed: slow };
+  const shooter = battle.shipById(t.owner);
+  const dx = target.x - shooter.x, dy = target.y - shooter.y;
+  const d = Math.hypot(dx, dy) || 1e-6;
+  const wx = target.x - (dy / d) * t.side * N.TORP_FLANK, wy = target.y + (dx / d) * t.side * N.TORP_FLANK;
+  if (Math.hypot(wx - t.x, wy - t.y) < N.TORP_FLANK * 0.5) { t.dove = true; return { x: target.x, y: target.y, speed: slow }; }
+  return { x: wx, y: wy, speed: slow };
+}
+
 export function stepTorp(battle, t, dt) {
   const target = battle.shipById(t.target);
   t.age += dt;
-  // homing: accelerate toward target, cap speed
-  const dx = target.x - t.x, dy = target.y - t.y;
-  const d = Math.hypot(dx, dy) || 1e-6;
-  t.vx += (dx / d) * N.TORP_HOMING * dt;
-  t.vy += (dy / d) * N.TORP_HOMING * dt;
+  // homing: accelerate toward the aim point, cap speed
+  const aim = torpAim(battle, t, target);
+  const ax = aim.x - t.x, ay = aim.y - t.y;
+  const da = Math.hypot(ax, ay) || 1e-6;
+  t.vx += (ax / da) * N.TORP_HOMING * dt;
+  t.vy += (ay / da) * N.TORP_HOMING * dt;
+  const dBefore = Math.hypot(target.x - t.x, target.y - t.y);
   const sp = Math.hypot(t.vx, t.vy);
-  if (sp > N.TORP_SPEED) { t.vx *= N.TORP_SPEED / sp; t.vy *= N.TORP_SPEED / sp; }
+  if (sp > aim.speed) { t.vx *= aim.speed / sp; t.vy *= aim.speed / sp; }
   t.x += t.vx * dt; t.y += t.vy * dt;
-  if (d < 0.08) {
+  const d = Math.hypot(target.x - t.x, target.y - t.y);
+  // Proximity fuse: go off at closest approach when that is inside TORP_FUSE, or on a direct hit.
+  const closest = d > dBefore && dBefore < N.TORP_FUSE;
+  if (d < 0.08 || closest) {
     t.dead = true;
     if (!battle.rng.chance(t.aim)) {
       battle.emit({ type: 'torpMiss', x: t.x, y: t.y, ship: target.id });
       return;
     }
-    strike(battle, target, 'torpHit', N.ROOM_HP);
+    strike(battle, target, 'torpHit', N.ROOM_HP, t.room);
   }
 }
 

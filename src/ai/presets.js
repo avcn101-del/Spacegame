@@ -11,21 +11,22 @@ export const PRESETS = {
     burnChance: 0.3,        // chance per tick to burn while a railgun aims at it
     runAt: 2,               // run when this few pieces are left and losing
     openWhenNoPdc: true,    // back off when both PDCs are gone
+    target: 'pdc',          // the enemy room it goes for: torpedoes flank to it, PDCs chew it broadside; null for the exposed end
   },
   // Stays out at torpedo range, lets the railgun do the work.
   sniper: {
     range: 'open', face: 'bow', pdc: 'guard', torps: 'always',
-    railGamble: 0.1, burnChance: 0.6, runAt: 2, openWhenNoPdc: true,
+    railGamble: 0.1, burnChance: 0.6, runAt: 2, openWhenNoPdc: true, target: 'drive',
   },
   // Closes, keeps PDCs on guard, saves torpedoes until their PDCs are down.
   turtle: {
     range: 'close', face: 'side', pdc: 'guard', torps: 'guardDown',
-    railGamble: 0.0, burnChance: 0.6, runAt: 3, openWhenNoPdc: true,
+    railGamble: 0.0, burnChance: 0.6, runAt: 3, openWhenNoPdc: true, target: 'tubes',
   },
   // Fights until the end, never runs, never dodges.
   berserker: {
     range: 'close', face: 'side', pdc: 'rake', torps: 'always',
-    railGamble: 1.0, burnChance: 0.0, runAt: 0, openWhenNoPdc: false,
+    railGamble: 1.0, burnChance: 0.0, runAt: 0, openWhenNoPdc: false, target: null,
   },
 };
 export const DEFAULT_PRESET = 'brawler';

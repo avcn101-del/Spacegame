@@ -16,6 +16,7 @@ src/ships/tachi.js    a ship as data: rooms bow to stern, hp each
 src/sim/ship.js       rooms, facing, exposure, line of fire, damage, "is beaten"
 src/sim/orders.js     the orders: refusal() and apply(); 'move' carries {face, speed, dir}
 src/input/drag.js     drag on the map -> move order; input only
+src/input/tap.js      tap on a silhouette panel -> target order or room info; input only
 src/sim/weapons.js    pdc, torpedo, railgun
 src/sim/battle.js     makeBattle(seed): state, step(dt), phases, result
 src/sim/stats.js      per-side counters fed by battle.emit()
@@ -43,13 +44,22 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   `{hp, maxHp, alive}`; `face` / `faceTarget` (`bow | side | tail`) and
   `turnLeft` seconds of swing; `orders {range, pdc, run}`,
   `torps, torpReload, railCharge, railAim (-1 idle or seconds aiming),
-  burns, thrust`.
+  burns, thrust`; `target` is the enemy room this ship's weapons go for, or
+  null (the exposed end). The sim clears it when that room dies.
 - The one geometry rule: a shot meets the rooms from the exposed end
   (`lineOfFire`). Bow-on: rail first. Tail-on: drive first. Broadside or
   turning: a random room, spill into its neighbour. PDC chews the first
   room; torpedo and rail kill the first and wound the next.
-- `projectiles`: `{kind: 'torp', owner, target, x, y, vx, vy}` and
-  `{kind: 'slug', owner, target, x, y, tx, ty, hit}`.
+- Tap-a-room: a `target` order names an enemy room. A torpedo carries the
+  room it was sent at (`room`); if that room is not the exposed end it slows
+  to `TORP_FLANK_SPEED`, swings out `TORP_FLANK` beside the target on its
+  launch side, then turns in and hits that room (spill into its neighbour):
+  longer and slower inside PDC range, so more are shot down. Broadside, every
+  room is exposed and there is no detour. PDCs chew the chosen room only when
+  the enemy is broadside or turning. The railgun ignores it. Torpedoes have a
+  proximity fuse (`TORP_FUSE`): they go off at closest approach.
+- `projectiles`: `{kind: 'torp', owner, target, x, y, vx, vy, room, side, dove}`
+  and `{kind: 'slug', owner, target, x, y, tx, ty, hit}`.
 - `tracers`: `{x1, y1, x2, y2, ttl, owner}` short-lived PDC lines.
 - `events`: pushed by the sim each step, drained by `main.js` and handed
   to every renderer's `onEvent(ev)`. Types:
@@ -63,10 +73,11 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   seed plus log is a replay. The AI rolls its own seeded dice so a replay
   without the AI reproduces the same battle. The weapons loop alternates which
   ship goes first each step: a fixed order gave the first ship a 60/40 edge.
-- `battle.order(shipId, order)` returns null if accepted or a refusal key:
+- `battle.order(shipId, order, arg)` returns null if accepted or a refusal key:
   `noDrive running noPdc noTubes noTorps reloading tooFar noRail charging
   aiming noBurns aimingNoBurn alreadyPdc alreadyHolding badMove
-  tailNoTubes noSensors railNeedsBow over`.
+  tailNoTubes noSensors railNeedsBow badTarget roomDead sameTarget noTarget
+  over`. `target` takes `{room}` (null clears). Replay version 4 adds it.
 
 ## Render module contract
 
@@ -75,8 +86,10 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   `piecePoint(piece, box, facing)` returns the canvas point of a piece.
 - `canvas.js`: `makeTactical(canvas, {inset})` returns `{draw, onEvent,
   toScreen, toWorld, shipScreen, setGhost}`; `makeSilhouettePanel(canvas,
-  shipId, {orientation})` returns `{draw, onEvent}`. They own their own
-  particles, shake and flashes. They never mutate battle.
+  shipId, {orientation})` returns `{draw, onEvent, roomAt(x, y)}`. The panel
+  draws a bracket around the room the other side is going for, in that
+  side's color. They own their own particles, shake and flashes. They never
+  mutate battle.
 - Movement: one `move` order `{face, speed, dir}`; the autopilot chases
   the asked relative velocity (bow closing, tail opening at half drive,
   side circling with a locked range). `hold` locks the range. `run` is

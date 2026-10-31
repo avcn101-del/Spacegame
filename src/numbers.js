@@ -46,6 +46,9 @@ export const N = {
   TORP_RANGE: 10,        // launch only inside this; approach phase is "torpedo range only"
   TORP_SPEED: 1.5,       // crosses PDC range in 2 s, so Guard has a chance, not a certainty
   TORP_HOMING: 2.0,      // km/s^2 toward target; enough to follow a burning ship
+  TORP_FUSE: 0.3,        // km; a torpedo that passes this close goes off. Past it, at full speed it cannot turn back around (turn radius about 1.1 km) and would circle forever
+  TORP_FLANK: 1.0,       // km beside the target a torpedo swings out to, to reach a room that is not exposed
+  TORP_FLANK_SPEED: 0.5, // fraction of TORP_SPEED while swinging wide: slow enough to make the turn in; the cost of a buried room is time under their PDCs
 
   // --- railgun ---
   RAIL_RANGE: 10,        // long; the sniper weapon

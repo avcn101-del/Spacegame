@@ -8,7 +8,7 @@
 import { N } from '../numbers.js';
 import { exposure } from '../sim/ship.js';
 import {
-  drawSilhouette, piecePoint, drawShipMark, shipPoint, LANDMARKS, SHIP_ASPECT, COLORS,
+  drawSilhouette, piecePoint, drawShipMark, shipPoint, LANDMARKS, SHIP_ASPECT, COLORS, roomAtPoint, drawRoomBracket,
 } from './silhouette.js';
 
 // Visual-only knobs. Not game numbers, so they live here, not in numbers.js.
@@ -967,6 +967,9 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
       flash, t: time, warn, bg: COLORS.bg, orientation,
       active: { pdc: pdcActive },
     });
+    // the room the other side's weapons are going for, in that side's color
+    const aimed = enemy && enemy.target && ship.pieces[enemy.target] && ship.pieces[enemy.target].alive ? enemy.target : null;
+    if (aimed) drawRoomBracket(ctx, aimed, box, facing, orientation, shipId === 'them' ? COLORS.me : COLORS.them, time);
     // lingering embers on freshly dead pieces, on top of the silhouette's own dim ember
     if (embers.length) {
       ctx.save();
@@ -1149,5 +1152,8 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     }
   }
 
-  return { draw, onEvent };
+  // The room under a canvas point (CSS px, relative to the canvas), or null. For tap-a-room.
+  const roomAt = (x, y) => { ensureBox(); return roomAtPoint(x, y, box, facing, orientation); };
+
+  return { draw, onEvent, roomAt };
 }

@@ -44,6 +44,8 @@ export function makeBattle(seed) {
     b.emit({ type: 'burn', x: ship.x, y: ship.y, by: ship.id, dir });
   };
   b.pieceDied = (ship, piece, cause) => {
+    const foe = b.enemyOf(ship);
+    if (foe.target === piece) foe.target = null; // the room they were going for is gone: back to the exposed end
     b.emit({ type: 'pieceDead', x: ship.x, y: ship.y, ship: ship.id, piece, cause });
   };
   // Give an order. Returns null if accepted, else a refusal reason key.
@@ -51,7 +53,7 @@ export function makeBattle(seed) {
   b.order = (shipId, order, arg) => {
     if (b.result) return 'over';
     const ship = b.shipById(shipId);
-    const why = refusal(ship, order, { range: b.range() }, arg);
+    const why = refusal(ship, order, { range: b.range(), enemy: b.enemyOf(ship) }, arg);
     if (why) return why;
     apply(ship, order, b, arg);
     b.log.push(arg === undefined ? { t: b.t, ship: shipId, order } : { t: b.t, ship: shipId, order, arg });

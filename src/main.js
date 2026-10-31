@@ -9,6 +9,7 @@ import { makeHud } from './render/hud.js';
 import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
 import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
 import { attachDrag } from './input/drag.js';
+import { attachTap } from './input/tap.js';
 
 const params = new URLSearchParams(location.search);
 let seed = Number(params.get('seed')) || (Date.now() % 100000); // seed choice is outside the sim
@@ -76,7 +77,7 @@ function start(replay = null) {
   hud.setAuto(!!autoPilot);
   paused = false; slowmo = 0; acc = 0;
   history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}`);
-  window.game = { battle, tactical, exportReplay: () => exportReplay(battle) }; // for debugging and tests
+  window.game = { battle, tactical, panels: { me: panelMe, them: panelThem }, exportReplay: () => exportReplay(battle) }; // for debugging and tests
 }
 
 // Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
@@ -126,6 +127,24 @@ attachDrag(document.getElementById('tactical'), tactical, () => battle, (arg) =>
   if (replayer || autoPilot) return;
   const why = battle.order('me', 'move', arg);
   if (why) hud.toast(T.refusal[why]);
+});
+
+// Tap a room on their ship: go for it (tap again to clear). Tap a room on ours: what it does.
+attachTap(document.getElementById('sil-them'), (x, y) => {
+  if (replayer || autoPilot) return;
+  const room = panelThem.roomAt(x, y);
+  if (!room) return;
+  const me = battle.ships[0];
+  const arg = { room: me.target === room ? null : room };
+  const why = battle.order('me', 'target', arg);
+  if (why) hud.toast(T.refusal[why]);
+  else hud.toast(arg.room ? `${T.order.target} ${T.pieces[room].toLowerCase()}.` : T.order.targetCleared);
+});
+attachTap(document.getElementById('sil-me'), (x, y) => {
+  const room = panelMe.roomAt(x, y);
+  if (!room) return;
+  const pc = battle.ships[0].pieces[room];
+  hud.toast(`${T.pieces[room]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${T.roomInfo[room]}`);
 });
 
 start();

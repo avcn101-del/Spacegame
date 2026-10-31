@@ -35,22 +35,29 @@ in Vietnamese mixed with English; answer short, verified facts only, say
   are rooms with one effect each. Rooms have only HP and one job. No
   power, crew counts, heat, oxygen. Shields and jammer are parked in NOTES.
 - Drag replaced the range and face buttons; one HOLD button remains.
+- Tap-a-room: broadside means no detour (every room exposed); the bracket
+  shows on both silhouettes, each in the targeting side's color.
 - Guardrails agreed against the DTN Bridge failure: three lines before any
   system (decision it creates, what stops it, what it costs); numbers file
   under 80 numbers; sim under 2000 lines; at most 12 buttons; one layer per
   PR with five battles and three lines from the owner in between; no
   physics tests, only arena and replay.
 
+- Tap-a-room targeting is built (one PR): `target {room}` order, torpedoes
+  flank a buried room slowly and wide, PDCs chew the chosen room broadside,
+  rail unchanged, AI targets by preset, bracket on the silhouette, tap your
+  own room for its info. Torpedoes got a proximity fuse (`TORP_FUSE`): before
+  it, a torpedo that missed by more than 0.08 km inside 3 km circled forever
+  (replays 6045 and 70368: 9 of 12 and 6 of 12 torpedoes never resolved).
+
 ## Next task, already agreed
 
-Tap-a-room targeting, one PR: tap a room on the enemy silhouette; torpedoes
-then flank to that room even when it is not exposed, at a cost (longer
-flight inside PDC range, so more get shot down); PDC can pick a room only
-when the enemy is broadside or turning; railgun unchanged (penetrates in
-line). Tap a room on your own ship shows its info. The enemy AI picks
-targets by preset (sniper: drive, brawler: pdc, turtle: tubes). Show the
-chosen room with a bracket on the silhouette. Then ask the owner to play
-five battles and write three lines.
+Drag as heading, one PR. The owner said drag is confusing. Wanted: drag
+picks a direction on the map, the ship turns to it; a longer drag is a harder
+burn (faster). The owner says the DTN bridge did it that way; ask what
+exactly that was before building (absolute heading or relative to the
+enemy; does speed persist until a new drag). Face (bow / side / tail) then
+follows from heading versus the bearing to the enemy.
 
 After that, ideas the owner raised but did not approve: drifting starfield
 or circling already came with drag; layer 2 (a second ship design as data,

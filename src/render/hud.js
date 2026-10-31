@@ -97,6 +97,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
         else parts.push(`${T.order[me.faceTarget === 'bow' ? 'closing' : me.faceTarget === 'tail' ? 'opening' : 'circling']} ${me.move.speed.toFixed(2)}`);
         if (auto) parts.unshift(T.auto);
         parts.push(T.order[me.orders.pdc]);
+        if (me.target && alive(them, me.target)) parts.push(`${T.order.target} ${T.pieces[me.target].toLowerCase()}`);
         if (me.railAim >= 0) parts.push(T.order.aiming);
         line = parts.join(' · ');
       }
