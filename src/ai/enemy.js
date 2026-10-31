@@ -67,7 +67,18 @@ function think(b, P, me, you, give, rng) {
     const bearing = Math.atan2(you.y - me.y, you.x - me.x);
     let heading, speed;
     const r = b.range();
-    if (err > N.RANGE_TOLERANCE) { heading = bearing; speed = N.MAX_SPEED; }
+    // Stern to the answer: after a salvo, or with their torpedoes coming, swing the stern to them
+    // and hold the range. The drive and the plated tubes take the hits, not rail and sensors (a
+    // bow-on salvo took both at once). Swing back when the tubes are nearly loaded: 180 degrees is
+    // two FACE_TURN_TIMEs. Not inside PDC range, where one turret and a bare drive lose the knife
+    // fight; not while they go for the drive (the bracket on our silhouette says so): a stern-on
+    // ship that loses its drive is a hulk facing the wrong way, and never fires again; not with
+    // no salvo left to protect.
+    const incomingTorps = b.projectiles.some((p) => p.kind === 'torp' && p.target === me.id && !p.dead);
+    const sternTo = P.sternAfterSalvo && alive(me, 'tubes') && me.torps > 0 && r > N.PDC_RANGE
+      && you.target !== 'drive' && (incomingTorps || me.torpReload > 2 * N.FACE_TURN_TIME);
+    if (sternTo) { heading = bearing + Math.PI; speed = 0; }
+    else if (err > N.RANGE_TOLERANCE) { heading = bearing; speed = N.MAX_SPEED; }
     else if (err < -N.RANGE_TOLERANCE && r > N.PDC_RANGE) { heading = bearing + Math.PI; speed = N.MAX_SPEED; } // never show the tail inside PDC range
     else {
       const face = P.face === 'auto' ? 'side' : P.face;
