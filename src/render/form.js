@@ -4,7 +4,7 @@
 // brighter with hp; frame is dim steel; a dead room is dark; a cut or torn cell drifts off
 // the bridge side, dimmer. No text in cells. Pure canvas. No Math.random: drift is hashed
 // from the cell's x and y, so it is the same every frame.
-import { exposure } from '../sim/ship.js';
+import { exposure, isPdc } from '../sim/ship.js';
 
 const BG = [6, 8, 15];
 const UNLIT = [22, 28, 36];      // a job room with no hp left to show would be this dark
@@ -17,6 +17,9 @@ export const ROOM_COLORS = {
   rail: [143, 208, 255], sensors: [110, 225, 190], pdc: [255, 208, 112], bridge: [235, 242, 255],
   crew: [140, 225, 130], tubes: [255, 150, 90], drive: [170, 150, 255],
 };
+// A room's colour: every PDC mount (pdc1 .. pdc6) is pdc yellow; frame has none (steel).
+export const roomColor = (room) => ROOM_COLORS[isPdc(room) ? 'pdc' : room];
+const NEAR_TAP = 8;              // px: a tap this close to a job-room cell still picks it
 const DRIFT_GAP = 2.5;           // px a cut cell moves away from the bridge, plus up to DRIFT_JIT more
 const DRIFT_JIT = 2.5;
 const DRIFT_SIDE = 1.2;          // px of hashed sideways wobble
@@ -90,15 +93,25 @@ export function roomPoint(ship, room, box) {
   return { x: box.x + box.w / 2, y: box.y + box.h / 2 };
 }
 
-// The job room under a canvas point, or null: void and frame are not targetable.
+// The job room under a canvas point, or null: void and frame are not targetable. A PDC mount is one
+// cell (about 9 x 7 px), too small for a finger, so a point on void, frame or a seam picks the nearest
+// job-room cell within NEAR_TAP px of its edge; with nothing in reach it is null.
 export function roomAtPoint(ship, px, py, box) {
   const { cols, rows, cw, ch } = dims(ship, box);
   const col = Math.floor((px - box.x) / cw), row = Math.floor((py - box.y) / ch);
-  if (col < 0 || col >= cols || row < 0 || row >= rows) return null;
-  const y = box.horizontal ? row : ship.facing === -1 ? cols - 1 - col : col, x = box.horizontal ? col : rows - 1 - row;
-  const c = ship.cells[y][x];
-  if (!c || c.room.startsWith('frame:')) return null;
-  return c.room;
+  if (col >= 0 && col < cols && row >= 0 && row < rows) {
+    const y = box.horizontal ? row : ship.facing === -1 ? cols - 1 - col : col, x = box.horizontal ? col : rows - 1 - row;
+    const c = ship.cells[y][x];
+    if (c && !c.room.startsWith('frame:')) return c.room;
+  }
+  let best = null, bd = NEAR_TAP;
+  eachCell(ship, (c, x, y) => {
+    if (c.room.startsWith('frame:')) return;
+    const r = cellRect(ship, x, y, box);
+    const d = Math.hypot(Math.max(r.x - px, 0, px - (r.x + r.w)), Math.max(r.y - py, 0, py - (r.y + r.h)));
+    if (d < bd) { bd = d; best = c.room; }
+  });
+  return best;
 }
 
 // --- drawing ------------------------------------------------------------------------
@@ -121,7 +134,7 @@ function cellColor(ship, c) {
   if (!pc || !pc.alive) col = DEAD;
   else {
     const hp = clamp01(pc.hp / (pc.maxHp || 1));
-    const base = ROOM_COLORS[c.room];
+    const base = roomColor(c.room);
     col = base ? mix(UNLIT, base, 0.4 + 0.6 * hp) : mix(UNLIT, FRAME, 0.65 + 0.35 * hp);
   }
   return adrift ? mix(col, BG, pc && pc.alive ? 0.45 : 0.2) : col;
@@ -131,7 +144,7 @@ function edgeStyle(ship, c) {
   const pc = ship.pieces[c.room];
   const adrift = isAdrift(ship, c);
   if (!pc || !pc.alive) return { s: DEAD_EDGE, w: 1 };
-  const base = ROOM_COLORS[c.room];
+  const base = roomColor(c.room);
   if (!base) return { s: adrift ? 'rgba(120,132,146,0.35)' : 'rgba(140,155,170,0.6)', w: 1 };
   const plated = !!(ship.armor && ship.armor[c.room]);
   return { s: css(mix(base, [255, 255, 255], plated ? 0.7 : 0.4), adrift ? 0.5 : 0.95), w: plated ? 1.7 : 1.1 };

@@ -4,22 +4,21 @@
 import { drawForm, cellRect, ROOM_COLORS } from './form.js';
 import { T } from '../text.js';
 
-const SLOT_OF = { rail: 'gun', tubes: 'launcher', drive: 'drive', pdc: 'pdc' }; // room -> the slot that picks it
+const SLOT_OF = { rail: 'gun', tubes: 'launcher', drive: 'drive' }; // room -> the slot that picks it
 const CELL_MAX = 20;     // px: about 600 px for the Tachi's 28 columns
 const MARGIN = 26;       // px above and below the hull, for the labels
-const GROW = 4;          // px a hit box grows past its cells, so a finger finds a one-cell mount
+const GROW = 4;          // px a hit box grows past its cells, so a finger finds a small part
 const LABEL_FONT = '9px "SF Mono", Menlo, Consolas, monospace';
 const LABEL_H = 13, LABEL_PAD = 4, LABEL_GAP = 4;
 
-// Hardpoints of a ship: {slot, cells: [[x, y], ...], fitted, label}. Non-pdc slots are one hardpoint per
-// 4-connected group of their room's cells (the two tube bays are two); pdc is one per mount in
-// ship.form.mounts, fitted or not. Without mounts (older sim) the groups of pdc cells stand in.
+// Hardpoints of a ship: {slot, cells: [[x, y], ...]}, one per 4-connected group of a picked room's
+// cells (the two tube bays are two). The PDC mounts have no pick, so they are not hardpoints.
 export function hardpoints(ship) {
   const { w, h } = ship.form, out = [], seen = new Set();
   const room = (x, y) => (ship.cells[y] && ship.cells[y][x] ? ship.cells[y][x].room : null);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const r = room(x, y), slot = SLOT_OF[r];
-    if (!slot || seen.has(x + ',' + y) || (slot === 'pdc' && ship.form.mounts)) continue;
+    if (!slot || seen.has(x + ',' + y)) continue;
     const cells = [], stack = [[x, y]];
     while (stack.length) {
       const [a, b] = stack.pop();
@@ -27,9 +26,8 @@ export function hardpoints(ship) {
       seen.add(a + ',' + b); cells.push([a, b]);
       stack.push([a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]);
     }
-    out.push({ slot, cells, fitted: true });
+    out.push({ slot, cells });
   }
-  for (const [x, y] of ship.form.mounts || []) out.push({ slot: 'pdc', cells: [[x, y]], fitted: room(x, y) === 'pdc' });
   return out;
 }
 
@@ -50,7 +48,7 @@ const boundsOf = (ship, cells, box) => {
 };
 
 const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-const ROOM_OF_SLOT = { gun: 'rail', launcher: 'tubes', drive: 'drive', pdc: 'pdc' };
+const ROOM_OF_SLOT = { gun: 'rail', launcher: 'tubes', drive: 'drive' };
 
 // Draws the ship and its marks. Returns the hit list [{slot, x, y, w, h}] in canvas CSS px.
 // `sel` is the slot last tapped (lit brighter).
@@ -62,14 +60,13 @@ export function drawHangar(ctx, ship, fit, sel, W, H) {
   const hp = hardpoints(ship).map((p) => ({ ...p, b: boundsOf(ship, p.cells, box) }));
   const mid = box.y + box.h / 2;
 
-  // outlines: solid round a fitted hardpoint, dashed round an empty mount
+  // outlines: a solid box round each hardpoint
   ctx.save();
   for (const p of hp) {
     const col = ROOM_COLORS[ROOM_OF_SLOT[p.slot]] || [255, 255, 255];
     const on = p.slot === sel;
     ctx.strokeStyle = rgb(col, on ? 1 : 0.85);
     ctx.lineWidth = on ? 2.4 : 1.4;
-    ctx.setLineDash(p.fitted ? [] : [3, 2.5]);
     ctx.strokeRect(p.b.x - 1.5, p.b.y - 1.5, p.b.w + 3, p.b.h + 3);
   }
   ctx.restore();
@@ -112,6 +109,16 @@ export function drawHangar(ctx, ship, fit, sel, W, H) {
   return hp.map((p) => ({ slot: p.slot, x: p.b.x - GROW, y: p.b.y - GROW, w: p.b.w + 2 * GROW, h: p.b.h + 2 * GROW, cx: p.b.x + p.b.w / 2, cy: p.b.y + p.b.h / 2 }));
 }
 
+// The hit box under a canvas point (the nearest hardpoint centre among the boxes that hold it), or null.
+export function hitAt(hits, px, py) {
+  let best = null, bd = Infinity;
+  for (const h of hits) {
+    if (px < h.x || px > h.x + h.w || py < h.y || py > h.y + h.h) continue;
+    const d = Math.hypot(px - h.cx, py - h.cy);
+    if (d < bd) { bd = d; best = h; }
+  }
+  return best;
+}
 // The slot under a canvas point (the nearest hardpoint centre among the boxes that hold it), or null.
 export function slotAt(hits, px, py) {
   let best = null, bd = Infinity;

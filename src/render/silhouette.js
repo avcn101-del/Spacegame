@@ -14,7 +14,7 @@
 // ahead meets 'rail' first, a shot from behind meets 'drive' first.
 
 import { N } from '../numbers.js';
-import { exposure } from '../sim/ship.js';
+import { exposure, pdcRooms } from '../sim/ship.js';
 
 export const SHIP_ASPECT = 220 / 90; // box width / height the ship was drawn for
 
@@ -802,13 +802,12 @@ export function drawShipMark(ctx, ship, x, y, scale, angle) {
   ctx.strokeStyle = 'rgba(255,255,255,0.35)';
   ctx.lineWidth = 1;
   ctx.stroke();
-  // PDC deck: one dot per turret, alternating sides, dark when the deck is dead
-  const pdcAlive = !pieces.pdc || pieces.pdc.alive;
-  const turrets = (ship.turrets && ship.turrets.pdc) || 2;
-  for (let i = 0; i < turrets; i++) {
+  // PDC mounts: one dot per mount, alternating sides, dark when that mount is dead
+  const mounts = pdcRooms(ship);
+  for (let i = 0; i < mounts.length; i++) {
     const vy = (i % 2 ? 0.24 : -0.24), vx = -0.04 + Math.floor(i / 2) * 0.2;
     ctx.beginPath(); ctx.arc(vx * s, vy * s, 0.08 * s, 0, Math.PI * 2);
-    ctx.fillStyle = pdcAlive ? color : COLORS.dead; ctx.fill();
+    ctx.fillStyle = pieces[mounts[i]].alive ? color : COLORS.dead; ctx.fill();
   }
   // rail: a thin line out past the bow, on ships that carry one
   if (pieces.rail && pieces.rail.alive) {

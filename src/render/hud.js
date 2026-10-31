@@ -1,10 +1,10 @@
 // HUD: four numbers, phase, current order line, nine buttons with hints,
 // pause menu with legend, result. Reads battle state; sends orders through callbacks.
 import { N } from '../numbers.js';
-import { T } from '../text.js';
-import { alive, exposure, canFireTubes, canAimRail } from '../sim/ship.js';
+import { T, roomKey } from '../text.js';
+import { alive, exposure, canFireTubes, canAimRail, pdcAlive } from '../sim/ship.js';
 import { CATALOG } from '../ships/catalog.js';
-import { drawHangar, slotAt } from './hangar.js';
+import { drawHangar, hitAt } from './hangar.js';
 
 const $ = (sel) => document.querySelector(sel);
 const fmtClock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -37,18 +37,45 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   for (const id of ['#pm-hangar', '#rs-hangar']) { tap(id, () => api.showHangar(fit)); $(id).textContent = T.hangar.button; }
   $('#hg-title').textContent = T.hangar.title; $('#hg-launch').textContent = T.hangar.launch; $('#hg-close').textContent = T.hangar.close;
   const cv = $('#hg-canvas');
+  // A tap on a hardpoint opens a list of that slot's variants (an HTML element over the canvas, rows
+  // 40 px tall); a row picks, redraws and closes; a tap anywhere else closes it.
+  const list = $('#hg-list');
+  const closeList = () => { list.classList.remove('show'); list.textContent = ''; };
+  const openList = (hit) => {
+    const slot = hit.slot;
+    list.textContent = '';
+    for (const key of Object.keys(CATALOG[slot])) {
+      const c = T.catalog[key], row = document.createElement('div');
+      row.className = 'opt' + (fit[slot] === key ? ' cur' : '');
+      row.innerHTML = `<b>${c.name}</b> <i>${T.variantStats[slot](CATALOG[slot][key])}</i><span>${c.line}</span>`;
+      row.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        fit = { ...fit, [slot]: key }; sel = slot; closeList(); markFit(fit);
+      });
+      list.appendChild(row);
+    }
+    list.classList.add('show');
+    // beside the hardpoint, kept inside the canvas so LAUNCH and CLOSE stay clear
+    const box = list.offsetParent.getBoundingClientRect(), r = cv.getBoundingClientRect();
+    const lw = list.offsetWidth, lh = list.offsetHeight;
+    let x = r.left - box.left + hit.cx - lw / 2, y = r.top - box.top + hit.y + hit.h + 2;
+    if (hit.y + hit.h + 2 + lh > r.height) y = r.top - box.top + hit.y - lh - 2;
+    x = Math.max(r.left - box.left, Math.min(r.left - box.left + r.width - lw, x));
+    y = Math.max(r.top - box.top, Math.min(r.top - box.top + r.height - lh, y));
+    list.style.left = `${Math.round(x)}px`; list.style.top = `${Math.round(y)}px`;
+  };
   cv.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
+    e.preventDefault(); e.stopPropagation();
     const r = cv.getBoundingClientRect();
-    const slot = slotAt(hits, e.clientX - r.left, e.clientY - r.top);
-    if (!slot) return;
-    const keys = Object.keys(CATALOG[slot]);
-    fit = { ...fit, [slot]: keys[(keys.indexOf(fit[slot]) + 1) % keys.length] };
-    sel = slot;
+    const hit = hitAt(hits, e.clientX - r.left, e.clientY - r.top);
+    if (!hit) { closeList(); return; }
+    sel = hit.slot;
     markFit(fit);
+    openList(hit);
   });
+  $('#hangar').addEventListener('pointerdown', closeList); // anywhere else (the buttons still act)
   let hangarOpen = false;
-  const closeHangar = () => { hangarOpen = false; $('#hangar').classList.remove('show'); };
+  const closeHangar = () => { hangarOpen = false; closeList(); $('#hangar').classList.remove('show'); };
   tap('#hg-close', closeHangar);
   tap('#hg-launch', () => { closeHangar(); onFit(fit); });
   // Redraw the previewed ship for this fit and say what the last tapped slot now holds.
@@ -92,7 +119,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
 
   const api = {
     showExport(text) { $('#export-text').value = text; $('#exportbox').classList.add('show'); },
-    showHangar(f) { fit = { ...f }; sel = null; hangarOpen = true; $('#hangar').classList.add('show'); markFit(fit); },
+    showHangar(f) { closeList(); fit = { ...f }; sel = null; hangarOpen = true; $('#hangar').classList.add('show'); markFit(fit); },
     setFit(f) { fit = { ...f }; },
     setAuto(on) { auto = on; $('#pm-auto').textContent = on ? T.autoOff : T.auto; document.getElementById('orders').classList.toggle('replay', on || replay); },
     toast(text, ttl = 2.0) { toast = { text, ttl }; },
@@ -135,7 +162,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
         else parts.push(`${T.order[me.move.speed > 0 ? 'flying' : 'stopping']} ${me.move.speed.toFixed(2)}`);
         if (auto) parts.unshift(T.auto);
         parts.push(T.order[me.orders.pdc]);
-        if (me.target && alive(them, me.target)) parts.push(`${T.order.target} ${T.pieces[me.target].toLowerCase()}`);
+        if (me.target && alive(them, me.target)) parts.push(`${T.order.target} ${T.pieces[roomKey(me.target)].toLowerCase()}`);
         if (me.railAim >= 0) parts.push(T.order.aiming);
         line = parts.join(' · ');
       }
@@ -156,7 +183,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       B.rail.classList.toggle('aiming', me.railAim >= 0);
       B.burn.classList.toggle('dead', !alive(me, 'drive') || me.burns === 0);
       for (const o of ['hold', 'run']) B[o].classList.toggle('dead', !alive(me, 'drive'));
-      for (const o of ['guard', 'rake']) B[o].classList.toggle('dead', !alive(me, 'pdc'));
+      for (const o of ['guard', 'rake']) B[o].classList.toggle('dead', !pdcAlive(me));
       B.torps.classList.toggle('ready', me.torpReload === 0 && range <= N.TORP_RANGE && canFireTubes(me));
       B.rail.classList.toggle('ready', me.railCharge === 0 && me.railAim < 0 && range <= me.railRange && canAimRail(me));
 

@@ -14,7 +14,7 @@ work longer than about an hour, give the estimate and wait for go.
   proxy cannot reach the live site; ask the owner to reload. URL knobs:
   `?seed=`, `?enemy=brawler|sniper|turtle|berserker|gunship`, `?ship=belter`
   (fly the gunship), `?auto=brawler` (the AI flies my ship),
-  `?fit=pdc:tripleDeck,gun:quickRail` (the hangar's picks).
+  `?fit=gun:quickRail,drive:hot` (the hangar's picks; `pdc:` in old URLs is ignored).
 - Process: one branch and one PR per change; the owner asked me to merge PRs
   myself after the headless checks and a Playwright run pass. Every PR body
   starts with "Play this and tell me where it is boring." The session's
@@ -25,21 +25,22 @@ work longer than about an hour, give the estimate and wait for go.
 - Headless checks before every PR: `node tools/selfplay.mjs` (determinism),
   `node tools/arena.mjs all seeds=30` (preset vs preset, 5 presets; compare
   with the run before the change, differences under about 3 wins are noise),
-  `node tools/arena.mjs me=brawler them=gunship seeds=30 mefit=pdc:tripleDeck`
+  `node tools/arena.mjs me=brawler them=gunship seeds=30 mefit=gun:quickRail`
   for one fit, and Playwright at 844 x 390 with
   `/opt/node-tools/node_modules/playwright/index.js` (CommonJS default
   import, `hasTouch`, `isMobile`) against `python3 -m http.server 8123`;
   `window.game` exposes `battle`, `tactical`, `panels.me/them` (with
   `roomAt(x, y)`), `exportReplay()`. Force a tear in the browser with
-  `b.pieceDied(ship, 'pdc', 'torp')` after setting the room dead.
+  `b.pieceDied(ship, 'pdc2', 'torp')` after setting the room dead.
 - Parallel work (the owner asked, to save quota): the parent session writes the contract
   into ARCHITECTURE.md, then spawns an Opus agent for `src/sim` and a Sonnet agent for
   `src/render` on the same tree with disjoint files, reviews both, runs the checks, merges.
-  The form PR was built this way.
+  PRs 22 to 25 were built this way; briefs name the files each agent owns, and say never
+  to run `pkill -f` with a pattern that matches the agent's own shell line.
 - Replays: the owner pastes exported JSON into chat; save it to the scratchpad
   and run `node tools/replay.mjs file.json`, or a small node script that
   replays and prints per-hit events (face of the target, PDC count, range) to
-  answer "why". Replay version 8 (the form); version 7 replays diverge. `ships {me, them}` are `{design, fit}`;
+  answer "why". Replay version 9 (the six mounts); older replays diverge. `ships {me, them}` are `{design, fit}`;
   pass `r.ships` to `makeBattle(seed, ships)` or the replay diverges. Older
   replays diverge anyway (the sim changed).
 - Rendering (`src/render/canvas.js`, `form.js`, `hangar.js`, `silhouette.js`) follows the state
@@ -55,13 +56,12 @@ work longer than about an hour, give the estimate and wait for go.
   15 km, torpedoes 10, the fight ends (apart) at 20 km: the rail has a band
   where it shoots and is not shot back (the owner: a sniper that reaches no
   further than a normal gun is no sniper).
-- Rooms layer 1, bridge in the middle: rail, sensors, pdc, bridge, crew,
-  tubes, drive (Tachi); a shot hits the exposed end first; rooms have only
-  HP and one job. Plating (bridge, pdc, tubes: double hp) and bulkheads aft
-  of sensors, pdc, tubes (spill stops). No power, crew counts, heat, oxygen.
-- The tear rule: a dead room is a hole; living rooms with no path to the
-  bridge tear off (hp 0, `torn`, the tubes take the torpedo stock). pdc dead
-  loses rail and sensors; crew dead loses tubes and drive.
+- Rooms have only HP and one job. Job rooms: rail, sensors, pdc1..pdc6, bridge, crew,
+  tubes, drive (Tachi; the Belter has no rail and pdc1..pdc4). Plating (bridge, tubes:
+  double hp). No power, crew counts, heat, oxygen. (History: layer 1 was a chain of seven
+  rooms with the exposed end hit first and bulkheads; the form replaced it, see below.)
+- The tear rule: a dead room is a hole; cells with no path to the bridge are cut, a room
+  with no cell left tears off (hp 0, `torn`, the tubes take the torpedo stock).
 - Drag as heading: direction is an absolute heading, length is the speed,
   relative to the enemy; HOLD coasts. Face from heading versus bearing,
   BOW_CONE 45.
@@ -81,11 +81,12 @@ work longer than about an hour, give the estimate and wait for go.
 - A second ship as data: the Belter gunship (`belter.js`): six rooms, no
   rail, three turrets, 16 torpedoes, half drive, no plating. The owner: not
   too hard.
-- The hangar (PR 21): two picks per slot, from `catalog.js`: tubes quad /
-  twin (2 every 10 s), PDC deck twin plated / triple unplated, rail long
-  (15 km, 40 s) / quick (10 km, 20 s), drive corvette (3 Burns) / hot (twice
-  the push, 2 Burns). Every variant number is the stock one doubled or
-  halved. No buying, no points. The owner has not played it yet.
+- The hangar (PR 21, redrawn in PR 24 and 25): two picks per slot, from `catalog.js`:
+  tubes quad / twin (2 every 10 s), rail long (15 km, 40 s) / quick (10 km, 20 s), drive
+  corvette (3 Burns) / hot (twice the push, 2 Burns). Every variant number is the stock
+  one doubled or halved. No buying, no points. The hangar draws the form; a tap on a
+  hardpoint opens a list of its variants with the stats (the owner: "each choice must
+  show stats or I do not know what I pick"). The PDC pick is gone (below).
 - The form (2026-10-31, replaces "not the 2D grid"): the ship is draft 12 of the owner's
   "Roci form" artifact, a 28 x 9 grid of cells with fixed hardpoints; the direction is ship
   building like Cosmoteer but with a fixed form and fixed hardpoints, the player picks a
@@ -93,6 +94,14 @@ work longer than about an hour, give the estimate and wait for go.
   on the room; a shot is a ray along a row or a column from where it really comes from; the
   first cell's room takes it, SPILL into the next; frame is cover, not a wall: what its hp
   (FRAME_HP 5) does not absorb carries into the room behind.
+- PDC (PR 25, the owner, 2026-10-31): six fixed PDC mounts on the hull edge, placed by the
+  owner on a screenshot: (6, 1) (13, 1) (19, 2) above the keel, (6, 7) (13, 7) (19, 6)
+  below. Each is its own room pdc1..pdc6, 10 hp, unplated, one turret; it dies, tears and
+  is tapped alone (tap near a one-cell mount within 8 px picks it). A mount fires by its
+  arc: above the keel when the enemy is top, bow or stern; below when bottom, bow or stern
+  ("every living mount fires" end-on). So broadside three guard, end-on all six. The PDC
+  pick is gone from the catalog. The two T sponsons of draft 12 are Gun mount M, a weapon
+  the game lacks: frame. The Belter has four mounts (10, 1) (15, 1) (10, 5) (15, 5), mine.
   Every letter that is not one of the seven job rooms is a frame room (hp FRAME_HP, no job,
   not targetable, blocks spill): bulkheads, spine, hull frame, and the empty hardpoints
   (reactors, heat sink, shield generator, cockpit, workshop) that later rooms will fill ("các
@@ -113,15 +122,22 @@ work longer than about an hour, give the estimate and wait for go.
 Everything below the first bullet was measured before the form and is void for balance;
 kept only as history. After the form (30 seeds, win/lose/draw):
 
-- After the PDC mounts (PR 24; the pdc is six one-cell mounts on the hull edge, open to shots
+- After the six independent mounts firing by arc (PR 25): Guard kills about 94 percent of
+  torpedoes (was 58): bow-on all six guard where one turret did. brawler vs brawler 7/10/13
+  avg 194 s (10 time draws); brawler vs sniper 0/12/18; brawler vs gunship 20/0/10; sniper
+  vs sniper 0/1/29 (27 time draws); sniper vs gunship 29/0/1 (the Belter flies broadside,
+  so 2 of 4 mounts fire where its deck had 3); gunship mirror 6/4/20. Torpedoes barely land
+  end-on. Not tuned; the owner plays first. Candidates if he says boring: halve
+  PDC_GUARD_KILL_RATE, or Guard counts the mounts that see the torpedo, not the ship.
+- The AI presets run at `runAt: 2` pieces left and the break phase at 3 job rooms left;
+  with 12 job rooms (Belter 9) both come much later than before. Left as is.
+- After the PDC mounts (PR 24; the pdc was six one-cell mounts on the hull edge, open to shots
   from the sides only): brawler vs brawler 7/14/9 avg 113 s; brawler vs gunship 8/19/3 (was
   27/2/1: the Belter's PDC used to be twelve sponson cells hit from every side); sniper vs
   gunship 5/5/20 with 19 time draws avg 193 s (the gunship keeps its PDCs, the sniper's
   torpedoes die); sniper vs sniper 4/10/16; tripleDeck brawler vs gunship 13/15/2. Not tuned.
-- A quirk since PR 21: a fit from the URL or the hangar always carries all four slots, so a
-  Belter flown by the owner gets the Tachi's pdc pick (twinDeck: 2 mounts, plated) while the
-  AI gunship with fit {} keeps its own 3 unplated. The hangar title also says Rocinante for
-  the Belter. Cosmetic until the Belter has its own catalog.
+- The hangar title says Rocinante for the Belter too; the Belter shares the Tachi's
+  catalog. Cosmetic until the Belter has its own.
 - After the form, with the rail aiming and frame carrying (PR 23): brawler vs brawler
   12/11/7 (5 time draws), avg 95 s (chain: 19/9, 40 s); brawler vs gunship 27/2/1; sniper
   vs gunship 6/21/3; sniper vs sniper 9/10/11; brawler (tripleDeck) vs gunship 25/5/0;
@@ -158,13 +174,12 @@ kept only as history. After the form (30 seeds, win/lose/draw):
 
 ## Next, in this order, each only if the owner says a battle was boring without it
 
-1. The owner plays the form with the rail aiming and frame as cover (PR 23) and says three
-   things: can the grid be read at 9 x 7 px a cell, does cover make a decision, is the
-   stalemate still there (a hulk with its drive dead that cannot be finished).
-2. Built (PR 24): PDC is the six hull mounts of draft 12, the pick lights 2 or 3; the hangar
-   draws the form, tap a hardpoint to swap its pick. The owner plays this too. Then, only if
-   the stalemate stays: a ship with its drive dead and no weapon it can bring to bear is
-   beaten (or tail-on tubes fire at half rate).
+1. The owner plays PR 25 (six mounts by arc, the hangar list with stats) and says: can the
+   grid be read, does cover make a decision, is Guard at 94 percent boring (torpedoes never
+   land end-on), is the stalemate still there (a hulk with its drive dead that cannot be
+   finished; and now long time draws in every mirror).
+2. Only if the owner says so: Guard tuned by halving, or Guard by the torpedo's side; a
+   drive-dead ship with no weapon to bear is beaten (or tail-on tubes at half rate).
 3. The next rooms into the empty hardpoints, only when the owner names them (he said
    "discuss later"). Then the hangar picks per hardpoint, one at a time.
 4. The owner plays with fits and says which pick never gets chosen; a pick nobody takes is
