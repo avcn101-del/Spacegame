@@ -121,6 +121,10 @@ work longer than about an hour, give the estimate and wait for go.
   chevrons from `shotFrom`; tap their hull to target. Buttons and pause work; drag is off there;
   only the visible view gets events and draws. A bigger ship scales down; past about 80 columns it
   will need zoom (later).
+  Fix (PR 39, the owner's phone screenshot): the close-up canvas had `height: auto`, so on a phone
+  (devicePixelRatio about 2.6) it took its pixel buffer's height and the hulls sat under the
+  buttons; now an explicit height. In the close-up the order buttons are 50 px and lose their hint
+  line. Test Playwright with `deviceScaleFactor: 2.6`, not only 1.
 - The form (2026-10-31, replaces "not the 2D grid"): the ship is draft 12 of the owner's
   "Roci form" artifact, a 28 x 9 grid of cells with fixed hardpoints; the direction is ship
   building like Cosmoteer but with a fixed form and fixed hardpoints, the player picks a
@@ -262,6 +266,14 @@ kept only as history. After the form (30 seeds, win/lose/draw):
 1. Done (PR 30): half the cells cut = beaten, the duplicate tear fixed. Next the owner plays
    PR 28 (Guard at 0.375) and PR 30 and says: can the grid be read, does cover make a
    decision, does one torpedo in a salvo landing feel right, does a split hull end right.
+   Open now: the fx discussion (the owner likes beautiful, heavy-hitting visuals). Offered groups:
+   (1) impact weight: hit-stop 50 to 80 ms, shake by weight (rail > torpedo > PDC), a punch zoom in
+   the close-up; (2) lasting wounds: glowing holes that cool, venting gas, fire in dead rooms,
+   sparks on torn edges; (3) weapons: the rail glowing along the keel while charging, muzzle flash,
+   exit spray, torpedo smoke trails, PDC kills as clusters; (4) big moments: torn sections tumble,
+   the bridge's death as a chain of blasts. Asked: which first (advised 1 and 4), close-up only or
+   TAC too, and sound (BRIEF lists sound as not now; the owner's call). Render only; over an hour,
+   so a Sonnet render agent.
 2. Only if the owner says so: a drive-dead ship with no weapon to bear is beaten (or tail-on
    tubes at half rate), the half-hull rule (PR 30) covers only about one hulk in five: most hulks are
    out of ammunition with the hull whole.
