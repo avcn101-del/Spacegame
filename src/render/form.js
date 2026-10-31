@@ -36,11 +36,15 @@ const cellHash = (x, y, salt) => hash01(x * 73856093 + y * 19349663 + salt * 834
 
 // Canvas columns run across the hull (form rows), canvas rows run bow to stern (form x, high first).
 // facing -1 mirrors the columns, as the old silhouette did: 'me' keeps its spine on the left.
-const dims = (ship, box) => ({ cols: ship.form.h, rows: ship.form.w, cw: box.w / ship.form.h, ch: box.h / ship.form.w });
+// box.horizontal (the hangar): bow right, form row 0 on top, columns are form x; facing is ignored.
+const dims = (ship, box) => (box.horizontal
+  ? { cols: ship.form.w, rows: ship.form.h, cw: box.w / ship.form.w, ch: box.h / ship.form.h }
+  : { cols: ship.form.h, rows: ship.form.w, cw: box.w / ship.form.h, ch: box.h / ship.form.w });
 
 // The canvas rect of form cell (x, y), in place (no drift).
 export function cellRect(ship, x, y, box) {
   const { cols, rows, cw, ch } = dims(ship, box);
+  if (box.horizontal) return { x: box.x + x * cw, y: box.y + y * ch, w: cw, h: ch };
   const col = ship.facing === -1 ? cols - 1 - y : y;
   const row = rows - 1 - x;
   return { x: box.x + col * cw, y: box.y + row * ch, w: cw, h: ch };
@@ -91,7 +95,7 @@ export function roomAtPoint(ship, px, py, box) {
   const { cols, rows, cw, ch } = dims(ship, box);
   const col = Math.floor((px - box.x) / cw), row = Math.floor((py - box.y) / ch);
   if (col < 0 || col >= cols || row < 0 || row >= rows) return null;
-  const y = ship.facing === -1 ? cols - 1 - col : col, x = rows - 1 - row;
+  const y = box.horizontal ? row : ship.facing === -1 ? cols - 1 - col : col, x = box.horizontal ? col : rows - 1 - row;
   const c = ship.cells[y][x];
   if (!c || c.room.startsWith('frame:')) return null;
   return c.room;
@@ -104,9 +108,9 @@ export function roomAtPoint(ship, px, py, box) {
 function drawnRect(ship, c, x, y, box, bridgeX) {
   const r = cellRect(ship, x, y, box);
   if (!isAdrift(ship, c)) return r;
-  const dir = x < bridgeX ? 1 : -1; // canvas down toward the stern
-  r.y += dir * (DRIFT_GAP + DRIFT_JIT * cellHash(x, y, 1));
-  r.x += (cellHash(x, y, 2) - 0.5) * 2 * DRIFT_SIDE;
+  const dir = x < bridgeX ? 1 : -1; // canvas down (horizontal: left) toward the stern
+  const along = dir * (DRIFT_GAP + DRIFT_JIT * cellHash(x, y, 1)), wob = (cellHash(x, y, 2) - 0.5) * 2 * DRIFT_SIDE;
+  if (box.horizontal) { r.x -= along; r.y += wob; } else { r.y += along; r.x += wob; }
   return r;
 }
 
@@ -159,7 +163,7 @@ export function drawForm(ctx, ship, box, fx = {}) {
   // plume out of the stern while the drive pushes
   const drive = ship.pieces.drive;
   const thrust = Math.abs(ship.thrust || 0);
-  if (drive && drive.alive && thrust > 0.05) {
+  if (drive && drive.alive && thrust > 0.05 && !box.horizontal) { // the plume is drawn bow up only
     const db = roomBounds(ship, 'drive', box);
     if (db) {
       const flick = 0.78 + 0.22 * hash01(Math.floor(t * 30));
@@ -198,6 +202,13 @@ export function drawForm(ctx, ship, box, fx = {}) {
     const { r, x, y } = e;
     // canvas up is form x + 1; canvas left/right is form y -/+ 1 (mirrored for facing -1)
     const left = ship.facing === -1 ? y + 1 : y - 1, right = ship.facing === -1 ? y - 1 : y + 1;
+    if (box.horizontal) { // canvas left/right is form x -/+ 1, up/down is form y -/+ 1
+      edge(e, x, y - 1, r.x, r.y, r.x + r.w, r.y);
+      edge(e, x, y + 1, r.x, r.y + r.h, r.x + r.w, r.y + r.h);
+      edge(e, x - 1, y, r.x, r.y, r.x, r.y + r.h);
+      edge(e, x + 1, y, r.x + r.w, r.y, r.x + r.w, r.y + r.h);
+      continue;
+    }
     edge(e, x + 1, y, r.x, r.y, r.x + r.w, r.y);
     edge(e, x - 1, y, r.x, r.y + r.h, r.x + r.w, r.y + r.h);
     edge(e, x, left, r.x, r.y, r.x, r.y + r.h);
@@ -240,7 +251,7 @@ export function drawForm(ctx, ship, box, fx = {}) {
   }
 
   // exposure: chevrons pointing into the hull from where the fire comes
-  if (fx.exposure !== false && ship.face) {
+  if (fx.exposure !== false && ship.face && !box.horizontal) {
     const e = exposure(ship);
     const pulse = ship.turnLeft > 0 ? 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * 9)) : 1;
     const size = Math.max(4, Math.min(7, cw * 0.6));

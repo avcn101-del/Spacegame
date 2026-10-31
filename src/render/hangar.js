@@ -1,0 +1,124 @@
+// The hangar's drawing: the previewed ship's form, bow right, with every hardpoint that has a pick
+// marked and labelled (ARCHITECTURE.md "The hangar draws the form"). Pure canvas, no state:
+// hud.js keeps the fit and the selection and calls drawHangar again on every change.
+import { drawForm, cellRect, ROOM_COLORS } from './form.js';
+import { T } from '../text.js';
+
+const SLOT_OF = { rail: 'gun', tubes: 'launcher', drive: 'drive', pdc: 'pdc' }; // room -> the slot that picks it
+const CELL_MAX = 20;     // px: about 600 px for the Tachi's 28 columns
+const MARGIN = 26;       // px above and below the hull, for the labels
+const GROW = 4;          // px a hit box grows past its cells, so a finger finds a one-cell mount
+const LABEL_FONT = '9px "SF Mono", Menlo, Consolas, monospace';
+const LABEL_H = 13, LABEL_PAD = 4, LABEL_GAP = 4;
+
+// Hardpoints of a ship: {slot, cells: [[x, y], ...], fitted, label}. Non-pdc slots are one hardpoint per
+// 4-connected group of their room's cells (the two tube bays are two); pdc is one per mount in
+// ship.form.mounts, fitted or not. Without mounts (older sim) the groups of pdc cells stand in.
+export function hardpoints(ship) {
+  const { w, h } = ship.form, out = [], seen = new Set();
+  const room = (x, y) => (ship.cells[y] && ship.cells[y][x] ? ship.cells[y][x].room : null);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const r = room(x, y), slot = SLOT_OF[r];
+    if (!slot || seen.has(x + ',' + y) || (slot === 'pdc' && ship.form.mounts)) continue;
+    const cells = [], stack = [[x, y]];
+    while (stack.length) {
+      const [a, b] = stack.pop();
+      if (a < 0 || b < 0 || a >= w || b >= h || seen.has(a + ',' + b) || room(a, b) !== r) continue;
+      seen.add(a + ',' + b); cells.push([a, b]);
+      stack.push([a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]);
+    }
+    out.push({ slot, cells, fitted: true });
+  }
+  for (const [x, y] of ship.form.mounts || []) out.push({ slot: 'pdc', cells: [[x, y]], fitted: room(x, y) === 'pdc' });
+  return out;
+}
+
+// The box the form is drawn in, centred in a W x H canvas: cells as big as fit, at most CELL_MAX.
+export function hangarBox(ship, W, H) {
+  const cell = Math.max(4, Math.min(CELL_MAX, (W - 16) / ship.form.w, (H - 2 * MARGIN) / ship.form.h));
+  const w = cell * ship.form.w, h = cell * ship.form.h;
+  return { x: (W - w) / 2, y: (H - h) / 2, w, h, horizontal: true };
+}
+
+const boundsOf = (ship, cells, box) => {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of cells) {
+    const r = cellRect(ship, x, y, box);
+    x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h);
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+};
+
+const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const ROOM_OF_SLOT = { gun: 'rail', launcher: 'tubes', drive: 'drive', pdc: 'pdc' };
+
+// Draws the ship and its marks. Returns the hit list [{slot, x, y, w, h}] in canvas CSS px.
+// `sel` is the slot last tapped (lit brighter).
+export function drawHangar(ctx, ship, fit, sel, W, H) {
+  const box = hangarBox(ship, W, H);
+  ctx.clearRect(0, 0, W, H);
+  drawForm(ctx, ship, box, { exposure: false });
+
+  const hp = hardpoints(ship).map((p) => ({ ...p, b: boundsOf(ship, p.cells, box) }));
+  const mid = box.y + box.h / 2;
+
+  // outlines: solid round a fitted hardpoint, dashed round an empty mount
+  ctx.save();
+  for (const p of hp) {
+    const col = ROOM_COLORS[ROOM_OF_SLOT[p.slot]] || [255, 255, 255];
+    const on = p.slot === sel;
+    ctx.strokeStyle = rgb(col, on ? 1 : 0.85);
+    ctx.lineWidth = on ? 2.4 : 1.4;
+    ctx.setLineDash(p.fitted ? [] : [3, 2.5]);
+    ctx.strokeRect(p.b.x - 1.5, p.b.y - 1.5, p.b.w + 3, p.b.h + 3);
+  }
+  ctx.restore();
+
+  // one label per slot, in the margin above or below the hull, on a leader line from its first group
+  ctx.save();
+  ctx.font = LABEL_FONT; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  const labels = [];
+  const seen = new Set();
+  for (const p of hp) {
+    if (seen.has(p.slot)) continue;
+    seen.add(p.slot);
+    const text = T.catalog[fit[p.slot]] ? T.catalog[fit[p.slot]].name : fit[p.slot];
+    labels.push({ p, text, tw: ctx.measureText(text).width + 2 * LABEL_PAD, cx: p.b.x + p.b.w / 2, top: p.b.y + p.b.h / 2 < mid });
+  }
+  // a keel-row group (dead centre) goes to the emptier side
+  for (const l of labels) if (Math.abs(l.p.b.y + l.p.b.h / 2 - mid) < 1) l.top = labels.filter((o) => o.top).length <= labels.length / 2;
+  for (const top of [true, false]) {
+    const row = labels.filter((l) => l.top === top).sort((a, b) => a.cx - b.cx);
+    let edge = 2;
+    for (const l of row) { l.x = Math.max(edge, Math.min(W - 2 - l.tw, l.cx - l.tw / 2)); edge = l.x + l.tw + LABEL_GAP; }
+    for (let i = row.length - 1, lim = W - 2; i >= 0; i--) { row[i].x = Math.min(row[i].x, lim - row[i].tw); lim = row[i].x - LABEL_GAP; }
+    for (const l of row) {
+      l.y = top ? 3 : H - 3 - LABEL_H;
+      const col = ROOM_COLORS[ROOM_OF_SLOT[l.p.slot]] || [255, 255, 255];
+      const on = l.p.slot === sel;
+      const fromY = top ? l.p.b.y - 1.5 : l.p.b.y + l.p.b.h + 1.5, toY = top ? l.y + LABEL_H : l.y;
+      ctx.strokeStyle = rgb(col, 0.5); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(l.cx, fromY); ctx.lineTo(Math.max(l.x + 3, Math.min(l.x + l.tw - 3, l.cx)), toY); ctx.stroke();
+      ctx.fillStyle = on ? 'rgba(16,36,58,0.95)' : 'rgba(6,8,15,0.9)';
+      ctx.fillRect(l.x, l.y, l.tw, LABEL_H);
+      ctx.strokeStyle = rgb(col, on ? 1 : 0.6); ctx.lineWidth = on ? 1.4 : 1;
+      ctx.strokeRect(l.x + 0.5, l.y + 0.5, l.tw - 1, LABEL_H - 1);
+      ctx.fillStyle = on ? '#ffffff' : rgb(col, 1);
+      ctx.fillText(l.text, l.x + LABEL_PAD, l.y + LABEL_H / 2 + 0.5);
+    }
+  }
+  ctx.restore();
+
+  return hp.map((p) => ({ slot: p.slot, x: p.b.x - GROW, y: p.b.y - GROW, w: p.b.w + 2 * GROW, h: p.b.h + 2 * GROW, cx: p.b.x + p.b.w / 2, cy: p.b.y + p.b.h / 2 }));
+}
+
+// The slot under a canvas point (the nearest hardpoint centre among the boxes that hold it), or null.
+export function slotAt(hits, px, py) {
+  let best = null, bd = Infinity;
+  for (const h of hits) {
+    if (px < h.x || px > h.x + h.w || py < h.y || py > h.y + h.h) continue;
+    const d = Math.hypot(px - h.cx, py - h.cy);
+    if (d < bd) { bd = d; best = h.slot; }
+  }
+  return best;
+}

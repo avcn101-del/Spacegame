@@ -100,7 +100,7 @@ export const T = {
   },
   again: 'NEW BATTLE', same: 'SAME SEED', seed: 'seed',
   // The hangar: one of two for each slot that has a choice. Names and one line each.
-  hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, then launch.', launch: 'LAUNCH', close: 'CLOSE' },
+  hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, then launch.', launch: 'LAUNCH', close: 'CLOSE', hint: 'Tap a marked part to swap it. Dashed is an empty PDC mount.' },
   slots: { launcher: 'Tubes', pdc: 'PDC deck', gun: 'Railgun', drive: 'Drive' },
   catalog: {
     quad: { name: 'Quad tubes', line: 'Four a salvo, every 20 s. Swamps a Guard.' },

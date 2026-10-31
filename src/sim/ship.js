@@ -18,20 +18,24 @@ export function faceFor(off) {
 // The form as cells (ARCHITECTURE.md "The form"): design.form.rows, one letter per cell, '.' void.
 // A letter in design.form.rooms is that job room's cell. Any other letter is frame: each 4-connected
 // group of one letter is its own frame room `frame:<letter><n>` (hp FRAME_HP, no job), added to
-// `pieces`. Row-major, so the numbering is deterministic. Returns {form, cells, frames}.
-export function buildForm(design, pieces) {
+// `pieces`. Row-major, so the numbering is deterministic. Mounts (ARCHITECTURE.md "PDC mounts"): the
+// first `fitted` of design.form.mounts are pdc cells; every other P cell is its own frame room
+// `frame:P<n>`, one cell each. Returns {form, cells, frames}.
+export function buildForm(design, pieces, fitted = 0) {
   const rows = design.form.rows, h = rows.length, w = rows[0].length;
   const cells = rows.map((r) => [...r].map(() => null));
-  const frames = [], count = {};
+  const frames = [], count = {}, mounts = design.form.mounts || [];
+  mounts.slice(0, fitted).forEach(([x, y]) => { cells[y][x] = { room: 'pdc', cut: false }; });
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const ch = rows[y][x];
     if (ch === '.' || cells[y][x]) continue;
     const job = design.form.rooms[ch];
-    if (job) { cells[y][x] = { room: job, cut: false }; continue; }
+    if (job && !(ch === 'P' && mounts.length)) { cells[y][x] = { room: job, cut: false }; continue; }
     count[ch] = (count[ch] || 0) + 1;
     const id = `frame:${ch}${count[ch]}`;
     frames.push(id);
     pieces[id] = { hp: N.FRAME_HP, maxHp: N.FRAME_HP, alive: true };
+    if (ch === 'P') { cells[y][x] = { room: id, cut: false }; continue; } // an empty mount: one cell
     const stack = [[x, y]];
     while (stack.length) {
       const [a, b] = stack.pop();
@@ -61,10 +65,13 @@ export function makeShip(id, name, x, facing, design, fit = {}) {
     if (x && r.kind === 'gun') { railRange = x.range; railRecharge = x.recharge; }
     if (x && r.kind === 'drive') { accel = x.accel; burns = x.burns; }
   }
-  const { form, cells, frames } = buildForm(design, pieces);
+  const mounts = design.form.mounts;
+  const fitted = mounts ? Math.min(turrets.pdc || 2, mounts.length) : 0; // as turretCount: no number is two
+  const { form, cells, frames } = buildForm(design, pieces, fitted);
+  if (mounts) { form.mounts = mounts.map(([a, b]) => [a, b]); form.fitted = fitted; }
   return {
     id, name, design: design.id, fit: { ...fit },
-    form, cells, frames,  // the grid: {w, h}; cells[y][x] null or {room, cut}; the frame room ids
+    form, cells, frames,  // the grid: {w, h, mounts?, fitted?}; cells[y][x] null or {room, cut}; the frame room ids
     accel,              // fraction of ACCEL this hull's drive gives
     salvo, reloadTime,  // torpedoes per salvo, seconds between salvos
     railRange, railRecharge, // km, seconds
