@@ -1,7 +1,7 @@
 // PDC, torpedo, railgun. Each function advances one ship's weapon by dt.
 // They push events onto battle.events for the renderer and mutate state.
 import { N } from '../numbers.js';
-import { alive, pdcCount, damage, pickPiece, lateralSpeed } from './ship.js';
+import { alive, pdcCount, damage, pickPiece } from './ship.js';
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // 1 at point blank, 0 at PDC_RANGE and beyond.
@@ -106,12 +106,13 @@ export function stepRail(battle, ship, enemy, dt) {
   // fire
   ship.railAim = -1;
   ship.railCharge = N.RAIL_RECHARGE;
-  const hit = lateralSpeed(enemy) < N.RAIL_DODGE_SPEED;
+  // A Burn at any moment during the aim throws the shot off.
+  const hit = enemy.lastBurnT < ship.railAimStart;
   battle.projectiles.push({
     kind: 'slug', owner: ship.id, target: enemy.id, hit,
     x: ship.x, y: ship.y,
     // aimed at where the enemy is; on a miss, aim at where it was before the burn
-    tx: enemy.x, ty: hit ? enemy.y : enemy.y - Math.sign(enemy.vy || 1) * 0.6,
+    tx: enemy.x, ty: hit ? enemy.y : enemy.y - Math.sign(enemy.vy || 1) * 0.6, aimStart: ship.railAimStart,
     dead: false, age: 0,
   });
   battle.events.push({ type: 'railFire', x: ship.x, y: ship.y, by: ship.id });

@@ -33,8 +33,8 @@ function think(b, me, you) {
   // Torpedoes: fire when loaded and in range.
   give('torps');
 
-  // Railgun: aim when the target is not dodging and we are not about to be hit.
-  if (Math.abs(you.vy) < N.RAIL_DODGE_SPEED) give('rail');
+  // Railgun: sure shot when they cannot dodge (no burns, or aiming themselves); otherwise a gamble.
+  if (you.burns === 0 || you.railAim >= 0 || b.rng.chance(N.AI_RAIL_GAMBLE)) give('rail');
 
   // Range: close when healthy or winning, open when behind and PDCs are gone.
   const pdcs = (alive(me, 'pdcL') ? 1 : 0) + (alive(me, 'pdcR') ? 1 : 0);

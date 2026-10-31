@@ -51,7 +51,7 @@ export function apply(ship, order, battle) {
     case 'torps':
       battle.launchTorps(ship); break;
     case 'rail':
-      ship.railAim = 0; break;
+      ship.railAim = 0; ship.railAimStart = battle.t; break;
     case 'burn':
       battle.burn(ship); break;
     case 'run':
