@@ -15,6 +15,34 @@ export function faceFor(off) {
 
 // fit: slot kind -> variant key from the catalog, for the slots of this design that have one;
 // a variant overrides the room's turrets and armor, or the ship's tubes, rail and drive numbers.
+// The form as cells (ARCHITECTURE.md "The form"): design.form.rows, one letter per cell, '.' void.
+// A letter in design.form.rooms is that job room's cell. Any other letter is frame: each 4-connected
+// group of one letter is its own frame room `frame:<letter><n>` (hp FRAME_HP, no job), added to
+// `pieces`. Row-major, so the numbering is deterministic. Returns {form, cells, frames}.
+export function buildForm(design, pieces) {
+  const rows = design.form.rows, h = rows.length, w = rows[0].length;
+  const cells = rows.map((r) => [...r].map(() => null));
+  const frames = [], count = {};
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const ch = rows[y][x];
+    if (ch === '.' || cells[y][x]) continue;
+    const job = design.form.rooms[ch];
+    if (job) { cells[y][x] = { room: job, cut: false }; continue; }
+    count[ch] = (count[ch] || 0) + 1;
+    const id = `frame:${ch}${count[ch]}`;
+    frames.push(id);
+    pieces[id] = { hp: N.FRAME_HP, maxHp: N.FRAME_HP, alive: true };
+    const stack = [[x, y]];
+    while (stack.length) {
+      const [a, b] = stack.pop();
+      if (b < 0 || b >= h || a < 0 || a >= w || rows[b][a] !== ch || cells[b][a]) continue;
+      cells[b][a] = { room: id, cut: false };
+      stack.push([a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]);
+    }
+  }
+  return { form: { w, h }, cells, frames };
+}
+
 export function makeShip(id, name, x, facing, design, fit = {}) {
   const pieces = {}, armor = {}, bulkheadAft = {}, turrets = {};
   const v = (kind) => (CATALOG[kind] && CATALOG[kind][fit[kind]]) || null; // the fitted variant of a kind, if any
@@ -34,8 +62,10 @@ export function makeShip(id, name, x, facing, design, fit = {}) {
     if (x && r.kind === 'gun') { railRange = x.range; railRecharge = x.recharge; }
     if (x && r.kind === 'drive') { accel = x.accel; burns = x.burns; }
   }
+  const { form, cells, frames } = buildForm(design, pieces);
   return {
     id, name, design: design.id, fit: { ...fit },
+    form, cells, frames,  // the grid: {w, h}; cells[y][x] null or {room, cut}; the frame room ids
     accel,              // fraction of ACCEL this hull's drive gives
     salvo, reloadTime,  // torpedoes per salvo, seconds between salvos
     railRange, railRecharge, // km, seconds

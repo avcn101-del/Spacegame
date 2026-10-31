@@ -26,6 +26,7 @@ export const N = {
   ROOM_HP: 10,           // a room dies to one torpedo or one slug
   BRIDGE_WEIGHT: 0.5,    // broadside: bridge is buried in the hull, half as likely to be the room hit
   ARMOR_HP_MULT: 2,      // a plated room takes two torpedoes, not one; which rooms are plated is the ship's design
+  FRAME_HP: 5,           // a frame room (structure, an empty hardpoint) dies to one torpedo and soaks it: cover costs the enemy one hit per layer
   FACE_TURN_TIME: 4,     // seconds to swing the hull 90 degrees; a bigger swing takes proportionally longer
   BOW_CONE: 45,          // degrees off the bearing to the enemy that still count as bow-on (or tail-on at the other end); between is broadside
   OFF_AXIS_ACCEL: 0.5,   // thrusters push half as hard as the main drive; facing the wrong way is slow

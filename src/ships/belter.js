@@ -17,4 +17,18 @@ export const BELTER = {
     { id: 'tubes', kind: 'launcher', bulkhead: true }, // dead: no torpedoes, the drive tears off
     { id: 'drive', kind: 'drive' },                         // dead: adrift
   ].map((r) => ({ ...r, hp: N.ROOM_HP * (r.armor ? N.ARMOR_HP_MULT : 1) })),
+  // The form: a shorter, boxier hull, 20 x 7 cells, keel on row 3. Three turret sponsons (two above,
+  // one below), the sensors A filling the soft nose, the bays L just aft of them, two bulkheads K.
+  form: {
+    rows: [
+      '......TT.....TT.....',
+      '.FFFKFTTFFFFFTTFFKF.',
+      'EEFFKQQFFBBFFFFLLKAA',
+      'EEFFKQQFFBBFFFFLLKAA',
+      'EEFFKQQFFBBFFFFLLKAA',
+      '.FFFKFFFFFFFFTTFFKF.',
+      '.............TT.....',
+    ],
+    rooms: { A: 'sensors', T: 'pdc', B: 'bridge', Q: 'crew', L: 'tubes', E: 'drive' },
+  },
 };

@@ -19,4 +19,23 @@ export const TACHI = {
     { id: 'tubes', kind: 'launcher', armor: true, bulkhead: true }, // torpedoes; plated (its bays); cannot fire tail-on; dead: the drive tears off
     { id: 'drive', kind: 'drive' },                         // dead: no moving, no turning, no burns
   ].map((r) => ({ ...r, hp: N.ROOM_HP * (r.armor ? N.ARMOR_HP_MULT : 1) })),
+  // The form (ARCHITECTURE.md "The form"): draft 12 of the owner's Roci form, 28 x 9 cells of 5 m,
+  // stern at x 0, bow at the right, the keel on row 4. A letter in `rooms` is a job room's cell; every
+  // other letter is frame, one frame room per 4-connected group of the same letter (bulkheads K,
+  // spine S, hull frame F, and the empty hardpoints: reactors R, heat sink H, shield generator X,
+  // cockpit C, workshop W, empty slots e c, the vent v). A: the antenna, the sensors' one cell.
+  form: {
+    rows: [
+      '........TT..................',
+      '.FFFKKFFTT..FFFFF...........',
+      'FFeeKKQQQmAKWWBBHHRRKLL.....',
+      'EEeeKKQQQFFKWWBBHHRRKFFFFF..',
+      'EESSSSSSSSSSSSSSSSGGGGGGGGGG',
+      'EEeeKKDDDFFKccCCXXRRKFFFFF..',
+      'FFeeKKDDDmvKccCCXXRRKLL.....',
+      '.FFFKKFFTT..FFFFF...........',
+      '........TT..................',
+    ],
+    rooms: { G: 'rail', A: 'sensors', T: 'pdc', m: 'pdc', B: 'bridge', Q: 'crew', D: 'crew', L: 'tubes', E: 'drive' },
+  },
 };
