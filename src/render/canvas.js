@@ -6,7 +6,7 @@
 // that are the same sequence every run.
 
 import { N } from '../numbers.js';
-import { exposure, alive, pdcRooms, mountSide } from '../sim/ship.js';
+import { exposure, alive, pdcRooms, mountSide, shotFrom } from '../sim/ship.js';
 import { drawArcs, drawPdcCounts, railKm } from './arcs.js';
 import { drawShipMark, COLORS } from './silhouette.js';
 import { drawForm, roomPoint, roomBounds, roomAtPoint, roomBracket } from './form.js';
@@ -919,7 +919,12 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     return Math.atan2(m.ay - (box.y + box.h / 2), m.ax - (box.x + box.w / 2));
   };
   // the side the broadside chevrons sit on, as a canvas direction: right for 'me', left for 'them'
-  const sideDir = () => (facing === 1 ? 0 : Math.PI);
+  let foe = null; // the other ship from the last draw: which broadside faces it
+  const sideDir = () => {
+    const f = ship && foe ? shotFrom(ship, foe.x, foe.y) : null, topLeft = facing === 1; // row 0 ('top') is the left column for facing +1
+    const left = f === 'top' ? topLeft : f === 'bottom' ? !topLeft : facing !== 1;
+    return left ? Math.PI : 0;
+  };
   // Travel direction of enemy fire across this panel: down the hull from the
   // bow when bow-on, up from the stern when tail-on, across it when broadside.
   const incomingDir = () => {
@@ -934,6 +939,7 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     if (!size) return; // hidden or mid-rotation: skip; layout is redone when a size comes back
     ship = battle.shipById ? battle.shipById(shipId) : battle.ships.find((s) => s.id === shipId);
     const enemy = battle.enemyOf ? battle.enemyOf(ship) : battle.ships.find((s) => s !== ship);
+    foe = enemy;
     facing = ship.facing === -1 ? -1 : 1;
     if (size.w !== w || size.h !== h || !box || layoutFacing !== facing || layoutDesign !== ship.design) { w = size.w; h = size.h; layout(); }
 
@@ -965,7 +971,9 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     const so = fx.shakeOffset(time);
     ctx.save();
     ctx.translate(so.x, so.y);
-    drawForm(ctx, ship, box, { flash, t: time, warn });
+    // which side faces them: the broadside chevrons go on that side (top or bottom of the form)
+    const from = enemy ? shotFrom(ship, enemy.x, enemy.y) : null;
+    drawForm(ctx, ship, box, { flash, t: time, warn, from });
     // the room the other side's weapons are going for, in that side's color
     const aimed = enemy && enemy.target && ship.pieces[enemy.target] && ship.pieces[enemy.target].alive ? enemy.target : null;
     if (aimed) roomBracket(ctx, ship, aimed, box, shipId === 'them' ? COLORS.me : COLORS.them, time);
