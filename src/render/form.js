@@ -268,7 +268,9 @@ export function drawForm(ctx, ship, box, fx = {}) {
     const e = exposure(ship);
     const pulse = ship.turnLeft > 0 ? 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * 9)) : 1;
     const size = Math.max(4, Math.min(7, cw * 0.6));
-    const cx = box.x + box.w / 2, sideX = ship.facing === -1 ? box.x : box.x + box.w, sd = ship.facing === -1 ? 1 : -1;
+    // the broadside that faces them: row 0 ('top') is the left column for facing +1, the right for -1
+    const topLeft = ship.facing !== -1, left = fx.from === 'top' ? topLeft : fx.from === 'bottom' ? !topLeft : ship.facing === -1;
+    const cx = box.x + box.w / 2, sideX = left ? box.x : box.x + box.w, sd = left ? 1 : -1;
     const marks = [];
     if (e === 'bow') marks.push([cx, box.y - 2, 0, 1]);
     else if (e === 'tail') marks.push([cx, box.y + box.h + 2, 0, -1]);

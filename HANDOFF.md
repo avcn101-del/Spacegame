@@ -102,6 +102,10 @@ work longer than about an hour, give the estimate and wait for go.
   RAIL, TORPS, GUARD and RAKE buttons wear their room's colour, the same as the arc and the panel
   room. The PDC arc is four sectors, each shaded by and labelled with the living mounts that see
   it (bow and stern every mount, a broadside that side's): where a torpedo is easiest to stop.
+- Broadside chevrons (PR 36, the owner: "show which side of my ship faces them, so I can put the
+  broadside without the bridge in front"): the panel's side chevrons sit on the side that faces the
+  enemy (`shotFrom`: top = row 0 side, where the bridge is: from the top one frame cell covers it,
+  from the bottom four: F, C, C, S in column 14). Before, they were always on one fixed side.
 - The form (2026-10-31, replaces "not the 2D grid"): the ship is draft 12 of the owner's
   "Roci form" artifact, a 28 x 9 grid of cells with fixed hardpoints; the direction is ship
   building like Cosmoteer but with a fixed form and fixed hardpoints, the player picks a
