@@ -3,13 +3,14 @@
 import { N } from '../numbers.js';
 import { T } from '../text.js';
 import { alive, exposure, canFireTubes, canAimRail } from '../sim/ship.js';
-import { CATALOG, SLOTS } from '../ships/catalog.js';
+import { CATALOG } from '../ships/catalog.js';
+import { drawHangar, slotAt } from './hangar.js';
 
 const $ = (sel) => document.querySelector(sel);
 const fmtClock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 const tap = (sel, fn) => $(sel).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 
-export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit }) {
+export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview }) {
   const el = {
     clock: $('#n-clock'), range: $('#n-range'), rate: $('#n-rate'), torps: $('#n-torps'), burns: $('#n-burns'),
     phase: $('#phase'), order: $('#order'), pause: $('#pause'),
@@ -30,18 +31,40 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   for (const id of ['#pm-export', '#rs-export']) { tap(id, onExport); $(id).textContent = T.export; }
   for (const id of ['#pm-import', '#rs-import']) { tap(id, onImport); $(id).textContent = T.import; }
   tap('#pm-auto', onAuto);
-  // The hangar: rows of two picks; LAUNCH hands the fit back and starts a new battle.
-  let fit = {};
+  // The hangar: the ship's form (preview(fit) builds it), a tap on a marked part toggles that slot's
+  // variant; LAUNCH hands the fit back and starts a new battle. No pick rows: every slot is on the drawing.
+  let fit = {}, sel = null, hits = [];
   for (const id of ['#pm-hangar', '#rs-hangar']) { tap(id, () => api.showHangar(fit)); $(id).textContent = T.hangar.button; }
   $('#hg-title').textContent = T.hangar.title; $('#hg-launch').textContent = T.hangar.launch; $('#hg-close').textContent = T.hangar.close;
-  $('#hg-slots').innerHTML = SLOTS.map((slot) => `<div class="slot"><div class="k">${T.slots[slot].toUpperCase()}</div>` +
-    Object.keys(CATALOG[slot]).map((key) => `<button class="pick" data-slot="${slot}" data-key="${key}"><span class="n">${T.catalog[key].name.toUpperCase()}</span><span class="d">${T.catalog[key].line}</span></button>`).join('') + '</div>').join('');
-  for (const b of document.querySelectorAll('#hg-slots .pick')) b.addEventListener('pointerdown', (e) => { e.preventDefault(); fit = { ...fit, [b.dataset.slot]: b.dataset.key }; markFit(fit); });
+  const cv = $('#hg-canvas');
+  cv.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const r = cv.getBoundingClientRect();
+    const slot = slotAt(hits, e.clientX - r.left, e.clientY - r.top);
+    if (!slot) return;
+    const keys = Object.keys(CATALOG[slot]);
+    fit = { ...fit, [slot]: keys[(keys.indexOf(fit[slot]) + 1) % keys.length] };
+    sel = slot;
+    markFit(fit);
+  });
   let hangarOpen = false;
   const closeHangar = () => { hangarOpen = false; $('#hangar').classList.remove('show'); };
   tap('#hg-close', closeHangar);
   tap('#hg-launch', () => { closeHangar(); onFit(fit); });
-  const markFit = (f) => { for (const b of document.querySelectorAll('#hg-slots .pick')) b.classList.toggle('on', f[b.dataset.slot] === b.dataset.key); };
+  // Redraw the previewed ship for this fit and say what the last tapped slot now holds.
+  const markFit = (f) => {
+    const ship = preview(f);
+    const W = Math.min(660, window.innerWidth - 16), H = Math.max(120, Math.min(260, window.innerHeight - 150));
+    const dpr = window.devicePixelRatio || 1;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = `${W}px`; cv.style.height = `${H}px`;
+    }
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    hits = drawHangar(ctx, ship, f, sel, W, H);
+    const c = sel && T.catalog[f[sel]];
+    $('#hg-line').innerHTML = c ? `<b>${T.slots[sel].toUpperCase()}</b> ${c.name}. <span>${c.line}</span>` : `<span>${T.hangar.hint}</span>`;
+  };
   $('#export-title').textContent = T.exportTitle;
   $('#export-copy').textContent = T.copy; $('#export-download').textContent = T.download; $('#export-close').textContent = T.close;
   tap('#export-close', () => $('#exportbox').classList.remove('show'));
@@ -69,7 +92,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
 
   const api = {
     showExport(text) { $('#export-text').value = text; $('#exportbox').classList.add('show'); },
-    showHangar(f) { fit = { ...f }; markFit(fit); hangarOpen = true; $('#hangar').classList.add('show'); },
+    showHangar(f) { fit = { ...f }; sel = null; hangarOpen = true; $('#hangar').classList.add('show'); markFit(fit); },
     setFit(f) { fit = { ...f }; },
     setAuto(on) { auto = on; $('#pm-auto').textContent = on ? T.autoOff : T.auto; document.getElementById('orders').classList.toggle('replay', on || replay); },
     toast(text, ttl = 2.0) { toast = { text, ttl }; },

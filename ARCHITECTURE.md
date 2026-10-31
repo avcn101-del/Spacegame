@@ -29,7 +29,8 @@ src/ai/enemy.js       makeEnemy(shipId, preset): decide/apply/step, same orders
 tools/selfplay.mjs    20 seeds AI vs AI, determinism check
 tools/arena.mjs       preset vs preset over many seeds: the balance tool
 tools/replay.mjs      replay a battle JSON headless, print stats and orders
-src/render/form.js    the form drawn as a grid in a panel: cells lit, dark, adrift; roomAtPoint for the tap
+src/render/form.js    the form drawn as a grid (vertical in a panel, horizontal in the hangar): cells lit, dark, adrift; roomAtPoint for the tap
+src/render/hangar.js  the hangar drawing: hardpoints with their picks over the form, slotAt for the tap
 src/render/silhouette.js  Roci outline (the tactical mark and the art tables)
 src/render/canvas.js  tactical strip, tracers, impacts, debris, shake
 src/render/hud.js     four numbers, current order, buttons, pause, result, the hangar overlay (onFit hands the fit back; main.js keeps it in the URL `?fit=` and localStorage)

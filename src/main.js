@@ -10,7 +10,7 @@ import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
 import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
 import { DESIGNS, DEFAULT_DESIGN } from './ships/index.js';
 import { parseFit, fitString, DEFAULT_FIT } from './ships/catalog.js';
-import { turretCount } from './sim/ship.js';
+import { turretCount, makeShip } from './sim/ship.js';
 import { attachDrag } from './input/drag.js';
 import { attachTap } from './input/tap.js';
 
@@ -70,6 +70,8 @@ const hud = makeHud({
     try { localStorage.setItem('fit', fitString(myFit)); } catch (e) { /* no storage: the URL still carries it */ }
     start();
   },
+  // The hangar's drawing: the ship I would fly with this fit (a throwaway, not the battle's).
+  preview(fit) { return makeShip('me', T.ships.me, 0, +1, DESIGNS[myShip], { ...DEFAULT_FIT, ...fit }); },
   onImport() {
     const text = prompt(T.importPrompt);
     if (!text) return;

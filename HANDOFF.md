@@ -42,7 +42,7 @@ work longer than about an hour, give the estimate and wait for go.
   answer "why". Replay version 8 (the form); version 7 replays diverge. `ships {me, them}` are `{design, fit}`;
   pass `r.ships` to `makeBattle(seed, ships)` or the replay diverges. Older
   replays diverge anyway (the sim changed).
-- Rendering (`src/render/canvas.js`, `form.js`, `silhouette.js`) follows the state
+- Rendering (`src/render/canvas.js`, `form.js`, `hangar.js`, `silhouette.js`) follows the state
   contract in ARCHITECTURE.md; the panels draw the form from `ship.cells` (`form.js`),
   `silhouette.js` keeps the tactical mark and the art tables. Sim and AI never import render.
 
@@ -113,6 +113,15 @@ work longer than about an hour, give the estimate and wait for go.
 Everything below the first bullet was measured before the form and is void for balance;
 kept only as history. After the form (30 seeds, win/lose/draw):
 
+- After the PDC mounts (PR 24; the pdc is six one-cell mounts on the hull edge, open to shots
+  from the sides only): brawler vs brawler 7/14/9 avg 113 s; brawler vs gunship 8/19/3 (was
+  27/2/1: the Belter's PDC used to be twelve sponson cells hit from every side); sniper vs
+  gunship 5/5/20 with 19 time draws avg 193 s (the gunship keeps its PDCs, the sniper's
+  torpedoes die); sniper vs sniper 4/10/16; tripleDeck brawler vs gunship 13/15/2. Not tuned.
+- A quirk since PR 21: a fit from the URL or the hangar always carries all four slots, so a
+  Belter flown by the owner gets the Tachi's pdc pick (twinDeck: 2 mounts, plated) while the
+  AI gunship with fit {} keeps its own 3 unplated. The hangar title also says Rocinante for
+  the Belter. Cosmetic until the Belter has its own catalog.
 - After the form, with the rail aiming and frame carrying (PR 23): brawler vs brawler
   12/11/7 (5 time draws), avg 95 s (chain: 19/9, 40 s); brawler vs gunship 27/2/1; sniper
   vs gunship 6/21/3; sniper vs sniper 9/10/11; brawler (tripleDeck) vs gunship 25/5/0;
@@ -152,12 +161,10 @@ kept only as history. After the form (30 seeds, win/lose/draw):
 1. The owner plays the form with the rail aiming and frame as cover (PR 23) and says three
    things: can the grid be read at 9 x 7 px a cell, does cover make a decision, is the
    stalemate still there (a hulk with its drive dead that cannot be finished).
-2. Agreed with the owner (2026-10-31), in this order after he plays: PDC becomes the six hull
-   mounts of draft 12 ((6,1) (13,1) (24,3) top, (6,7) (13,7) (24,5) bottom), the T sponsons
-   (Gun mount M, a weapon the game lacks) go back to frame, the hangar pick lights 2 or 3 of
-   the six mounts; then the hangar draws the form with the picks on their hardpoints (tap a
-   hardpoint to change it); then, only if the stalemate stays: a ship with its drive dead and
-   no weapon it can bring to bear is beaten (or tail-on tubes fire at half rate).
+2. Built (PR 24): PDC is the six hull mounts of draft 12, the pick lights 2 or 3; the hangar
+   draws the form, tap a hardpoint to swap its pick. The owner plays this too. Then, only if
+   the stalemate stays: a ship with its drive dead and no weapon it can bring to bear is
+   beaten (or tail-on tubes fire at half rate).
 3. The next rooms into the empty hardpoints, only when the owner names them (he said
    "discuss later"). Then the hangar picks per hardpoint, one at a time.
 4. The owner plays with fits and says which pick never gets chosen; a pick nobody takes is
