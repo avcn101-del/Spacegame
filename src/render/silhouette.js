@@ -1,6 +1,6 @@
-// Side-profile silhouette of a Tachi-class corvette (Rocinante-inspired):
-// seven rooms laid along the hull from bow to stern, each lit or dark (a torn
-// room drawn adrift past the end it broke from), plus
+// Side-profile silhouettes: the Tachi-class corvette (Rocinante-inspired) and the
+// Belter gunship, each its own art table. Rooms laid along the hull from bow to
+// stern, each lit or dark (a torn room drawn adrift past the end it broke from), plus
 // the small top-down mark for the tactical map and the exposure chevrons.
 // Pure canvas drawing. No DOM, no state kept here: everything comes from
 // (ship, box, fx). No Math.random: every "random" crack or chunk is hashed
@@ -30,112 +30,113 @@ export const COLORS = {
 
 // --- hull profile -------------------------------------------------------------
 
-// (u, half height): the top edge of the hull body, stern to bow. The bottom
-// edge mirrors it. Bulkheads cut this profile into the seven room bodies.
-const PROFILE = [[0.04, 0.30], [0.20, 0.36], [0.68, 0.36], [0.86, 0.22], [1.00, 0.06]];
+// Each ship design has its own art: a hull profile, its rooms as shapes, a draw order,
+// landmarks for effects, and the small detail positions. `A` is the art of the ship being
+// drawn; every public function picks it from the ship's design first.
+const ART = {};
+let A = null;
+const useArt = (design) => { A = ART[design] || ART.tachi; };
 
-function halfH(u) {
-  if (u <= PROFILE[0][0]) return PROFILE[0][1];
-  for (let i = 1; i < PROFILE.length; i++) {
-    const [u0, h0] = PROFILE[i - 1], [u1, h1] = PROFILE[i];
+// (u, half height): the top edge of the hull body, stern to bow. The bottom
+// edge mirrors it. Bulkheads cut this profile into the room bodies.
+function halfH(u, profile = A.profile) {
+  if (u <= profile[0][0]) return profile[0][1];
+  for (let i = 1; i < profile.length; i++) {
+    const [u0, h0] = profile[i - 1], [u1, h1] = profile[i];
     if (u <= u1) return h0 + (h1 - h0) * ((u - u0) / (u1 - u0));
   }
-  return PROFILE[PROFILE.length - 1][1];
+  return profile[profile.length - 1][1];
 }
 
 // The hull body between u0 and u1 as a closed polygon, shrunk by `inset` at
 // each end so the base hull shows through as the bulkhead seam.
-function segment(u0, u1, inset = 0) {
+function segment(u0, u1, inset = 0, profile = A.profile) {
   const a = u0 + inset, b = u1 - inset;
-  const top = [[a, -halfH(a)]];
-  for (const [u] of PROFILE) if (u > a && u < b) top.push([u, -halfH(u)]);
-  top.push([b, -halfH(b)]);
+  const top = [[a, -halfH(a, profile)]];
+  for (const [u] of profile) if (u > a && u < b) top.push([u, -halfH(u, profile)]);
+  top.push([b, -halfH(b, profile)]);
   const bottom = top.slice().reverse().map(([u, v]) => [u, -v]);
   return [...top, ...bottom];
 }
-
-// Hull body outline (u, v), bow on the right.
-const HULL = segment(0.04, 1.0);
 
 const SEAM = 0.006; // half the bulkhead gap, in u
 
 // Rooms from bow to stern. span: the u range the room occupies (also the hp
 // gauge's axis); shapes[0] is the main body (chunks, cracks, the hp fill),
 // the rest are fittings; center is the hit point in ship-local coordinates.
-const ROOM_DEFS = {
-  // Railgun room: the bow taper, with the keel barrel slung under it and the
-  // muzzle sticking out past the bow.
-  rail: {
-    span: [0.86, 1.00],
-    center: [0.92, 0.0],
-    shapes: [
-      segment(0.86, 1.00, SEAM),
-      [[0.78, 0.22], [1.10, 0.22], [1.10, 0.30], [0.78, 0.30]],   // barrel
-      [[0.84, 0.14], [0.92, 0.14], [0.92, 0.23], [0.84, 0.23]],   // pylon
-    ],
-  },
-  // Sensors: a mast with a dish on the spine, just behind the bow.
-  sensors: {
-    span: [0.74, 0.86],
-    center: [0.80, 0.0],
-    shapes: [
-      segment(0.74, 0.86, SEAM),
-      [[0.79, -0.24], [0.815, -0.24], [0.815, -0.46], [0.79, -0.46]],   // mast
-      [[0.75, -0.46], [0.855, -0.46], [0.84, -0.54], [0.765, -0.54]],   // dish
-    ],
-  },
-  // PDC deck: two turrets, one on the spine, one on the keel, barrels forward.
-  pdc: {
-    span: [0.60, 0.74],
-    center: [0.67, 0.0],
-    shapes: [
-      segment(0.60, 0.74, SEAM),
-      [[0.62, -0.36], [0.74, -0.36], [0.725, -0.52], [0.70, -0.60], [0.64, -0.60], [0.615, -0.52]], // top dome
-      [[0.68, -0.585], [0.80, -0.585], [0.80, -0.535], [0.68, -0.535]],                            // top barrel
-      [[0.62, 0.36], [0.74, 0.36], [0.725, 0.52], [0.70, 0.60], [0.64, 0.60], [0.615, 0.52]],       // bottom dome
-      [[0.68, 0.585], [0.80, 0.585], [0.80, 0.535], [0.68, 0.535]],                                // bottom barrel
-    ],
-  },
-  // Bridge: in the middle of the hull, windows face the bow. The room the others must reach.
-  bridge: {
-    span: [0.44, 0.60],
-    center: [0.52, 0.0],
-    shapes: [segment(0.44, 0.60, SEAM)],
-  },
-  // Crew: quarters and damage control, portholes along the side.
-  crew: {
-    span: [0.29, 0.44],
-    center: [0.365, 0.0],
-    shapes: [segment(0.29, 0.44, SEAM)],
-  },
-  // Torpedo tubes: two ports.
-  tubes: {
-    span: [0.13, 0.29],
-    center: [0.21, 0.0],
-    shapes: [segment(0.13, 0.29, SEAM)],
-  },
-  // Epstein drive: the stern block flaring into the cone.
-  drive: {
-    span: [-0.03, 0.13],
-    center: [0.05, 0.0],
-    shapes: [
-      [[0.13 - SEAM, -halfH(0.13 - SEAM)], [0.13 - SEAM, halfH(0.13 - SEAM)], [0.04, 0.30], [-0.02, 0.42], [-0.03, 0.0], [-0.02, -0.42], [0.04, -0.30]],
-    ],
-  },
-};
+function tachiRooms(P) {
+  const seg = (u0, u1, inset = 0) => segment(u0, u1, inset, P), hh = (u) => halfH(u, P);
+  return {
+    // Railgun room: the bow taper, with the keel barrel slung under it and the
+    // muzzle sticking out past the bow.
+    rail: {
+      span: [0.86, 1.00],
+      center: [0.92, 0.0],
+      shapes: [
+        seg(0.86, 1.00, SEAM),
+        [[0.78, 0.22], [1.10, 0.22], [1.10, 0.30], [0.78, 0.30]],   // barrel
+        [[0.84, 0.14], [0.92, 0.14], [0.92, 0.23], [0.84, 0.23]],   // pylon
+      ],
+    },
+    // Sensors: a mast with a dish on the spine, just behind the bow.
+    sensors: {
+      span: [0.74, 0.86],
+      center: [0.80, 0.0],
+      shapes: [
+        seg(0.74, 0.86, SEAM),
+        [[0.79, -0.24], [0.815, -0.24], [0.815, -0.46], [0.79, -0.46]],   // mast
+        [[0.75, -0.46], [0.855, -0.46], [0.84, -0.54], [0.765, -0.54]],   // dish
+      ],
+    },
+    // PDC deck: two turrets, one on the spine, one on the keel, barrels forward.
+    pdc: {
+      span: [0.60, 0.74],
+      center: [0.67, 0.0],
+      shapes: [
+        seg(0.60, 0.74, SEAM),
+        [[0.62, -0.36], [0.74, -0.36], [0.725, -0.52], [0.70, -0.60], [0.64, -0.60], [0.615, -0.52]], // top dome
+        [[0.68, -0.585], [0.80, -0.585], [0.80, -0.535], [0.68, -0.535]],                            // top barrel
+        [[0.62, 0.36], [0.74, 0.36], [0.725, 0.52], [0.70, 0.60], [0.64, 0.60], [0.615, 0.52]],       // bottom dome
+        [[0.68, 0.585], [0.80, 0.585], [0.80, 0.535], [0.68, 0.535]],                                // bottom barrel
+      ],
+    },
+    // Bridge: in the middle of the hull, windows face the bow. The room the others must reach.
+    bridge: {
+      span: [0.44, 0.60],
+      center: [0.52, 0.0],
+      shapes: [seg(0.44, 0.60, SEAM)],
+    },
+    // Crew: quarters and damage control, portholes along the side.
+    crew: {
+      span: [0.29, 0.44],
+      center: [0.365, 0.0],
+      shapes: [seg(0.29, 0.44, SEAM)],
+    },
+    // Torpedo tubes: two ports.
+    tubes: {
+      span: [0.13, 0.29],
+      center: [0.21, 0.0],
+      shapes: [seg(0.13, 0.29, SEAM)],
+    },
+    // Epstein drive: the stern block flaring into the cone.
+    drive: {
+      span: [-0.03, 0.13],
+      center: [0.05, 0.0],
+      shapes: [
+        [[0.13 - SEAM, -hh(0.13 - SEAM)], [0.13 - SEAM, hh(0.13 - SEAM)], [0.04, 0.30], [-0.02, 0.42], [-0.03, 0.0], [-0.02, -0.42], [0.04, -0.30]],
+      ],
+    },
+  };
+}
 
-// Draw order, stern first so the rail barrel ends up on top.
-const DRAW_ORDER = ['drive', 'tubes', 'crew', 'bridge', 'pdc', 'sensors', 'rail'];
 // A torn room is drawn this far (in u) past the end it broke from, slightly turned: adrift.
 const TEAR_GAP = 0.10;
 const TEAR_TILT = 0.12;
-const bridgeU = () => ROOM_DEFS.bridge.center[0];
+const bridgeU = () => A.rooms.bridge.center[0];
 const isTorn = (ship, name) => !!(ship.pieces && ship.pieces[name] && ship.pieces[name].torn);
-// Bow to stern, the default when a ship carries no roomOrder.
-const BOW_TO_STERN = DRAW_ORDER.slice().reverse();
 
 // Points the panels need for effects that are not room centers.
-export const LANDMARKS = {
+const TACHI_LANDMARKS = {
   bow: [1.0, 0.0],
   muzzle: [1.11, 0.26],
   nozzle: [-0.04, 0.0],
@@ -149,6 +150,85 @@ export const LANDMARKS = {
   // where the exposure chevrons sit
   chevronBow: [1.16, 0.0], chevronTail: [-0.14, 0.0], chevronSideA: [0.33, 0.70], chevronSideB: [0.67, 0.70],
 };
+// Small details drawn on the rooms: where the windows, portholes, ports, hinges and the
+// antenna sit, in ship-local u, v.
+const TACHI_DECO = {
+  bridgeWindows: [0.585, 0.545],                 // u of the window slits' ends
+  portholes: [0.32, 0.365, 0.41], portholeV: -0.12,
+  tubePorts: [[0.21, -0.16], [0.21, 0.16]], portR: 0.045,
+  nozzleU: -0.02,
+  pdcHinges: [[0.63, 0.73, -0.44], [0.63, 0.73, 0.44]], // u0, u1, v of each dome's hinge line
+  railGroove: [0.80, 1.08, 0.26],
+  sensorWhisker: [[0.80, -0.50], [0.86, -0.50]], sensorDot: [0.8025, -0.56],
+};
+
+// defineArt: profile, rooms (a function of the profile), draw order (stern first, so what
+// pokes forward ends up on top), landmarks, details.
+function defineArt(id, profile, rooms, drawOrder, landmarks, deco) {
+  ART[id] = { id, profile, rooms: rooms(profile), drawOrder, bowToStern: drawOrder.slice().reverse(), landmarks, deco, hull: segment(0.04, 1.0, 0, profile) };
+}
+defineArt('tachi', [[0.04, 0.30], [0.20, 0.36], [0.68, 0.36], [0.86, 0.22], [1.00, 0.06]], tachiRooms,
+  ['drive', 'tubes', 'crew', 'bridge', 'pdc', 'sensors', 'rail'], TACHI_LANDMARKS, TACHI_DECO);
+
+// Belter gunship: a blunt, fat hull, six rooms, no rail. Three PDC domes (two on the spine,
+// one on the keel), a sensor mast and a keel antenna at the bow, four torpedo ports, a wide cone.
+function belterRooms(P) {
+  const seg = (u0, u1, inset = 0) => segment(u0, u1, inset, P), hh = (u) => halfH(u, P);
+  const dome = (u0, u1, sv) => [[u0, sv * 0.40], [u1, sv * 0.40], [u1 - 0.01, sv * 0.54], [u1 - 0.03, sv * 0.62], [u0 + 0.03, sv * 0.62], [u0 + 0.01, sv * 0.54]];
+  const barrel = (u0, u1, sv) => [[u0, sv * 0.60], [u1, sv * 0.60], [u1, sv * 0.555], [u0, sv * 0.555]];
+  return {
+    sensors: {
+      span: [0.82, 1.00], center: [0.91, 0.0],
+      shapes: [
+        seg(0.82, 1.00, SEAM),
+        [[0.90, -0.26], [0.925, -0.26], [0.925, -0.48], [0.90, -0.48]],  // mast
+        [[0.86, -0.48], [0.965, -0.48], [0.95, -0.56], [0.875, -0.56]],   // dish
+        [[0.86, 0.22], [0.88, 0.22], [0.88, 0.42], [0.86, 0.42]],         // keel antenna
+      ],
+    },
+    pdc: {
+      span: [0.62, 0.82], center: [0.72, 0.0],
+      shapes: [
+        seg(0.62, 0.82, SEAM),
+        dome(0.63, 0.71, -1), barrel(0.68, 0.80, -1),   // spine, aft
+        dome(0.73, 0.81, -1), barrel(0.78, 0.90, -1),   // spine, fore
+        dome(0.68, 0.76, 1), barrel(0.73, 0.85, 1),     // keel
+      ],
+    },
+    bridge: { span: [0.46, 0.62], center: [0.54, 0.0], shapes: [seg(0.46, 0.62, SEAM)] },
+    crew: { span: [0.32, 0.46], center: [0.39, 0.0], shapes: [seg(0.32, 0.46, SEAM)] },
+    tubes: { span: [0.14, 0.32], center: [0.23, 0.0], shapes: [seg(0.14, 0.32, SEAM)] },
+    drive: {
+      span: [-0.03, 0.14], center: [0.05, 0.0],
+      shapes: [
+        [[0.14 - SEAM, -hh(0.14 - SEAM)], [0.14 - SEAM, hh(0.14 - SEAM)], [0.04, 0.32], [-0.02, 0.46], [-0.03, 0.0], [-0.02, -0.46], [0.04, -0.32]],
+      ],
+    },
+  };
+}
+const BELTER_LANDMARKS = {
+  bow: [1.0, 0.0], muzzle: [1.0, 0.0], nozzle: [-0.04, 0.0],
+  tubeTop: [0.23, -0.42], tubeBottom: [0.23, 0.42],
+  topside: [0.39, -0.40], underside: [0.39, 0.40],
+  thrusterBowTop: [0.86, -0.32], thrusterBowBottom: [0.86, 0.32],
+  thrusterSternTop: [0.18, -0.41], thrusterSternBottom: [0.18, 0.41],
+  chevronBow: [1.16, 0.0], chevronTail: [-0.14, 0.0], chevronSideA: [0.33, 0.74], chevronSideB: [0.67, 0.74],
+};
+const BELTER_DECO = {
+  bridgeWindows: [0.605, 0.565],
+  portholes: [0.35, 0.39, 0.43], portholeV: -0.14,
+  tubePorts: [[0.19, -0.20], [0.19, 0.20], [0.27, -0.20], [0.27, 0.20]], portR: 0.045,
+  nozzleU: -0.02,
+  pdcHinges: [[0.64, 0.70, -0.46], [0.74, 0.80, -0.46], [0.69, 0.75, 0.46]],
+  railGroove: null,
+  sensorWhisker: [[0.91, -0.52], [0.97, -0.52]], sensorDot: [0.9125, -0.58],
+};
+defineArt('belter', [[0.04, 0.32], [0.14, 0.40], [0.72, 0.40], [0.88, 0.30], [1.00, 0.14]], belterRooms,
+  ['drive', 'tubes', 'crew', 'bridge', 'pdc', 'sensors'], BELTER_LANDMARKS, BELTER_DECO);
+useArt('tachi');
+
+// A landmark of a design, for the panels' effects.
+export const landmark = (name, design) => (ART[design] || ART.tachi).landmarks[name];
 
 // --- tiny deterministic hash (the only "random" here) -----------------------
 
@@ -195,8 +275,9 @@ function tracePoly(ctx, poly, box, facing) {
 
 // Canvas point at the center of a room. Used to spawn debris.
 // The trailing orientation argument is optional and defaults to horizontal.
-export function piecePoint(piece, box, facing, orientation = 'horizontal') {
-  const def = ROOM_DEFS[piece];
+export function piecePoint(piece, box, facing, orientation = 'horizontal', design = 'tachi') {
+  useArt(design);
+  const def = A.rooms[piece];
   const c = def ? def.center : [0.5, 0];
   return shipPoint(c[0], c[1], box, facing, orientation);
 }
@@ -208,10 +289,11 @@ const decoCache = new Map();
 // Cracks: jagged polylines from near the center outward. Chunks: triangular
 // bites out of the main shape's corners. Ember: a point inside the room.
 function decoration(name) {
-  let d = decoCache.get(name);
+  const key = A.id + ':' + name;
+  let d = decoCache.get(key);
   if (d) return d;
-  const def = ROOM_DEFS[name];
-  const seed = strSeed(name);
+  const def = A.rooms[name];
+  const seed = strSeed(key);
   const main = def.shapes[0];
   // bounding radius of the main shape around the center
   let rad = 0;
@@ -243,7 +325,7 @@ function decoration(name) {
   }
   const ember = [def.center[0] + (hash01(seed + 200) - 0.5) * 0.06, def.center[1] + (hash01(seed + 201) - 0.5) * 0.12];
   d = { cracks, chunks, ember, rad, phase: hash01(seed + 300) * 6.28 };
-  decoCache.set(name, d);
+  decoCache.set(key, d);
   return d;
 }
 
@@ -261,38 +343,39 @@ function strokePolyline(ctx, pts, box, facing) {
 function drawDetails(ctx, name, ship, box, facing, lit, t) {
   const P = (u, v) => shipPoint(u, v, box, facing);
   const s = box.h; // scale unit
+  const D = A.deco;
   ctx.lineWidth = 1;
   if (name === 'bridge') {
     // three window slits near the forward face
     for (let i = -1; i <= 1; i++) {
-      const a = P(0.585, i * 0.09), b = P(0.545, i * 0.09);
+      const a = P(D.bridgeWindows[0], i * 0.09), b = P(D.bridgeWindows[1], i * 0.09);
       ctx.strokeStyle = lit ? 'rgba(220,240,255,0.9)' : 'rgba(60,70,80,0.6)';
       ctx.lineWidth = Math.max(1, s * 0.018);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
   } else if (name === 'sensors') {
     // a forward antenna whisker and the dish's feed dot
-    const a = P(0.80, -0.50), b = P(0.86, -0.50);
+    const a = P(D.sensorWhisker[0][0], D.sensorWhisker[0][1]), b = P(D.sensorWhisker[1][0], D.sensorWhisker[1][1]);
     ctx.strokeStyle = lit ? 'rgba(200,220,240,0.7)' : 'rgba(50,58,68,0.6)';
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     if (lit) {
       const blink = 0.4 + 0.6 * (hash01(Math.floor(t * 2)) > 0.5 ? 1 : 0.3);
-      const d = P(0.8025, -0.56);
+      const d = P(D.sensorDot[0], D.sensorDot[1]);
       ctx.fillStyle = `rgba(143,208,255,${blink})`;
       ctx.beginPath(); ctx.arc(d.x, d.y, Math.max(1, s * 0.015), 0, Math.PI * 2); ctx.fill();
     }
   } else if (name === 'crew') {
     // a row of portholes
-    for (const u of [0.32, 0.365, 0.41]) {
-      const c = P(u, -0.12);
+    for (const u of D.portholes) {
+      const c = P(u, D.portholeV);
       ctx.beginPath(); ctx.arc(c.x, c.y, Math.max(1, s * 0.022), 0, Math.PI * 2);
       ctx.fillStyle = lit ? 'rgba(255,230,190,0.75)' : 'rgba(30,34,40,0.8)'; ctx.fill();
     }
   } else if (name === 'tubes') {
-    // two round ports
-    for (const vv of [-0.16, 0.16]) {
-      const c = P(0.21, vv);
-      ctx.beginPath(); ctx.arc(c.x, c.y, s * 0.045, 0, Math.PI * 2);
+    // round ports
+    for (const [u, v] of D.tubePorts) {
+      const c = P(u, v);
+      ctx.beginPath(); ctx.arc(c.x, c.y, s * D.portR, 0, Math.PI * 2);
       ctx.fillStyle = lit ? '#0b0e14' : '#07080b'; ctx.fill();
       ctx.strokeStyle = lit ? 'rgba(200,220,240,0.7)' : 'rgba(50,58,68,0.6)'; ctx.stroke();
       if (lit && ship.torps > 0 && ship.torpReload === 0) {
@@ -303,12 +386,12 @@ function drawDetails(ctx, name, ship, box, facing, lit, t) {
     }
   } else if (name === 'drive') {
     // nozzle throat and, when alive, the idle drive glow
-    const n = P(-0.02, 0);
+    const n = P(D.nozzleU, 0);
     ctx.beginPath(); ctx.ellipse(n.x, n.y, s * 0.02, s * 0.2, 0, 0, Math.PI * 2);
     ctx.fillStyle = lit ? '#0d1119' : '#07080b'; ctx.fill();
     if (lit) {
       const pulse = 0.55 + 0.15 * Math.sin(t * 9 + 1);
-      const g = P(-0.06, 0);
+      const g = P(D.nozzleU - 0.04, 0);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const grad = ctx.createRadialGradient(g.x, g.y, 0, g.x, g.y, s * 0.22);
@@ -321,18 +404,18 @@ function drawDetails(ctx, name, ship, box, facing, lit, t) {
       // thrust plume: only while the drive is actually accelerating, so a
       // ship with no plume reads as coasting or stationary
       const thrust = Math.abs(ship.thrust || 0);
-      if (thrust > 0.05) drawPlume(ctx, P, thrust, t);
+      if (thrust > 0.05) drawPlume(ctx, P, thrust, t, D.nozzleU);
     }
   } else if (name === 'pdc') {
     // hinge line on each dome
-    for (const vv of [-1, 1]) {
-      const a = P(0.63, vv * 0.44), b = P(0.73, vv * 0.44);
+    for (const [u0, u1, v] of D.pdcHinges) {
+      const a = P(u0, v), b = P(u1, v);
       ctx.strokeStyle = lit ? 'rgba(170,190,210,0.5)' : 'rgba(45,52,60,0.6)';
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
-  } else if (name === 'rail') {
+  } else if (name === 'rail' && D.railGroove) {
     // rail groove along the barrel
-    const a = P(0.80, 0.26), b = P(1.08, 0.26);
+    const a = P(D.railGroove[0], D.railGroove[2]), b = P(D.railGroove[1], D.railGroove[2]);
     ctx.strokeStyle = lit ? 'rgba(20,24,30,0.9)' : 'rgba(10,12,16,0.9)';
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   }
@@ -341,12 +424,12 @@ function drawDetails(ctx, name, ship, box, facing, lit, t) {
 // Blue-white Epstein plume out of the drive cone, along -u. Length scales
 // with |thrust| (up to about a fifth of the ship length) and flickers on a
 // hashed 30 Hz clock, so it is deterministic and freezes when time does.
-function drawPlume(ctx, P, thrust, t) {
+function drawPlume(ctx, P, thrust, t, nu) {
   const flick = 0.78 + 0.22 * hash01(Math.floor(t * 30));
   const len = (0.05 + 0.17 * thrust) * flick;
-  const n = P(-0.02, 0), tip = P(-0.02 - len, 0);
-  const a = P(-0.02, -0.15), b = P(-0.02, 0.15);
-  const a2 = P(-0.02, -0.06), b2 = P(-0.02, 0.06), tip2 = P(-0.02 - len * 0.65, 0);
+  const n = P(nu, 0), tip = P(nu - len, 0);
+  const a = P(nu, -0.15), b = P(nu, 0.15);
+  const a2 = P(nu, -0.06), b2 = P(nu, 0.06), tip2 = P(nu - len * 0.65, 0);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   const g = ctx.createLinearGradient(n.x, n.y, tip.x, tip.y);
@@ -373,7 +456,7 @@ function isActive(name, ship, fxActive) {
 // --- the room -------------------------------------------------------------------
 
 function drawRoom(ctx, name, ship, box, facing, fx, t) {
-  const def = ROOM_DEFS[name];
+  const def = A.rooms[name];
   const pc = ship.pieces && ship.pieces[name];
   const alive = pc ? !!pc.alive : true;
   const maxHp = pc && pc.maxHp > 0 ? pc.maxHp : N.ROOM_HP;
@@ -519,8 +602,8 @@ function drawExposure(ctx, ship, box, facing, fx, t) {
 
   // line of fire: the first alive room from the exposed end gets a red edge
   if (e !== 'side') {
-    const order = ship.roomOrder || BOW_TO_STERN;
-    const living = order.filter((r) => ROOM_DEFS[r] && roomAlive(ship, r));
+    const order = ship.roomOrder || A.bowToStern;
+    const living = order.filter((r) => A.rooms[r] && roomAlive(ship, r));
     const first = e === 'bow' ? living[0] : living[living.length - 1];
     if (first) {
       ctx.save();
@@ -529,7 +612,7 @@ function drawExposure(ctx, ship, box, facing, fx, t) {
       ctx.shadowColor = COLORS.warn;
       ctx.strokeStyle = 'rgba(255,70,70,0.55)';
       ctx.lineWidth = 1.2;
-      tracePoly(ctx, ROOM_DEFS[first].shapes[0], box, facing);
+      tracePoly(ctx, A.rooms[first].shapes[0], box, facing);
       ctx.stroke();
       ctx.restore();
     }
@@ -537,7 +620,7 @@ function drawExposure(ctx, ship, box, facing, fx, t) {
 
   // chevrons, pointing into the hull from where the fire comes
   const chevrons = [];
-  const L = LANDMARKS;
+  const L = A.landmarks;
   if (e === 'bow') chevrons.push([L.chevronBow[0], L.chevronBow[1], -1, 0]);
   else if (e === 'tail') chevrons.push([L.chevronTail[0], L.chevronTail[1], 1, 0]);
   else {
@@ -572,6 +655,7 @@ function drawExposure(ctx, ship, box, facing, fx, t) {
 //        orientation: 'horizontal' (default) | 'vertical' (tall box, bow up),
 //        exposure: false to hide the chevrons and the line-of-fire edge (default shown) }
 export function drawSilhouette(ctx, ship, box, fx = {}) {
+  useArt(ship.design);
   const facing = ship.facing === -1 ? -1 : 1;
   if (fx.orientation === 'vertical') {
     // Rotate the horizontal drawing: -90deg for facing 1, +90deg for facing -1.
@@ -595,10 +679,10 @@ function drawHorizontal(ctx, ship, box, fx, facing) {
 
   // hull base: a vertical steel gradient, darker when the ship is beaten.
   // It shows through the seams between rooms as the bulkheads. Torn rooms are not part of it.
-  let hull = HULL;
-  if (DRAW_ORDER.some((n) => isTorn(ship, n))) {
+  let hull = A.hull;
+  if (A.drawOrder.some((n) => isTorn(ship, n))) {
     let lo = 1, hi = 0;
-    for (const n of DRAW_ORDER) if (!isTorn(ship, n)) { lo = Math.min(lo, ROOM_DEFS[n].span[0]); hi = Math.max(hi, ROOM_DEFS[n].span[1]); }
+    for (const n of A.drawOrder) if (!isTorn(ship, n)) { lo = Math.min(lo, A.rooms[n].span[0]); hi = Math.max(hi, A.rooms[n].span[1]); }
     hull = segment(Math.max(0.04, lo), Math.min(1.0, hi));
   }
   tracePoly(ctx, hull, box, facing);
@@ -612,10 +696,10 @@ function drawHorizontal(ctx, ship, box, fx, facing) {
   ctx.strokeStyle = bridgeAlive ? 'rgba(168,188,205,0.7)' : 'rgba(80,90,100,0.6)';
   ctx.stroke();
 
-  for (const name of DRAW_ORDER) {
+  for (const name of A.drawOrder) {
     if (!isTorn(ship, name)) { drawRoom(ctx, name, ship, box, facing, fx, t); continue; }
     // torn: drawn past the end it broke from, turned a little, as a piece of wreck
-    const def = ROOM_DEFS[name];
+    const def = A.rooms[name];
     const aft = def.center[0] < bridgeU();
     const c = shipPoint(def.center[0], def.center[1], box, facing);
     ctx.save();
@@ -627,8 +711,8 @@ function drawHorizontal(ctx, ship, box, fx, facing) {
 
   // seams: a dark line at each room boundary, across the whole hull. A bulkhead (spill does
   // not cross) is a thick seam with a bright core. No seam for a torn room.
-  for (const name of DRAW_ORDER) {
-    const u = ROOM_DEFS[name].span[0]; // the boundary aft of this room
+  for (const name of A.drawOrder) {
+    const u = A.rooms[name].span[0]; // the boundary aft of this room
     if (u <= 0.04 || isTorn(ship, name)) continue;
     const bulk = !!(ship.bulkheadAft && ship.bulkheadAft[name]);
     const a = shipPoint(u, -halfH(u), box, facing), b = shipPoint(u, halfH(u), box, facing);
@@ -667,9 +751,10 @@ function drawHorizontal(ctx, ship, box, fx, facing) {
 // color (caller sets it). Dead rooms are dark bands along the hull; dim when
 // more than half the rooms are dead.
 export function drawShipMark(ctx, ship, x, y, scale, angle) {
+  useArt(ship.design);
   const s = scale;
   const pieces = ship.pieces || {};
-  const order = ship.roomOrder || BOW_TO_STERN;
+  const order = ship.roomOrder || A.bowToStern;
   let dead = 0;
   for (const k in pieces) if (!pieces[k].alive) dead++;
   const total = Object.keys(pieces).length || order.length;
@@ -714,14 +799,16 @@ export function drawShipMark(ctx, ship, x, y, scale, angle) {
   ctx.strokeStyle = 'rgba(255,255,255,0.35)';
   ctx.lineWidth = 1;
   ctx.stroke();
-  // PDC deck: two turret dots, dark when the deck is dead
+  // PDC deck: one dot per turret, alternating sides, dark when the deck is dead
   const pdcAlive = !pieces.pdc || pieces.pdc.alive;
-  for (const vy of [-0.24, 0.24]) {
-    ctx.beginPath(); ctx.arc(-0.04 * s, vy * s, 0.08 * s, 0, Math.PI * 2);
+  const turrets = (ship.turrets && ship.turrets.pdc) || 2;
+  for (let i = 0; i < turrets; i++) {
+    const vy = (i % 2 ? 0.24 : -0.24), vx = -0.04 + Math.floor(i / 2) * 0.2;
+    ctx.beginPath(); ctx.arc(vx * s, vy * s, 0.08 * s, 0, Math.PI * 2);
     ctx.fillStyle = pdcAlive ? color : COLORS.dead; ctx.fill();
   }
-  // rail: a thin line out past the bow
-  if (!pieces.rail || pieces.rail.alive) {
+  // rail: a thin line out past the bow, on ships that carry one
+  if (pieces.rail && pieces.rail.alive) {
     ctx.strokeStyle = color;
     ctx.lineWidth = Math.max(1, 0.06 * s);
     ctx.beginPath(); ctx.moveTo(0.1 * s, 0); ctx.lineTo(0.6 * s, 0); ctx.stroke();
@@ -749,12 +836,13 @@ function localPoint(x, y, box, facing, orientation) {
 
 // The room under a canvas point, or null when the point is clearly off the hull.
 // Generous across the hull (a thumb is wide); along the hull a little past each end.
-export function roomAtPoint(x, y, box, facing, orientation = 'horizontal') {
+export function roomAtPoint(x, y, box, facing, orientation = 'horizontal', design = 'tachi') {
+  useArt(design);
   const { u, v } = localPoint(x, y, box, facing, orientation);
   if (u < -0.15 || u > 1.15 || Math.abs(v) > 1.6) return null;
-  const uu = Math.max(ROOM_DEFS.drive.span[0] + 1e-6, Math.min(1 - 1e-6, u));
-  for (const name of BOW_TO_STERN) {
-    const [a, b] = ROOM_DEFS[name].span;
+  const uu = Math.max(A.rooms.drive.span[0] + 1e-6, Math.min(1 - 1e-6, u));
+  for (const name of A.bowToStern) {
+    const [a, b] = A.rooms[name].span;
     if (uu >= a && uu <= b) return name;
   }
   return null;
@@ -762,8 +850,9 @@ export function roomAtPoint(x, y, box, facing, orientation = 'horizontal') {
 
 // A bracket around a room: four corner ticks just outside the hull, in `color`.
 // The room one side's weapons are going for.
-export function drawRoomBracket(ctx, room, box, facing, orientation = 'horizontal', color = '#ffffff', t = 0) {
-  const def = ROOM_DEFS[room];
+export function drawRoomBracket(ctx, room, box, facing, orientation = 'horizontal', color = '#ffffff', t = 0, design = 'tachi') {
+  useArt(design);
+  const def = A.rooms[room];
   if (!def) return;
   const [u0, u1] = def.span;
   const uA = u0 - 0.012, uB = u1 + 0.012;

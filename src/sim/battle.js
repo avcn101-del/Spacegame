@@ -3,18 +3,21 @@
 import { N } from '../numbers.js';
 import { makeRng } from '../rng.js';
 import { makeShip, alive, isBeaten, alivePieces, turnShip, faceFor, angleDiff, tornRooms, tearOff } from './ship.js';
-import { TACHI } from '../ships/tachi.js';
+import { DESIGNS, DEFAULT_DESIGN } from '../ships/index.js';
 import { refusal, apply } from './orders.js';
 import * as W from './weapons.js';
 import { makeStats } from './stats.js';
 
-export function makeBattle(seed) {
+// designs: {me, them} design ids (see ships/index.js); a replay carries them.
+export function makeBattle(seed, designs = {}) {
+  const pick = (id) => DESIGNS[id] || DESIGNS[DEFAULT_DESIGN];
   const b = {
     seed, rng: makeRng(seed),
+    designs: { me: pick(designs.me).id, them: pick(designs.them).id },
     t: 0,
     ships: [
-      makeShip('me', 'Rocinante', -N.START_RANGE / 2, +1, TACHI),
-      makeShip('them', 'Pella', +N.START_RANGE / 2, -1, TACHI),
+      makeShip('me', 'Rocinante', -N.START_RANGE / 2, +1, pick(designs.me)),
+      makeShip('them', 'Pella', +N.START_RANGE / 2, -1, pick(designs.them)),
     ],
     projectiles: [], tracers: [],
     events: [],      // drained by the renderer every frame
@@ -120,13 +123,13 @@ function moveShip(b, ship, enemy, dt) {
       const hx = Math.cos(ship.heading), hy = Math.sin(ship.heading);
       let relX = hx * ship.move.speed, relY = hy * ship.move.speed;
       const closing = relX * ux + relY * uy;
-      const closingMax = Math.sqrt(2 * N.ACCEL * N.OFF_AXIS_ACCEL * Math.max(0, r - N.RANGE_MIN));
+      const closingMax = Math.sqrt(2 * N.ACCEL * ship.accel * N.OFF_AXIS_ACCEL * Math.max(0, r - N.RANGE_MIN));
       if (closing > closingMax) { relX -= (closing - closingMax) * ux; relY -= (closing - closingMax) * uy; }
       const wantX = enemy.vx + relX, wantY = enemy.vy + relY;
       let ax = (wantX - ship.vx) * N.AUTOPILOT_GAIN, ay = (wantY - ship.vy) * N.AUTOPILOT_GAIN;
       // The main drive pushes forward along the hull at full strength; braking and sideways
       // thrusters do the rest at half. While the hull swings the main drive is off axis too.
-      const base = N.ACCEL * (ship.orders.run ? N.RUN_ACCEL_MULT : 1);
+      const base = N.ACCEL * ship.accel * (ship.orders.run ? N.RUN_ACCEL_MULT : 1);
       const along = ax * hx + ay * hy;
       const acrossX = ax - along * hx, acrossY = ay - along * hy;
       const acrossMag = Math.hypot(acrossX, acrossY);

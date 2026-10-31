@@ -8,7 +8,7 @@
 import { N } from '../numbers.js';
 import { exposure } from '../sim/ship.js';
 import {
-  drawSilhouette, piecePoint, drawShipMark, shipPoint, LANDMARKS, SHIP_ASPECT, COLORS, roomAtPoint, drawRoomBracket,
+  drawSilhouette, piecePoint, drawShipMark, shipPoint, landmark, SHIP_ASPECT, COLORS, roomAtPoint, drawRoomBracket,
 } from './silhouette.js';
 
 // Visual-only knobs. Not game numbers, so they live here, not in numbers.js.
@@ -870,8 +870,9 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     h = canvas.clientHeight || canvas.height || (vertical ? 240 : 90);
     layout();
   }
-  const at = (piece) => { ensureBox(); const p = piecePoint(piece, box, facing, orientation); return { ax: p.x, ay: p.y }; };
-  const mark = (name) => { ensureBox(); const p = shipPoint(LANDMARKS[name][0], LANDMARKS[name][1], box, facing, orientation); return { ax: p.x, ay: p.y }; };
+  const design = () => (ship ? ship.design : 'tachi');
+  const at = (piece) => { ensureBox(); const p = piecePoint(piece, box, facing, orientation, design()); return { ax: p.x, ay: p.y }; };
+  const mark = (name) => { ensureBox(); const l = landmark(name, design()); const p = shipPoint(l[0], l[1], box, facing, orientation); return { ax: p.x, ay: p.y }; };
   const fwd = () => (vertical ? -Math.PI / 2 : facing === 1 ? 0 : Math.PI); // bow direction on the canvas, radians
   const aft = () => fwd() + Math.PI;                                          // stern direction
   // direction pointing out of the hull at a landmark (thruster puffs)
@@ -937,13 +938,13 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     });
     // the room the other side's weapons are going for, in that side's color
     const aimed = enemy && enemy.target && ship.pieces[enemy.target] && ship.pieces[enemy.target].alive ? enemy.target : null;
-    if (aimed) drawRoomBracket(ctx, aimed, box, facing, orientation, shipId === 'them' ? COLORS.me : COLORS.them, time);
+    if (aimed) drawRoomBracket(ctx, aimed, box, facing, orientation, shipId === 'them' ? COLORS.me : COLORS.them, time, ship.design);
     // lingering embers on freshly dead pieces, on top of the silhouette's own dim ember
     if (embers.length) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       for (const e of embers) {
-        const p = piecePoint(e.piece, box, facing, orientation);
+        const p = piecePoint(e.piece, box, facing, orientation, ship.design);
         const k = e.ttl / e.life;
         const r = shortSide() * 0.16;
         const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
@@ -1133,7 +1134,7 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
   }
 
   // The room under a canvas point (CSS px, relative to the canvas), or null. For tap-a-room.
-  const roomAt = (x, y) => { ensureBox(); return roomAtPoint(x, y, box, facing, orientation); };
+  const roomAt = (x, y) => { ensureBox(); return roomAtPoint(x, y, box, facing, orientation, design()); };
 
   return { draw, onEvent, roomAt };
 }

@@ -87,7 +87,7 @@ export const T = {
     rail: 'One shot kills a room. Bow only. Dead: no railgun.',
     sensors: 'Firing solutions. Dead: no rail aim, weapons hit half as often.',
     bridge: 'Takes two hits. Every room must reach it, or it tears off. Dead: the ship is beaten.',
-    pdc: 'Two turrets broadside, one end-on. Dead: no Guard, no Rake, and the bow tears off.',
+    pdc: (turrets) => `${turrets} turrets broadside, ${Math.ceil(turrets / 2)} end-on. Dead: no Guard, no Rake, and the bow tears off.`, // a function: the count is the ship's
     crew: 'Damage control. Dead: reload and recharge at half speed, and the stern tears off.',
     tubes: 'Torpedoes, four a salvo. Dead: no torpedoes, and the drive tears off.',
     drive: 'Dead: no moving, no turning, no Burn.',

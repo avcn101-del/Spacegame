@@ -13,10 +13,12 @@ export function faceFor(off) {
 }
 
 export function makeShip(id, name, x, facing, design) {
-  const pieces = {}, armor = {}, bulkheadAft = {};
-  for (const r of design.rooms) { pieces[r.id] = { hp: r.hp, maxHp: r.hp, alive: true }; if (r.armor) armor[r.id] = true; if (r.bulkhead) bulkheadAft[r.id] = true; }
+  const pieces = {}, armor = {}, bulkheadAft = {}, turrets = {};
+  for (const r of design.rooms) { pieces[r.id] = { hp: r.hp, maxHp: r.hp, alive: true }; if (r.armor) armor[r.id] = true; if (r.bulkhead) bulkheadAft[r.id] = true; if (r.turrets) turrets[r.id] = r.turrets; }
   return {
     id, name, design: design.id,
+    accel: design.accel === undefined ? 1 : design.accel, // fraction of ACCEL this hull's drive gives
+    turrets,            // room id -> PDC turrets on that deck; all fire broadside, half (rounded up) end-on
     roomOrder: design.rooms.map((r) => r.id), // bow first
     x, y: 0,            // km; the fight line is the x axis
     vx: 0, vy: 0,       // km/s
@@ -32,7 +34,7 @@ export function makeShip(id, name, x, facing, design) {
     // it. coast: thrust off, velocity kept (Hold).
     move: { speed: 0, coast: true },
     orders: { pdc: 'guard', run: false },
-    torps: N.TORP_COUNT,
+    torps: design.torps === undefined ? N.TORP_COUNT : design.torps,
     torpReload: 0,      // seconds until tubes are loaded
     railCharge: N.RAIL_START_CHARGE, // seconds until the railgun is ready
     railAim: -1,        // -1 idle, else seconds spent aiming
@@ -50,8 +52,9 @@ export const alive = (ship, room) => !!ship.pieces[room] && ship.pieces[room].al
 export const alivePieces = (ship) => ship.roomOrder.filter((r) => ship.pieces[r].alive);
 // Which end the enemy sees right now (the sim keeps ship.face current every step).
 export const exposure = (ship) => ship.face;
-// PDC deck: two turrets broadside, one turret end-on.
-export const pdcCount = (ship) => (alive(ship, 'pdc') ? (exposure(ship) === 'side' ? 2 : 1) : 0);
+// PDC deck: every turret broadside, half of them (rounded up) end-on.
+export const turretCount = (ship) => ship.turrets.pdc || 2;
+export const pdcCount = (ship) => (alive(ship, 'pdc') ? (exposure(ship) === 'side' ? turretCount(ship) : Math.ceil(turretCount(ship) / 2)) : 0);
 export const canFireTubes = (ship) => alive(ship, 'tubes') && ship.torps > 0 && exposure(ship) !== 'tail';
 export const canAimRail = (ship) => alive(ship, 'rail') && alive(ship, 'sensors') && ship.face === 'bow' && ship.turnLeft <= 0;
 // Swing the hull toward headingTarget by dt. Returns true when the swing ends this step.

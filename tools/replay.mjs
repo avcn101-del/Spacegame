@@ -6,7 +6,7 @@ import { makeReplayer, parseReplay, exportReplay } from '../src/sim/replay.js';
 import { N } from '../src/numbers.js';
 
 const r = parseReplay(readFileSync(process.argv[2], 'utf8'));
-const b = makeBattle(r.seed);
+const b = makeBattle(r.seed, r.ships || {});
 const rp = makeReplayer(r);
 while (!b.result && b.t < N.BATTLE_MAX + 1) { rp.step(b); b.step(N.DT); b.events.length = 0; }
 const again = exportReplay(b);

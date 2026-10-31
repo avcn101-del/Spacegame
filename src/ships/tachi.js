@@ -8,10 +8,12 @@ import { N } from '../numbers.js';
 
 export const TACHI = {
   id: 'tachi',
+  torps: N.TORP_COUNT, // three salvos
+  accel: 1,            // fraction of ACCEL: the full corvette drive
   rooms: [
     { id: 'rail', kind: 'gun' },                            // keel railgun; at the bow so charging in costs you the gun first
     { id: 'sensors', kind: 'sensors', bulkhead: true },     // targeting; dead: weapons hit half as often, no rail aim
-    { id: 'pdc', kind: 'pdc', armor: true, bulkhead: true },// PDC deck, two turrets; plated (its magazine); dead: the bow tears off
+    { id: 'pdc', kind: 'pdc', armor: true, bulkhead: true, turrets: 2 },// PDC deck, two turrets broadside, one end-on; plated (its magazine); dead: the bow tears off
     { id: 'bridge', kind: 'core', armor: true },            // dead: the ship is beaten; plated; the room every other room must reach
     { id: 'crew', kind: 'crew' },                           // damage control; dead: reload and recharge at half speed, and the stern tears off
     { id: 'tubes', kind: 'launcher', armor: true, bulkhead: true }, // torpedoes; plated (its bays); cannot fire tail-on; dead: the drive tears off

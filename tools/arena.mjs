@@ -10,7 +10,7 @@ const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.includes('
 const seeds = Number(args.seeds || 100);
 
 function fight(meP, themP, seed) {
-  const b = makeBattle(seed);
+  const b = makeBattle(seed, { me: PRESETS[meP] && PRESETS[meP].ship, them: PRESETS[themP] && PRESETS[themP].ship });
   const a1 = makeEnemy('me', meP), a2 = makeEnemy('them', themP);
   while (!b.result) { const o1 = a1.decide(b, N.DT), o2 = a2.decide(b, N.DT); a1.apply(b, o1); a2.apply(b, o2); b.step(N.DT); b.events.length = 0; }
   return b;
