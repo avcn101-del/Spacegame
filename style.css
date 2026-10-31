@@ -8,7 +8,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 #tactical { position: fixed; inset: 0; width: 100vw; height: 100dvh; display: block; }
 #game { position: fixed; inset: 0; pointer-events: none; }
 #game > * { pointer-events: auto; }
-header { position: absolute; top: 0; left: 0; right: 0; height: var(--top); display: grid; grid-template-columns: 90px 130px 1fr 110px 84px; align-items: center; gap: 8px; padding: 4px 8px; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); background: linear-gradient(rgba(5,7,12,0.85), rgba(5,7,12,0)); }
+header { position: absolute; top: 0; left: 0; right: 0; height: var(--top); display: grid; grid-template-columns: 90px 130px 1fr 110px 84px 84px; align-items: center; gap: 8px; padding: 4px 8px; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); background: linear-gradient(rgba(5,7,12,0.85), rgba(5,7,12,0)); }
 #title { text-align: center; letter-spacing: 0.3em; color: var(--dim); font-size: 12px; }
 #phase { text-align: right; font-size: 11px; color: var(--dim); letter-spacing: 0.15em; }
 .num { display: flex; flex-direction: column; line-height: 1; }
@@ -46,7 +46,7 @@ nav button.progress::after { content: ""; position: absolute; left: 0; bottom: 0
 /* a weapon button wears its room's colour (form.js ROOM_COLORS), the same as its arc and its room on the panel */
 #btn-rail { --accent: rgb(143,208,255); } #btn-torps { --accent: rgb(255,84,110); } #btn-guard, #btn-rake { --accent: rgb(255,208,112); }
 #btn-rail .label, #btn-torps .label, #btn-guard .label, #btn-rake .label { color: var(--accent); }
-#pause { height: 26px; font-size: 11px; letter-spacing: 0.15em; }
+#pause, #view { height: 26px; font-size: 11px; letter-spacing: 0.15em; }
 #pause.on { border-color: var(--ok); color: var(--ok); }
 .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(3,5,10,0.78); padding: 16px; }
 .overlay.show { display: flex; }
@@ -88,3 +88,8 @@ nav#orders.replay button { opacity: 0.35; pointer-events: none; }
 #hg-list .opt span { display: block; color: var(--dim); }
 #hg-line b { color: var(--me); font-weight: normal; letter-spacing: 0.1em; }
 #hg-line span { color: var(--dim); }
+
+/* close-up: a stage over the map and both panels; the bars, order line and buttons stay */
+#closeup { display: none; position: absolute; left: 0; right: 0; top: var(--top); bottom: calc(var(--bottom) + 26px); width: 100%; height: auto; touch-action: none; }
+body.closeup #closeup { display: block; }
+body.closeup #tactical, body.closeup .panel { display: none; }

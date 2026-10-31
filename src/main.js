@@ -5,6 +5,7 @@ import { T, roomKey } from './text.js';
 import { makeBattle } from './sim/battle.js';
 import { makeEnemy } from './ai/enemy.js';
 import { makeTactical, makeSilhouettePanel } from './render/canvas.js';
+import { makeCloseup } from './render/closeup.js';
 import { makeHud } from './render/hud.js';
 import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
 import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
@@ -35,7 +36,11 @@ const tactical = makeTactical(document.getElementById('tactical'), {
 });
 const panelMe = makeSilhouettePanel(document.getElementById('sil-me'), 'me', { orientation: 'vertical' });
 const panelThem = makeSilhouettePanel(document.getElementById('sil-them'), 'them', { orientation: 'vertical' });
-const renderers = [tactical, panelMe, panelThem];
+const closeup = makeCloseup(document.getElementById('closeup'));
+// One view at a time (button only): TAC is the map and both panels, CLOSE-UP the stage that covers them.
+// Events and draws go only to the view on show, so a hidden view never replays old effects.
+const VIEWS = { tac: [tactical, panelMe, panelThem], closeup: [closeup] };
+let view = 'tac';
 
 const hud = makeHud({
   onOrder(o, arg) {
@@ -45,6 +50,7 @@ const hud = makeHud({
     else if (o === 'torps') hud.toast(T.order.torpsAway);
     else if (o === 'burn') hud.toast(T.order.burn);
   },
+  onView() { setView(view === 'tac' ? 'closeup' : 'tac'); },
   onPause() { paused = !paused; },
   onResume() { paused = false; },
   onRestart() { start(); },
@@ -83,6 +89,13 @@ const hud = makeHud({
   },
 });
 
+function setView(v) {
+  view = v;
+  document.body.classList.toggle('closeup', v === 'closeup');
+  hud.setView(v);
+  if (v === 'closeup' && battle) closeup.reset(battle);
+}
+
 // start() begins a fresh battle; start(replay) watches a recorded one.
 function start(replay = null) {
   if (replay) seed = replay.seed;
@@ -98,7 +111,8 @@ function start(replay = null) {
   paused = false; slowmo = 0; acc = 0;
   const fitQ = fitString(battle.designs.me.fit);
   history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}`);
-  window.game = { battle, tactical, panels: { me: panelMe, them: panelThem }, exportReplay: () => exportReplay(battle) }; // for debugging and tests
+  closeup.reset(battle);
+  window.game = { battle, tactical, closeup, setView, panels: { me: panelMe, them: panelThem }, exportReplay: () => exportReplay(battle) }; // for debugging and tests
 }
 
 // Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
@@ -146,16 +160,16 @@ function frame(now) {
         ? `${T.lost[ev.ship]} ${T.frameAdrift}.`
         : `${T.lost[ev.ship]} ${T.tear[ev.end]}: ${names.join(', ')} ${T.adrift}.`, 4);
     }
-    for (const r of renderers) r.onEvent(ev);
+    for (const r of VIEWS[view]) r.onEvent(ev);
   }
   battle.events.length = 0;
-  for (const r of renderers) r.draw(battle, dtGame);
+  for (const r of VIEWS[view]) r.draw(battle, dtGame);
   hud.draw(battle, paused, dtReal);
   requestAnimationFrame(frame);
 }
 
 attachDrag(document.getElementById('tactical'), tactical, () => battle, (arg) => {
-  if (replayer || autoPilot) return;
+  if (replayer || autoPilot || view !== 'tac') return;
   const why = battle.order('me', 'move', arg);
   if (why) hud.toast(T.refusal[why]);
 });
@@ -163,23 +177,28 @@ attachDrag(document.getElementById('tactical'), tactical, () => battle, (arg) =>
 // What a room does, in one line; every PDC mount shares the one line.
 const roomInfo = (room) => T.roomInfo[roomKey(room)];
 // Tap a room on their ship: go for it (tap again to clear). Tap a room on ours: what it does.
-attachTap(document.getElementById('sil-them'), (x, y) => {
-  if (replayer || autoPilot) return;
-  const room = panelThem.roomAt(x, y);
-  if (!room) return;
+function tapThem(room) {
+  if (replayer || autoPilot || !room) return;
   const me = battle.ships[0], pc = battle.ships[1].pieces[room];
   const info = `${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`;
   const arg = { room: me.target === room ? null : room };
   const why = battle.order('me', 'target', arg);
   if (why) hud.toast(`${T.refusal[why]} ${info}`);
   else hud.toast(arg.room ? `${T.order.target} ${T.pieces[roomKey(room)].toLowerCase()}. ${info}` : `${T.order.targetCleared} ${info}`);
-});
-attachTap(document.getElementById('sil-me'), (x, y) => {
-  const room = panelMe.roomAt(x, y);
+}
+function tapMine(room) {
   if (!room) return;
   const pc = battle.ships[0].pieces[room];
   hud.toast(`${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`);
+}
+attachTap(document.getElementById('sil-them'), (x, y) => tapThem(panelThem.roomAt(x, y)));
+attachTap(document.getElementById('sil-me'), (x, y) => tapMine(panelMe.roomAt(x, y)));
+// The close-up: the same two taps on the hulls of the stage.
+attachTap(document.getElementById('closeup'), (x, y) => {
+  const who = closeup.sideAt(x);
+  if (who === 'them') tapThem(closeup.roomAt(x, y, 'them')); else tapMine(closeup.roomAt(x, y, 'me'));
 });
 
+hud.setView(view);
 start();
 requestAnimationFrame(frame);

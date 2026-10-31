@@ -59,7 +59,7 @@ function noseAngle(ship, bearing) {
 // it re-reads the element size and devicePixelRatio each time, so a phone
 // rotation or a late layout is picked up on the next draw. Returns the CSS
 // px size, or null when the canvas has no size yet (callers skip the frame).
-function fit(canvas, ctx) {
+export function fit(canvas, ctx) {
   const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
   const cw = canvas.clientWidth || 0, ch = canvas.clientHeight || 0;
   if (cw === 0 || ch === 0) return null;
@@ -76,7 +76,7 @@ function fit(canvas, ctx) {
 // world km so effects ride along with ships and camera; the silhouette panel
 // anchors in panel px (identity).
 
-function makeFx(toScreen) {
+export function makeFx(toScreen) {
   const parts = [], rings = [], flashes = [], streaks = [];
   let seq = 1;
   const rnd = () => hash01(seq++);

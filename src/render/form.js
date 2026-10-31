@@ -118,11 +118,11 @@ export function roomAtPoint(ship, px, py, box) {
 
 // Where a cell is drawn: in place, or adrift away from the bridge side (up past the bow
 // end, down past the stern end) with a hashed wobble.
-function drawnRect(ship, c, x, y, box, bridgeX) {
+function drawnRect(ship, c, x, y, box, bridgeX, scale = 1) {
   const r = cellRect(ship, x, y, box);
   if (!isAdrift(ship, c)) return r;
   const dir = x < bridgeX ? 1 : -1; // canvas down (horizontal: left) toward the stern
-  const along = dir * (DRIFT_GAP + DRIFT_JIT * cellHash(x, y, 1)), wob = (cellHash(x, y, 2) - 0.5) * 2 * DRIFT_SIDE;
+  const along = dir * (DRIFT_GAP + DRIFT_JIT * cellHash(x, y, 1)) * scale, wob = (cellHash(x, y, 2) - 0.5) * 2 * DRIFT_SIDE * scale;
   if (box.horizontal) { r.x -= along; r.y += wob; } else { r.y += along; r.x += wob; }
   return r;
 }
@@ -160,7 +160,7 @@ function chevron(ctx, ax, ay, dx, dy, size) {
 }
 
 // fx = { flash: {room: 0..1}, t: seconds (optional), warn: 0..1 red outline (optional),
-//        exposure: false to hide the chevrons (default shown) }
+//        exposure: false to hide the chevrons (default shown), driftScale: how far cut cells drift (default 1) }
 export function drawForm(ctx, ship, box, fx = {}) {
   const t = fx.t || 0;
   const { cols, rows, cw, ch } = dims(ship, box);
@@ -168,7 +168,7 @@ export function drawForm(ctx, ship, box, fx = {}) {
   eachCell(ship, (c, x) => { if (c.room === 'bridge') { bx += x; bn++; } });
   const bridgeX = bn ? bx / bn : ship.form.w / 2;
   const rects = [];                       // {c, x, y, r} per cell, as drawn
-  eachCell(ship, (c, x, y) => rects.push({ c, x, y, r: drawnRect(ship, c, x, y, box, bridgeX) }));
+  eachCell(ship, (c, x, y) => rects.push({ c, x, y, r: drawnRect(ship, c, x, y, box, bridgeX, fx.driftScale || 1) }));
   const at = new Map();                   // "x,y" -> entry, for the room outlines
   for (const e of rects) at.set(e.x + ',' + e.y, e);
 

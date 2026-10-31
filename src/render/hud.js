@@ -15,7 +15,7 @@ const ROOM_OF = { gun: 'rail', launcher: 'tubes', drive: 'drive', rounds: 'pdc1'
 const hasPick = (room) => !!SLOTS_OF[room] || /^pdc\d+$/.test(room); // the PDC mounts pick the rounds
 const tap = (sel, fn) => $(sel).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 
-export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview, presets }) {
+export function makeHud({ onOrder, onView, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview, presets }) {
   const el = {
     clock: $('#n-clock'), range: $('#n-range'), rate: $('#n-rate'), torps: $('#n-torps'), burns: $('#n-burns'),
     phase: $('#phase'), order: $('#order'), pause: $('#pause'),
@@ -31,6 +31,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); onOrder(o); });
   }
   tap('#pause', onPause);
+  tap('#view', onView);
   tap('#pm-resume', onResume); tap('#pm-restart', onRestart); tap('#pm-new', onNew);
   tap('#again', onNew); tap('#same', onRestart);
   for (const id of ['#pm-export', '#rs-export']) { tap(id, onExport); $(id).textContent = T.export; }
@@ -157,6 +158,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
     toast(text, ttl = 2.0) { toast = { text, ttl }; },
     // Pop the silhouette panel of a ship that just took a big hit.
     hit(shipId) { hitTimers[shipId] = 0.8; },
+    setView(v) { $('#view').textContent = v === 'closeup' ? T.view.tac : T.view.closeup; },
     setReplay(on) { replay = on; document.getElementById('orders').classList.toggle('replay', on || auto); },
     draw(battle, paused, dtReal) {
       const me = battle.ships[0], them = battle.ships[1];

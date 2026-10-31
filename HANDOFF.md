@@ -106,6 +106,21 @@ work longer than about an hour, give the estimate and wait for go.
   broadside without the bridge in front"): the panel's side chevrons sit on the side that faces the
   enemy (`shotFrom`: top = row 0 side, where the bridge is: from the top one frame cell covers it,
   from the bottom four: F, C, C, S in column 14). Before, they were always on one fixed side.
+- PDC rounds (PR 37, the owner): hangar pick on the PDC mounts, `rounds` slot: HE (stock, today's
+  Rake: chews the first living cell, frame too) or AP (pierces frame to the first job room, half
+  dps; cannot break frame, so it never splits the hull). Hit events carry `at: [x, y]`. Arena all
+  unchanged. AI vs AI with AP (the AI does not pick targets for it): brawler mirror 6/12/12 (HE
+  10/13/7), brawler vs turtle 7/3/20 with 16 time draws (HE 19/2/9). The owner judges on the phone.
+  Fast/Heavy PDC (Guard vs Rake) agreed but not built: one layer at a time.
+- Close-up view (PR 38, the owner: "keep the view, add a close-up, I want to see the impacts"; built
+  by a Sonnet render agent): `#view` button CLOSE-UP / TAC in the top bar; `src/render/closeup.js`
+  draws a fixed stage, my form left bow right, theirs right mirrored, one cell size (Tachi 13.3 px),
+  whatever the real range; impact fx on `ev.at` (torpedo flash, rings, debris, spill burst; rail bolt
+  through the ray; PDC tracer streams from the mounts that see; Guard tracers and pops; room bursts;
+  tear line, cut cells drift 3x); torpedoes in flight cross the gap by their distance share; side
+  chevrons from `shotFrom`; tap their hull to target. Buttons and pause work; drag is off there;
+  only the visible view gets events and draws. A bigger ship scales down; past about 80 columns it
+  will need zoom (later).
 - The form (2026-10-31, replaces "not the 2D grid"): the ship is draft 12 of the owner's
   "Roci form" artifact, a 28 x 9 grid of cells with fixed hardpoints; the direction is ship
   building like Cosmoteer but with a fixed form and fixed hardpoints, the player picks a
