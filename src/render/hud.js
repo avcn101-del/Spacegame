@@ -4,6 +4,8 @@ import { N } from '../numbers.js';
 import { T, roomKey } from '../text.js';
 import { alive, exposure, canFireTubes, canAimRail, pdcAlive } from '../sim/ship.js';
 import { CATALOG } from '../ships/catalog.js';
+import { ROOM_COLORS } from './form.js';
+import { railKm } from './arcs.js';
 import { drawHangar, hitAt, roomAtCell } from './hangar.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -106,7 +108,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   // Redraw the previewed ship for this fit and say what the last tapped slot now holds.
   const markFit = (f) => {
     const ship = preview(f);
-    const W = Math.min(660, window.innerWidth - 16), H = Math.max(120, Math.min(260, window.innerHeight - 150));
+    const W = Math.min(660, window.innerWidth - 16), H = Math.max(120, Math.min(260, window.innerHeight - 166));
     const dpr = window.devicePixelRatio || 1;
     if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = `${W}px`; cv.style.height = `${H}px`;
@@ -114,6 +116,8 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
     const ctx = cv.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     hits = drawHangar(ctx, ship, f, sel, W, H); shown = { ship, W, H };
+    const lg = T.hangar.arcs(railKm(ship), N.TORP_RANGE, N.PDC_RANGE), col = { rail: 'rail', tubes: 'tubes', pdc: 'pdc' };
+    $('#hg-arcs').innerHTML = Object.keys(lg).map((k) => `<span style="color:rgb(${ROOM_COLORS[col[k]]})">${lg[k]}</span>`).join('');
     const c = sel && T.catalog[f[sel]], k = note && roomKey(note);
     const what = k ? `<b>${T.pieces[k].toUpperCase()}</b> ${T.roomInfo[k]}` : '';
     $('#hg-line').innerHTML = c ? `${what} <span>${c.name}. ${c.line}</span>` : k ? what : `<span>${T.hangar.hint}</span>`;
