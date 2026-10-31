@@ -147,6 +147,21 @@ What the sim exposes (render reads, never writes):
 - Panels: `roomAt(x, y)` maps a tap to a cell, then to its job room (frame gives null).
   The panel width `--side` grows to about 100 px so a cell is about 10 x 7 px vertical.
 - Replay version 8 (the form changes every hit; older replays diverge).
+- PDC mounts (2026-10-31): the pdc room is the six hull-edge mounts of draft 12, one cell
+  each, letter P: (6, 1) (13, 1) (24, 3) above, (6, 7) (13, 7) (24, 5) below. The two T
+  sponsons and their magazines m are Gun mount M, a weapon the game lacks: frame. The form
+  lists `mounts` in priority order; the fit's turret count (twinDeck 2, tripleDeck 3) says
+  how many are fitted, from the front of the list; a mount not fitted is its own frame room
+  `frame:P<n>`. So `ship.form.mounts` is `[[x, y], ...]` and `ship.form.fitted` the count;
+  `ship.cells` for a fitted mount says `room: 'pdc'`. The Belter form gets P mounts too
+  (three fitted stock). pdc hp stays one pool; pdcCount still reads `face`.
+- The hangar draws the form (`hud.js`, render): `main.js` hands it `preview(fit)`, a ship
+  built with `makeShip` for the current fit, and the hangar draws it with `drawForm`
+  (horizontal, bow right, big cells) on its own canvas, then marks every hardpoint that has
+  a pick: the rail cells (gun), the tubes cells (launcher), the drive cells (drive), and all
+  six mount positions (pdc), fitted or not. A tap on a hardpoint cycles that slot's variant
+  and redraws; the pick's name and reason show under the drawing. LAUNCH and the close
+  button stay. No battle buttons are added.
 
 ## Render module contract
 
