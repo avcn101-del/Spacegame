@@ -60,7 +60,7 @@ export const N = {
 
   // --- burn ---
   BURNS: 3,              // per battle; a scarce dodge, not a habit
-  BURN_SPEED: 0.8,       // lateral kick, km/s; what the dodge looks like on the map
+  BURN_SPEED: 0.8,       // kick along the hull, km/s; bow-on it closes about 3 km on a ship that holds range, before that ship's drive cancels it
 
   // --- enemy ---
   AI_TICK: 1.0,          // the enemy thinks once a second, like a crew, not a computer

@@ -24,7 +24,7 @@ export const T = {
     rake: 'PDCs chew their hull piece by piece. Torpedoes get through.',
     torps: 'Four torpedoes, three salvos. Each kills the room it reaches and wounds the next. Their PDCs on Guard shoot some down; four at once swamp them.',
     rail: 'Bow only. Three seconds of steady aim, then one shot kills a room and wounds the next. You cannot Burn while aiming.',
-    burn: 'A sideways kick. Any Burn while their railgun is aiming makes it miss. Three per battle.',
+    burn: 'The drive at full for an instant, the way the nose points: bow-on it closes, stern-on it opens, broadside it sidesteps. Any Burn while their railgun is aiming makes it miss. Three per battle.',
     run: 'Dump everything into the drive and leave. Ends the battle as an escape.',
     armor: 'Plated rooms (thick bright edge: bridge, PDC deck, tubes) take two torpedoes. Bulkheads (thick seams) stop damage spilling into the next room.',
     tear: 'A dead room is a hole. Rooms cut off from the bridge by it tear off and drift away. The bridge sits in the middle: PDC deck dead loses the bow (railgun, sensors); crew dead loses the stern (tubes, their torpedoes, drive).',

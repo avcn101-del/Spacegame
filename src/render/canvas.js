@@ -712,14 +712,11 @@ export function makeTactical(canvas, opts = {}) {
     if (!s || !e) return Math.PI;
     return noseAngle(s, Math.atan2(e.y - s.y, e.x - s.x)) + Math.PI;
   }
-  // A Burn kicks the ship across the line of fire: dir +1 is the bearing to
-  // the enemy turned +90 degrees. The exhaust goes the opposite way. With the
-  // ships unknown, fall back to the fight line being the x axis.
-  function burnExhaustDir(id, dir) {
-    const sign = dir < 0 ? -1 : 1;
-    const s = shipOf(id), e = shipOf(otherId(id));
-    const bearing = s && e ? Math.atan2(e.y - s.y, e.x - s.x) : 0;
-    return bearing + sign * Math.PI / 2 + Math.PI;
+  // A Burn kicks the ship along its hull, the way the nose points: the exhaust leaves the
+  // stern. With the ship unknown, fall back to the fight line being the x axis.
+  function burnExhaustDir(id) {
+    const s = shipOf(id);
+    return s ? s.heading + Math.PI : Math.PI;
   }
 
   function onEvent(ev) {
@@ -794,9 +791,9 @@ export function makeTactical(canvas, opts = {}) {
         break;
       }
       case 'burn': {
-        // lateral kick across the line of fire: exhaust goes opposite to the burn direction
+        // the drive at full for an instant: exhaust out of the stern
         const col = tint(ev.by);
-        const out = burnExhaustDir(ev.by, ev.dir);
+        const out = burnExhaustDir(ev.by);
         fx.flash(a, { r: 10, grow: 10, life: 0.4, col: C.white, col2: C.drive });
         fx.sparks(a, 16, { dir: out, spread: 0.7, speedMin: 120, speedMax: 260, lifeMin: 0.25, lifeMax: 0.5, size: 1.5, col: C.drive });
         fx.sparks(a, 6, { dir: out, spread: 0.3, speedMin: 60, speedMax: 120, lifeMin: 0.2, lifeMax: 0.4, col });
@@ -1103,7 +1100,7 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
       }
       case 'burn': {
         if (!byMe) break;
-        // main drive flare out the back, plus a thruster puff on the hull side
+        // main drive flare out the back, plus a thruster puff on the side the kick leans to
         const n = mark('nozzle');
         bump('drive', 0.6);
         fx.flash(n, { r: 26 * k, grow: 20 * k, life: 0.5, col: C.white, col2: C.drive, core: 1 });

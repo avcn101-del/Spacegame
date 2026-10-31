@@ -155,6 +155,16 @@ out loud: against the half-drive gunship a human can hold 11 to 15 km and win
 by rail alone in about four minutes; the owner judges whether that is a
 sniper or boring.
 
+## Done this chat: Burn kicks along the hull (PR 20)
+
+The owner asked whether the long rail gives Burn a second meaning, dodge or
+close. It did not: Burn was a sideways kick. Now it is the drive at full for
+an instant along the hull: bow-on it closes (about 3 km on a ship that holds
+range, before that ship's drive cancels it), stern-on it opens, broadside it
+sidesteps; any Burn during the enemy's aim still makes the rail miss. No new
+number, no new button. Arena before and after: every pair within noise. The
+exhaust on the map now leaves the stern. The owner has not played it yet.
+
 After that, in this order, each only if the owner says a battle was boring
 without it: slot variants from a small catalog (a hangar screen before the
 battle; `kind` per slot is in place), PDC ammo. Not the 2D grid.
