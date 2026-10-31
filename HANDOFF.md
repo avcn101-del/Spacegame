@@ -3,168 +3,114 @@
 Read CLAUDE.md, STATUS.md, ARCHITECTURE.md, BRIEF.md and NOTES.md in this
 repository first. This chat is the owner's: the owner replies here directly,
 in Vietnamese mixed with English; answer short, verified facts only, say
-"I don't know" when you don't, raise problems before doing work.
+"I don't know" when you don't, raise problems before doing work. Before any
+work longer than about an hour, give the estimate and wait for go.
 
 ## Where things are
 
 - Game is live at https://spacegame.avcn101.workers.dev/ (Cloudflare Workers
   Builds, deploys from `main`; `wrangler.jsonc` serves the repo root as
   static assets). Repo: github.com/avcn101-del/Spacegame. The cloud session's
-  proxy cannot reach the live site; check deploys on the GitHub branches page
-  (`main` check green) and ask the owner to reload.
+  proxy cannot reach the live site; ask the owner to reload. URL knobs:
+  `?seed=`, `?enemy=brawler|sniper|turtle|berserker|gunship`, `?ship=belter`
+  (fly the gunship), `?auto=brawler` (the AI flies my ship),
+  `?fit=pdc:tripleDeck,gun:quickRail` (the hangar's picks).
 - Process: one branch and one PR per change; the owner asked me to merge PRs
-  myself after the browser test passes. Every PR body starts with "Play this
-  and tell me where it is boring." Use a fresh branch name per PR
-  (`claude/<topic>`): the auto-mode classifier blocks force pushes even when
-  the owner allows them, so a squash-merged branch cannot be reused. The stop
-  hook then complains about "unpushed commits" on the stale branch; ignore it.
+  myself after the headless checks and a Playwright run pass. Every PR body
+  starts with "Play this and tell me where it is boring." The session's
+  designated branch can be reused across PRs: after each squash merge, `git
+  merge origin/main` into it and push (no force push; the auto-mode
+  classifier blocks force pushes). The stop hook complains about uncommitted
+  or unpushed work; keep the tree clean between tasks.
 - Headless checks before every PR: `node tools/selfplay.mjs` (determinism),
-  `node tools/arena.mjs all seeds=30` (preset vs preset, watch draws and
-  battle length), and Playwright at 844 x 390 with
+  `node tools/arena.mjs all seeds=30` (preset vs preset, 5 presets; compare
+  with the run before the change, differences under about 3 wins are noise),
+  `node tools/arena.mjs me=brawler them=gunship seeds=30 mefit=pdc:tripleDeck`
+  for one fit, and Playwright at 844 x 390 with
   `/opt/node-tools/node_modules/playwright/index.js` (CommonJS default
   import, `hasTouch`, `isMobile`) against `python3 -m http.server 8123`;
   `window.game` exposes `battle`, `tactical`, `panels.me/them` (with
-  `roomAt(x, y)`), `exportReplay()`.
+  `roomAt(x, y)`), `exportReplay()`. Force a tear in the browser with
+  `b.pieceDied(ship, 'pdc', 'torp')` after setting the room dead.
 - Replays: the owner pastes exported JSON into chat; save it to the scratchpad
-  and run `node tools/replay.mjs file.json` (or a small node script that
-  replays with the order log filtered) to answer "why" with events. Replay
-  version 5: move orders are `{heading, speed}`. Old replays diverge.
+  and run `node tools/replay.mjs file.json`, or a small node script that
+  replays and prints per-hit events (face of the target, PDC count, range) to
+  answer "why". Replay version 7: `ships {me, them}` are `{design, fit}`;
+  pass `r.ships` to `makeBattle(seed, ships)` or the replay diverges. Older
+  replays diverge anyway (the sim changed).
 - Rendering (`src/render/canvas.js`, `silhouette.js`) follows the state
-  contract in ARCHITECTURE.md; small render changes are fine to do directly.
-  Sim and AI never import render.
+  contract in ARCHITECTURE.md; `silhouette.js` holds one art table per design
+  (`ART`, picked from `ship.design`). Sim and AI never import render.
 
 ## What the owner decided (do not re-ask)
 
 - Mirror match Tachi vs Tachi, Roci-inspired; one torpedo type; active
   pause; tactical strip with tracers; epic procedural impacts, no image art.
 - Layout A: full-screen tactical, vertical silhouettes on the short edges.
-- Railgun: any Burn during the enemy's aim makes the shot miss.
-- Rooms layer 1: seven rooms bow to stern (rail, sensors, bridge, pdc,
-  crew, tubes, drive); a shot hits the exposed end first; sensors and crew
-  are rooms with one effect each. Rooms have only HP and one job. No
-  power, crew counts, heat, oxygen. Shields and jammer are parked in NOTES.
-- Drag as heading (PR 9): the drag direction is an absolute heading on the
-  map, the hull swings to it (90 degrees per FACE_TURN_TIME), the length is
-  the speed. Face (bow / side / tail) is derived from heading versus bearing
-  with BOW_CONE 45. HOLD coasts. The asked speed is relative to the enemy
-  (my call, flagged: an absolute cap made any Burned ship uncatchable).
-- Tap-a-room (PR 8): `target {room}` order; torpedoes sent at a room that is
-  not the exposed end slow to half speed, swing out 1 km and turn in; PDCs
-  chew the chosen room only broadside; rail unchanged; AI targets by preset
-  (sniper drive, brawler pdc, turtle tubes); brackets on both silhouettes;
-  tapping a room shows its hp and job (both ships).
-- Torpedoes: proximity fuse TORP_FUSE 0.3 km (PR 8) and a speed cap relative
-  to the target (PR 10); both fixed torpedoes that circled forever.
-- Salvos of four, stock of twelve (PR 11): the owner said this made the game
-  dramatic, torpedoes are the weapon with the most impact, a bit overpowered.
-- Plating and bulkheads (PR 13, this handoff): bridge, pdc, tubes are plated
-  (ARMOR_HP_MULT 2); bulkheads aft of sensors, pdc, tubes stop spill. Chosen
-  by the owner over nerfing torpedoes. Measured knobs if still overpowered:
-  TORP_RELOAD 40 lengthens battles (54 s avg vs 35), salvo 3 does not.
-- A line when a room dies (PR 12): "THEIR SENSORS GONE: rail blind, ...".
-- Guardrails against the DTN failure: three lines before any system
-  (decision it creates, what stops it, what it costs); numbers file under 80
-  numbers (now 50); sim under 2000 lines (now about 620); at most 12
-  buttons; one layer per PR with five battles and three lines from the owner
-  in between; no physics tests, only arena and replay. The owner's DTN "Roci
-  form draft 12" artifact (claude.ai/artifact/NvCPh7wurmHa8ZkZ2NvePP) has ten
-  systems and no fight; what to borrow from it is listed in NOTES.md.
+- Railgun: any Burn during the enemy's aim makes the shot miss. Rail range
+  15 km, torpedoes 10, the fight ends (apart) at 20 km: the rail has a band
+  where it shoots and is not shot back (the owner: a sniper that reaches no
+  further than a normal gun is no sniper).
+- Rooms layer 1, bridge in the middle: rail, sensors, pdc, bridge, crew,
+  tubes, drive (Tachi); a shot hits the exposed end first; rooms have only
+  HP and one job. Plating (bridge, pdc, tubes: double hp) and bulkheads aft
+  of sensors, pdc, tubes (spill stops). No power, crew counts, heat, oxygen.
+- The tear rule: a dead room is a hole; living rooms with no path to the
+  bridge tear off (hp 0, `torn`, the tubes take the torpedo stock). pdc dead
+  loses rail and sensors; crew dead loses tubes and drive.
+- Drag as heading: direction is an absolute heading, length is the speed,
+  relative to the enemy; HOLD coasts. Face from heading versus bearing,
+  BOW_CONE 45.
+- Tap-a-room: torpedoes flank to a room that is not the exposed end at half
+  speed (most die under a Guard); PDCs chew it broadside; rail ignores it.
+- Torpedoes: salvos of four, stock of twelve, proximity fuse, speed cap
+  relative to the target. TORP_DAMAGE 5 was measured and parked: it still
+  lost rail and sensors to the same three hits.
+- The enemy turns its stern after a salvo (`sternAfterSalvo`), outside PDC
+  range, unless the enemy's bracket is on its drive; the gunship never does
+  (no plating: one salvo end-on killed four rooms). The owner: since the AI
+  turns, I have to keep turning too, and that is gameplay the mechanics make.
+- Burn is the drive at full for an instant along the hull: bow-on closes
+  (about 3 km on a kiting ship), stern-on opens, broadside sidesteps.
+- A second ship as data: the Belter gunship (`belter.js`): six rooms, no
+  rail, three turrets, 16 torpedoes, half drive, no plating. The owner: not
+  too hard.
+- The hangar (PR 21): two picks per slot, from `catalog.js`: tubes quad /
+  twin (2 every 10 s), PDC deck twin plated / triple unplated, rail long
+  (15 km, 40 s) / quick (10 km, 20 s), drive corvette (3 Burns) / hot (twice
+  the push, 2 Burns). Every variant number is the stock one doubled or
+  halved. No buying, no points. The owner has not played it yet.
+- Guardrails: three lines before any system (decision it creates, what stops
+  it, what it costs); numbers file under 80 (now 52); sim under 2000 lines
+  (now about 690); at most 12 battle buttons (now 7; hangar picks are not
+  battle buttons); one layer per PR with battles and three lines from the
+  owner in between; no physics tests, only arena and replay; not the 2D grid;
+  no flares (parked in NOTES with its three lines).
 
-## Facts the owner asked about (answered, keep consistent)
+## Facts measured (keep consistent)
 
-- Burn does not dodge torpedoes (measured on replay 80172: the hit moved by
-  0.3 s). It only beats the railgun. A torpedo-dodging Burn is in NOTES.
-- Guard kills about 45 percent of a direct salvo at 3 km; flank torpedoes
-  (a buried room, half speed) die 85 percent. PDC "direction" already exists
-  coarsely: two turrets broadside, one end-on.
-- Rail aim is lost when the enemy leaves the 45 degree bow cone, not only
-  when you turn. The sure shot is while they aim (they cannot Burn).
-- Arena battles are 16 to 50 s now, below the 2 to 4 minute target; human
-  battles ran 37 to 150 s. berserker vs berserker is a 16 s mutual kill.
-- The owner's replays this session: 6045, 70368 (torpedoes circled), 51965,
-  15851 (Burned ship uncatchable), 80172 (win by two lucky bridge hits).
+- Burn does not dodge torpedoes. Guard kills about 45 percent of a direct
+  salvo at 3 km; flank torpedoes (a buried room) die about 85 percent. The
+  brawler AI taps pdc, so most of its torpedoes flank and die: the owner
+  shot down 8 of 8 in one battle (20531), which is the tail of that
+  distribution, not a change.
+- Arena (30 seeds, after everything): brawler vs brawler 19/9 in 40 s (the
+  first side has an edge); brawler vs gunship 15/14; sniper vs gunship 10/20;
+  sniper vs sniper 22 draws apart. Human battles run 25 to 70 s.
+- Fits in the arena (AI vs AI, brawler mirror): twin tubes 9/17 (the AI
+  fires whenever, so small salvos die), triple deck 20/8, quick rail no
+  change (the AI almost never fires the rail: 3 or 4 shots in 30 battles),
+  hot drive 14/14 for the brawler, 13/9 for the sniper. Informational: the
+  owner judges on the phone.
+- The owner's replays this session: 46641, 7852, 20531, 89957 (stern turn
+  cost the AI drive, tubes, crew to one salvo), 40817 and 29836 (gunship).
 
-## Done this chat: the AI turns its stern after a salvo (PR 15)
+## Next, in this order, each only if the owner says a battle was boring without it
 
-The owner said a salvo is too strong: whoever fires first wins. Measured (arena,
-40 seeds): room targeting is not the cause; the snowball is the exposed-end rule,
-a bow-on salvo of four kills rail, then sensors, then wounds bridge. Two fixes
-were on the table. TORP_DAMAGE 5 (a torpedo does half a room) measured well on
-averages but, replayed on the owner's battle 46641, still lost rail and sensors to
-the same three hits (two rooms of 10 hp side by side, spill adds up); it only
-saved the bridge. The owner's own tactic, fire and then turn the stern to them,
-was built into the AI instead (`sternAfterSalvo` in presets, all but berserker):
-after a salvo or with torpedoes coming, outside PDC range, the AI shows its
-stern and holds range, and swings back when the tubes are nearly loaded. It
-does not when the enemy's bracket is on its drive: a stern-on ship that loses
-its drive is a hulk facing away that never fires again (sniper vs sniper went
-to 30 timeouts before that clause). Measured brawler vs brawler: torpedo hits
-bow-on 120 to 8, rooms lost per battle 6.2 to 5.4, battles 38 to 44 s, brawler
-now beats berserker 28/2. TORP_DAMAGE 5 stays in the pocket if the owner still
-says the first salvo wins. The owner's replays: 46641, 7852 (tap bridge, salvo,
-stern: win in 24 s with no room lost).
-
-## Done this chat: ships break with consequences (PR 16)
-
-The tear rule, as agreed: a dead room is a hole; any living room with no path
-to the bridge through living rooms tears off (hp 0, `torn` for the renderer,
-the tubes take the torpedo stock). The bridge moved to the middle of the chain
-(rail, sensors, pdc, bridge, crew, tubes, drive); bulkheads stay aft of
-sensors, pdc, tubes, so the pdc is its own cell and the bridge spills into
-crew. The silhouette art swapped bridge and pdc; a torn room is drawn adrift
-past its end, the hull base shrinks to what is attached; one event `tear
-{end, pieces}` per end, one toast line. `kind` per slot in `tachi.js`, no UI.
-Measured (arena 30 seeds): brawler vs brawler 40 s avg (44 before), rooms lost
-per battle 6.2 (5.4), brawler vs berserker 23 s. Risks said out loud: crew
-(10 hp, unplated, next to the bridge) is the obvious tap, one torpedo or slug
-there loses tubes, torpedoes and drive; more "broke off" draws, because a
-drive-dead ship drifts past ESCAPE_RANGE (open: should that be a win for the other
-side; in NOTES). Bulkheads no longer claim to be tear lines in the text.
-
-## Done this chat: the Belter gunship as data (PR 18)
-
-`src/ships/belter.js`, picked by the `gunship` preset (`?enemy=gunship`) or
-flown with `?ship=belter`. Six rooms (sensors, pdc, bridge, crew, tubes,
-drive), no rail, a PDC deck with three turrets (two end-on), 16 torpedoes, half
-the drive, no plating at all: a cobbled hull, every room dies to one torpedo.
-What the design can now say: `turrets` per PDC deck, `torps` stock, `accel`
-fraction; the sim reads them, no new number. A replay records the two designs
-(version 6). The silhouette art is one table per design (`ART`), picked from
-`ship.design`. Arena, 30 seeds: gunship beats brawler 19/11 and sniper 20/10;
-plated it was 23/7 and 22/8, which is why it is unplated. The owner has not
-played it yet. Owner's line after the tear rule: since the AI turns its stern,
-the owner has to keep turning too, and that is gameplay the mechanics make, not
-randomness (replay 89957: the stern turn cost the AI drive, tubes and crew to
-one salvo). A hangar was asked about and parked: slot variants come next.
-
-## Done this chat: rail 15 km, escape 20 km, the gunship keeps its broadside (PR 19)
-
-The owner played the gunship: not too hard (two wins, 27 s and 45 s). In
-29836 the gunship turned its stern after a salvo and one salvo of four killed
-drive, tubes, crew and bridge (all 10 hp, no plating): `sternAfterSalvo` is
-off for the gunship preset (brawler AI vs gunship 17/13, was 11/19; against a
-human it no longer dies to one salvo). The owner asked whether the rail
-outranges torpedoes (it did not: both 10) and said a sniper that reaches no
-further than a normal gun is no sniper. Measured first: RAIL_RANGE 20 alone
-changes no AI result (fights happen inside 12 km); a sniper AI that stands at
-12 km loses more and draws more (nothing to shoot every 40 s but one room),
-so the AI was left at 9 km. The owner chose RAIL_RANGE 15 and ESCAPE_RANGE 20:
-a 5 km band where a rail ship can shoot and not be shot back. Arena after:
-no pair changed by more than noise; "apart" draws come later, not fewer. Said
-out loud: against the half-drive gunship a human can hold 11 to 15 km and win
-by rail alone in about four minutes; the owner judges whether that is a
-sniper or boring.
-
-## Done this chat: Burn kicks along the hull (PR 20)
-
-The owner asked whether the long rail gives Burn a second meaning, dodge or
-close. It did not: Burn was a sideways kick. Now it is the drive at full for
-an instant along the hull: bow-on it closes (about 3 km on a ship that holds
-range, before that ship's drive cancels it), stern-on it opens, broadside it
-sidesteps; any Burn during the enemy's aim still makes the rail miss. No new
-number, no new button. Arena before and after: every pair within noise. The
-exhaust on the map now leaves the stern. The owner has not played it yet.
-
-After that, in this order, each only if the owner says a battle was boring
-without it: slot variants from a small catalog (a hangar screen before the
-battle; `kind` per slot is in place), PDC ammo. Not the 2D grid.
+1. The owner plays with fits from the hangar and says which pick never gets
+   chosen; a pick nobody takes is removed or doubled again, not tuned finely.
+2. PDC ammo (in NOTES): Guard spends rounds, a decision between Guard now
+   and Rake later.
+3. Open: a drive-dead ship drifting past 20 km is a draw today; should it be
+   a win for the side that still flies.
+Not the 2D grid, not 2 v 2 (both in NOTES).

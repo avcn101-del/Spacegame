@@ -9,6 +9,7 @@ import { makeHud } from './render/hud.js';
 import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
 import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
 import { DESIGNS, DEFAULT_DESIGN } from './ships/index.js';
+import { parseFit, fitString, DEFAULT_FIT } from './ships/catalog.js';
 import { turretCount } from './sim/ship.js';
 import { attachDrag } from './input/drag.js';
 import { attachTap } from './input/tap.js';
@@ -17,6 +18,9 @@ const params = new URLSearchParams(location.search);
 let seed = Number(params.get('seed')) || (Date.now() % 100000); // seed choice is outside the sim
 const enemyPreset = PRESETS[params.get('enemy')] ? params.get('enemy') : DEFAULT_PRESET; // ?enemy=sniper, ?enemy=gunship
 const myShip = DESIGNS[params.get('ship')] ? params.get('ship') : DEFAULT_DESIGN; // ?ship=belter: fly the gunship yourself
+// The fit from the hangar: the URL wins, else the last one chosen on this phone, else stock.
+const storedFit = (() => { try { return localStorage.getItem('fit'); } catch (e) { return null; } })();
+let myFit = parseFit(params.has('fit') ? params.get('fit') : storedFit);
 let replayer = null; // set while watching a recorded battle
 let autoPreset = PRESETS[params.get('auto')] ? params.get('auto') : null; // ?auto=brawler: the AI flies my ship
 let autoPilot = null;
@@ -61,6 +65,11 @@ const hud = makeHud({
     hud.setAuto(!!autoPilot);
     paused = false;
   },
+  onFit(fit) {
+    myFit = { ...DEFAULT_FIT, ...fit };
+    try { localStorage.setItem('fit', fitString(myFit)); } catch (e) { /* no storage: the URL still carries it */ }
+    start();
+  },
   onImport() {
     const text = prompt(T.importPrompt);
     if (!text) return;
@@ -71,7 +80,8 @@ const hud = makeHud({
 // start() begins a fresh battle; start(replay) watches a recorded one.
 function start(replay = null) {
   if (replay) seed = replay.seed;
-  battle = makeBattle(seed, replay ? replay.ships : { me: myShip, them: PRESETS[enemyPreset].ship });
+  battle = makeBattle(seed, replay ? replay.ships : { me: { design: myShip, fit: myFit }, them: { design: PRESETS[enemyPreset].ship } });
+  hud.setFit(battle.designs.me.fit);
   battle.enemyPreset = enemyPreset;
   enemy = makeEnemy('them', enemyPreset);
   replayer = replay ? makeReplayer(replay) : null;
@@ -79,7 +89,8 @@ function start(replay = null) {
   hud.setReplay(!!replayer);
   hud.setAuto(!!autoPilot);
   paused = false; slowmo = 0; acc = 0;
-  history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}`);
+  const fitQ = fitString(battle.designs.me.fit);
+  history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}`);
   window.game = { battle, tactical, panels: { me: panelMe, them: panelThem }, exportReplay: () => exportReplay(battle) }; // for debugging and tests
 }
 

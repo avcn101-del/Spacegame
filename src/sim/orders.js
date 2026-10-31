@@ -39,7 +39,7 @@ export function refusal(ship, order, ctx, arg) {
       if (ship.railCharge > 0) return 'charging';
       if (ship.railAim >= 0) return 'aiming';
       if (!canAimRail(ship)) return 'railNeedsBow';
-      if (ctx.range > N.RAIL_RANGE) return 'tooFar';
+      if (ctx.range > ship.railRange) return 'tooFar';
       return null;
     case 'burn':
       if (!drive) return 'noDrive';

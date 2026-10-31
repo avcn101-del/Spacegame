@@ -1,16 +1,17 @@
 // Headless arena: preset vs preset over many seeds. The balance tool.
-// Run: node tools/arena.mjs [me=brawler] [them=sniper] [seeds=100]
+// Run: node tools/arena.mjs [me=brawler] [them=sniper] [seeds=100] [mefit=pdc:tripleDeck] [themfit=...]
 // Or:  node tools/arena.mjs all            (every preset against every preset)
 import { makeBattle } from '../src/sim/battle.js';
 import { makeEnemy } from '../src/ai/enemy.js';
 import { PRESETS } from '../src/ai/presets.js';
 import { N } from '../src/numbers.js';
+import { parseFit } from '../src/ships/catalog.js';
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.includes('=')).map((a) => a.split('=')));
 const seeds = Number(args.seeds || 100);
 
 function fight(meP, themP, seed) {
-  const b = makeBattle(seed, { me: PRESETS[meP] && PRESETS[meP].ship, them: PRESETS[themP] && PRESETS[themP].ship });
+  const b = makeBattle(seed, { me: { design: PRESETS[meP] && PRESETS[meP].ship, fit: args.mefit ? parseFit(args.mefit) : {} }, them: { design: PRESETS[themP] && PRESETS[themP].ship, fit: args.themfit ? parseFit(args.themfit) : {} } });
   const a1 = makeEnemy('me', meP), a2 = makeEnemy('them', themP);
   while (!b.result) { const o1 = a1.decide(b, N.DT), o2 = a2.decide(b, N.DT); a1.apply(b, o1); a2.apply(b, o2); b.step(N.DT); b.events.length = 0; }
   return b;

@@ -8,16 +8,19 @@ import { refusal, apply } from './orders.js';
 import * as W from './weapons.js';
 import { makeStats } from './stats.js';
 
-// designs: {me, them} design ids (see ships/index.js); a replay carries them.
-export function makeBattle(seed, designs = {}) {
-  const pick = (id) => DESIGNS[id] || DESIGNS[DEFAULT_DESIGN];
+// ships: {me, them}, each a design id or {design, fit} (see ships/index.js, ships/catalog.js);
+// a replay carries them.
+export function makeBattle(seed, ships = {}) {
+  const spec = (s) => (typeof s === 'string' ? { design: s } : s || {});
+  const pick = (s) => DESIGNS[spec(s).design] || DESIGNS[DEFAULT_DESIGN];
+  const fitOf = (s) => spec(s).fit || {};
   const b = {
     seed, rng: makeRng(seed),
-    designs: { me: pick(designs.me).id, them: pick(designs.them).id },
+    designs: { me: { design: pick(ships.me).id, fit: fitOf(ships.me) }, them: { design: pick(ships.them).id, fit: fitOf(ships.them) } },
     t: 0,
     ships: [
-      makeShip('me', 'Rocinante', -N.START_RANGE / 2, +1, pick(designs.me)),
-      makeShip('them', 'Pella', +N.START_RANGE / 2, -1, pick(designs.them)),
+      makeShip('me', 'Rocinante', -N.START_RANGE / 2, +1, pick(ships.me), fitOf(ships.me)),
+      makeShip('them', 'Pella', +N.START_RANGE / 2, -1, pick(ships.them), fitOf(ships.them)),
     ],
     projectiles: [], tracers: [],
     events: [],      // drained by the renderer every frame

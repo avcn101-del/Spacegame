@@ -3,12 +3,13 @@
 import { N } from '../numbers.js';
 import { T } from '../text.js';
 import { alive, exposure, canFireTubes, canAimRail } from '../sim/ship.js';
+import { CATALOG, SLOTS } from '../ships/catalog.js';
 
 const $ = (sel) => document.querySelector(sel);
 const fmtClock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 const tap = (sel, fn) => $(sel).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 
-export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload }) {
+export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit }) {
   const el = {
     clock: $('#n-clock'), range: $('#n-range'), rate: $('#n-rate'), torps: $('#n-torps'), burns: $('#n-burns'),
     phase: $('#phase'), order: $('#order'), pause: $('#pause'),
@@ -29,6 +30,18 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   for (const id of ['#pm-export', '#rs-export']) { tap(id, onExport); $(id).textContent = T.export; }
   for (const id of ['#pm-import', '#rs-import']) { tap(id, onImport); $(id).textContent = T.import; }
   tap('#pm-auto', onAuto);
+  // The hangar: rows of two picks; LAUNCH hands the fit back and starts a new battle.
+  let fit = {};
+  for (const id of ['#pm-hangar', '#rs-hangar']) { tap(id, () => api.showHangar(fit)); $(id).textContent = T.hangar.button; }
+  $('#hg-title').textContent = T.hangar.title; $('#hg-launch').textContent = T.hangar.launch; $('#hg-close').textContent = T.hangar.close;
+  $('#hg-slots').innerHTML = SLOTS.map((slot) => `<div class="slot"><div class="k">${T.slots[slot].toUpperCase()}</div>` +
+    Object.keys(CATALOG[slot]).map((key) => `<button class="pick" data-slot="${slot}" data-key="${key}"><span class="n">${T.catalog[key].name.toUpperCase()}</span><span class="d">${T.catalog[key].line}</span></button>`).join('') + '</div>').join('');
+  for (const b of document.querySelectorAll('#hg-slots .pick')) b.addEventListener('pointerdown', (e) => { e.preventDefault(); fit = { ...fit, [b.dataset.slot]: b.dataset.key }; markFit(fit); });
+  let hangarOpen = false;
+  const closeHangar = () => { hangarOpen = false; $('#hangar').classList.remove('show'); };
+  tap('#hg-close', closeHangar);
+  tap('#hg-launch', () => { closeHangar(); onFit(fit); });
+  const markFit = (f) => { for (const b of document.querySelectorAll('#hg-slots .pick')) b.classList.toggle('on', f[b.dataset.slot] === b.dataset.key); };
   $('#export-title').textContent = T.exportTitle;
   $('#export-copy').textContent = T.copy; $('#export-download').textContent = T.download; $('#export-close').textContent = T.close;
   tap('#export-close', () => $('#exportbox').classList.remove('show'));
@@ -56,6 +69,8 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
 
   const api = {
     showExport(text) { $('#export-text').value = text; $('#exportbox').classList.add('show'); },
+    showHangar(f) { fit = { ...f }; markFit(fit); hangarOpen = true; $('#hangar').classList.add('show'); },
+    setFit(f) { fit = { ...f }; },
     setAuto(on) { auto = on; $('#pm-auto').textContent = on ? T.autoOff : T.auto; document.getElementById('orders').classList.toggle('replay', on || replay); },
     toast(text, ttl = 2.0) { toast = { text, ttl }; },
     // Pop the silhouette panel of a ship that just took a big hit.
@@ -74,7 +89,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       el.phase.textContent = T.phase[battle.phase];
       el.pause.textContent = paused ? T.resume : T.pause;
       el.pause.classList.toggle('on', paused);
-      el.pausemenu.classList.toggle('show', paused && !battle.result);
+      el.pausemenu.classList.toggle('show', paused && !battle.result && !hangarOpen);
 
       for (const id of ['me', 'them']) {
         if (hitTimers[id] > 0) hitTimers[id] -= dtReal;
@@ -110,8 +125,8 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
         const active = (o === 'hold' && me.move.coast && !me.orders.run) || o === me.orders.pdc || (o === 'run' && me.orders.run);
         B[o].classList.toggle('active', active);
       }
-      setProgress(B.torps, me.torpReload > 0 ? 1 - me.torpReload / N.TORP_RELOAD : 1, `${me.torps}`);
-      setProgress(B.rail, me.railAim >= 0 ? me.railAim / N.RAIL_AIM_TIME : 1 - me.railCharge / N.RAIL_RECHARGE, me.railAim >= 0 ? 'AIM' : '');
+      setProgress(B.torps, me.torpReload > 0 ? 1 - me.torpReload / me.reloadTime : 1, `${me.torps}`);
+      setProgress(B.rail, me.railAim >= 0 ? me.railAim / N.RAIL_AIM_TIME : 1 - me.railCharge / me.railRecharge, me.railAim >= 0 ? 'AIM' : '');
       setProgress(B.burn, 1, `${me.burns}`);
       B.torps.classList.toggle('dead', !alive(me, 'tubes') || me.torps === 0 || exposure(me) === 'tail');
       B.rail.classList.toggle('dead', !canAimRail(me));
@@ -120,7 +135,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       for (const o of ['hold', 'run']) B[o].classList.toggle('dead', !alive(me, 'drive'));
       for (const o of ['guard', 'rake']) B[o].classList.toggle('dead', !alive(me, 'pdc'));
       B.torps.classList.toggle('ready', me.torpReload === 0 && range <= N.TORP_RANGE && canFireTubes(me));
-      B.rail.classList.toggle('ready', me.railCharge === 0 && me.railAim < 0 && range <= N.RAIL_RANGE && canAimRail(me));
+      B.rail.classList.toggle('ready', me.railCharge === 0 && me.railAim < 0 && range <= me.railRange && canAimRail(me));
 
       // Result overlay
       if (battle.result) {
@@ -128,7 +143,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
         el.resultText.textContent = T.result[r.kind][r.reason];
         el.resultSeed.textContent = `${T.seed} ${battle.seed} · ${fmtClock(battle.t)}${battle.enemyPreset ? ` · ${T.enemyLabel} ${battle.enemyPreset}` : ''}`;
         if (!el.result.classList.contains('show')) renderStats(battle.stats);
-        el.result.className = 'overlay show ' + r.kind;
+        el.result.className = hangarOpen ? 'overlay' : 'overlay show ' + r.kind;
       } else {
         el.result.className = 'overlay';
       }

@@ -15,6 +15,7 @@ src/text.js           all player-facing English strings
 src/ships/index.js    every design by id: tachi, belter; a battle names its two, a replay records them
 src/ships/tachi.js    a ship as data: rooms bow to stern, bridge in the middle; kind per slot; armor (plated, double hp), bulkhead (aft wall spill does not cross); turrets per PDC deck; torps stock; accel fraction
 src/ships/belter.js   the Belter gunship: no rail, three turrets, 16 torpedoes, half drive, no plating, six rooms
+src/ships/catalog.js  the hangar's catalog: two variants per slot kind (launcher, pdc, gun, drive); a fit picks one each; parseFit / fitString
 src/sim/ship.js       rooms, facing, exposure, line of fire, damage, the tear rule, "is beaten"
 src/sim/orders.js     the orders: refusal() and apply(); 'move' carries {heading, speed}
 src/input/drag.js     drag on the map -> move order; input only
@@ -30,19 +31,21 @@ tools/arena.mjs       preset vs preset over many seeds: the balance tool
 tools/replay.mjs      replay a battle JSON headless, print stats and orders
 src/render/silhouette.js  Roci outline, pieces lit or dark
 src/render/canvas.js  tactical strip, tracers, impacts, debris, shake
-src/render/hud.js     four numbers, current order, buttons, pause, result
+src/render/hud.js     four numbers, current order, buttons, pause, result, the hangar overlay (onFit hands the fit back; main.js keeps it in the URL `?fit=` and localStorage)
 ```
 
 ## State contract (what render reads)
 
-`battle` from `makeBattle(seed, {me, them})` (design ids; `battle.designs` keeps them):
+`battle` from `makeBattle(seed, {me, them})` (each a design id or `{design, fit}`; `battle.designs` keeps both as `{design, fit}`):
 
 - `t` seconds of game time; `phase` `'approach' | 'knife' | 'break'`;
   `result` null or `{kind: 'win'|'lose'|'escaped'|'draw', reason}`.
 - `ships[0]` is `'me'` (Rocinante, facing +1, starts at negative x),
-  `ships[1]` is `'them'` (Pella, facing -1). Each ship: `design` (id),
+  `ships[1]` is `'them'` (Pella, facing -1). Each ship: `design` (id), `fit`,
   `accel` (fraction of ACCEL), `turrets` (room id to PDC turrets: all fire
-  broadside, half rounded up end-on), `x, y, vx, vy`
+  broadside, half rounded up end-on), `salvo`, `reloadTime`, `railRange`,
+  `railRecharge`, `burns` (the fitted variant's, else the stock number; the
+  sim and HUD read these from the ship, never from the catalog), `x, y, vx, vy`
   in km (the fight line starts as the x axis, y is lateral), `facing`,
   `roomOrder` (bow to stern; Tachi: rail, sensors, pdc, bridge, crew, tubes,
   drive; Belter: sensors, pdc, bridge, crew, tubes, drive)
@@ -94,7 +97,7 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   aiming noBurns aimingNoBurn alreadyPdc alreadyHolding badMove
   tailNoTubes noSensors railNeedsBow badTarget roomDead sameTarget noTarget
   over`. `target` takes `{room}` (null clears). Replay version 4 adds it;
-  version 6 adds `ships {me, them}` design ids.
+  version 6 adds `ships {me, them}` design ids; version 7 makes each `{design, fit}`.
 
 ## Render module contract
 

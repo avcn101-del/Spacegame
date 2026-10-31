@@ -78,7 +78,7 @@ function spawnTracers(battle, ship, target, dt, turrets = 1) {
 }
 
 export function launchTorps(battle, ship, enemy) {
-  const n = Math.min(N.TORP_SALVO, ship.torps);
+  const n = Math.min(ship.salvo, ship.torps);
   for (let i = 0; i < n; i++) {
     const side = i % 2 === 0 ? 1 : -1;
     battle.projectiles.push({
@@ -92,7 +92,7 @@ export function launchTorps(battle, ship, enemy) {
     });
   }
   ship.torps -= n;
-  ship.torpReload = N.TORP_RELOAD;
+  ship.torpReload = ship.reloadTime;
   battle.emit({ type: 'torpLaunch', x: ship.x, y: ship.y, by: ship.id, count: n });
 }
 
@@ -151,7 +151,7 @@ export function stepRail(battle, ship, enemy, dt) {
   if (ship.railAim < N.RAIL_AIM_TIME) return;
   // fire
   ship.railAim = -1;
-  ship.railCharge = N.RAIL_RECHARGE;
+  ship.railCharge = ship.railRecharge;
   // A Burn at any moment during the aim throws the shot off.
   const hit = enemy.lastBurnT < ship.railAimStart;
   battle.projectiles.push({
