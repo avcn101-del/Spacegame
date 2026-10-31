@@ -87,6 +87,9 @@ work longer than about an hour, give the estimate and wait for go.
   one doubled or halved. No buying, no points. The hangar draws the form; a tap on a
   hardpoint opens a list of its variants with the stats (the owner: "each choice must
   show stats or I do not know what I pick"). The PDC pick is gone (below).
+  The enemy pick (PR 31, the owner): an ENEMY button in the hangar's button row opens the
+  same list with the five AI presets, a stats line from the preset's knobs and one line of
+  text each; remembered in localStorage `enemy`, `?enemy=` wins; the enemy flies its stock fit.
 - The form (2026-10-31, replaces "not the 2D grid"): the ship is draft 12 of the owner's
   "Roci form" artifact, a 28 x 9 grid of cells with fixed hardpoints; the direction is ship
   building like Cosmoteer but with a fixed form and fixed hardpoints, the player picks a
