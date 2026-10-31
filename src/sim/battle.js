@@ -39,17 +39,19 @@ export function makeBattle(seed, designs = {}) {
     return (dx * (t.vx - m.vx) + dy * (t.vy - m.vy)) / r;
   };
   b.launchTorps = (ship) => W.launchTorps(b, ship, b.enemyOf(ship));
-  // A Burn kicks the ship across the line of fire (perpendicular to the bearing to the enemy),
-  // the same way as its current drift, to build speed rather than cancel it.
+  // A Burn is the main drive at full for an instant: a kick along the hull, the way the nose
+  // points. Bow-on it closes, tail-on it opens, broadside it crosses the line of fire. Any Burn
+  // during the enemy's aim still makes their rail miss, whatever the direction. The event's
+  // `dir` is the side of the line of fire the kick leans to, for the thruster puff.
   b.burn = (ship) => {
     ship.burns -= 1;
     const e = b.enemyOf(ship);
-    const dx = e.x - ship.x, dy = e.y - ship.y, r = Math.hypot(dx, dy) || 1e-6;
-    const px = -dy / r, py = dx / r; // across the line, dir +1 is the bearing turned +90 degrees
-    const dir = (ship.vx - e.vx) * px + (ship.vy - e.vy) * py >= 0 ? 1 : -1;
-    ship.vx += dir * px * N.BURN_SPEED;
-    ship.vy += dir * py * N.BURN_SPEED;
+    const hx = Math.cos(ship.heading), hy = Math.sin(ship.heading);
+    ship.vx += hx * N.BURN_SPEED;
+    ship.vy += hy * N.BURN_SPEED;
     ship.lastBurnT = b.t;
+    const dx = e.x - ship.x, dy = e.y - ship.y, r = Math.hypot(dx, dy) || 1e-6;
+    const dir = hx * (-dy / r) + hy * (dx / r) >= 0 ? 1 : -1;
     b.emit({ type: 'burn', x: ship.x, y: ship.y, by: ship.id, dir });
   };
   b.pieceDied = (ship, piece, cause) => {
