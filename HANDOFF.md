@@ -90,6 +90,14 @@ work longer than about an hour, give the estimate and wait for go.
   The enemy pick (PR 31, the owner): an ENEMY button in the hangar's button row opens the
   same list with the five AI presets, a stats line from the preset's knobs and one line of
   text each; remembered in localStorage `enemy`, `?enemy=` wins; the enemy flies its stock fit.
+- Hangar labels and arcs, panels (PRs 32 to 34, the owner; built by a Sonnet render agent): every
+  job room named on the hangar form, a tap on any room says `T.roomInfo` (frame too); the three
+  arcs (`src/render/arcs.js`, shared) drawn under the hangar form, not to scale, with a km legend,
+  and to scale in `drawGhost` while a move is dragged, with "BOW · RAIL · PDC 6 (far)". Panels
+  `--side` 130 px and `PANEL.CELL_ASPECT` 1.8: cells only got wider (about 10 x 5.4 px), the row
+  height is bound by the panel height (28 rows in about 194 px), so the gain is small; my panel
+  is shorter than theirs (TORPS and BURNS under it). Orbit at range in place of HOLD: parked in
+  NOTES with its three lines (it hands the steering decision to the autopilot).
 - The form (2026-10-31, replaces "not the 2D grid"): the ship is draft 12 of the owner's
   "Roci form" artifact, a 28 x 9 grid of cells with fixed hardpoints; the direction is ship
   building like Cosmoteer but with a fixed form and fixed hardpoints, the player picks a
