@@ -121,9 +121,14 @@ export function mountSide(ship, room) {
 }
 // The living mounts that see the enemy: from the bow or the stern all of them, from a side that
 // side's. With no enemy given, every living mount.
-export function pdcCount(ship, enemy) {
-  const dir = enemy ? shotFrom(ship, enemy.x, enemy.y) : null;
-  return pdcRooms(ship).filter((r) => alive(ship, r) && (!dir || dir === 'bow' || dir === 'stern' || mountSide(ship, r) === dir)).length;
+// A mount sees a point when it is in its arc: its own side of the hull, or ahead or astern.
+export function mountSees(ship, room, x, y) {
+  const dir = shotFrom(ship, x, y);
+  return dir === 'bow' || dir === 'stern' || mountSide(ship, room) === dir;
+}
+// The living mounts that see `at` ({x, y}: the enemy ship for Rake, a torpedo for Guard); all of them without it.
+export function pdcCount(ship, at) {
+  return pdcRooms(ship).filter((r) => alive(ship, r) && (!at || mountSees(ship, r, at.x, at.y))).length;
 }
 export const canFireTubes = (ship) => alive(ship, 'tubes') && ship.torps > 0 && exposure(ship) !== 'tail';
 export const canAimRail = (ship) => alive(ship, 'rail') && alive(ship, 'sensors') && ship.face === 'bow' && ship.turnLeft <= 0;

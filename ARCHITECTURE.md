@@ -156,11 +156,11 @@ What the sim exposes (render reads, never writes):
   (10, 1) (15, 1) above, (10, 5) (15, 5) below. `ship.form.mounts` is the list; ship.js
   exports `isPdc(room)`, `pdcRooms(ship)` (the ids) and `pdcAlive(ship)` (any alive), which
   replace every `alive(ship, 'pdc')` (hasWeapons, the noPdc refusal, the AI, the HUD).
-  Fire by real direction: a mount above the keel fires when the enemy is `top`, `bow` or
-  `stern` (`shotFrom` the enemy's position); below, when `bottom`, `bow` or `stern`. So
-  `pdcCount(ship, enemy)` is the living mounts that see the enemy: broadside about three,
-  end-on all six. The old all-broadside, half-end-on rule is gone. Rake and Guard both use
-  it. Tap-a-room on a mount targets that mount; the AI's "go for the pdc" picks the living
+  Fire by real direction: a mount above the keel sees a point that is `top`, `bow` or
+  `stern` of the hull (`shotFrom`); below, `bottom`, `bow` or `stern` (`mountSees`). Guard
+  checks each torpedo against each mount's arc (a flanker meets only the mounts on its
+  side); Rake uses `pdcCount(ship, enemy)`, the living mounts that see the enemy ship:
+  broadside about three, end-on all six. The old all-broadside, half-end-on rule is gone. Tap-a-room on a mount targets that mount; the AI's "go for the pdc" picks the living
   mount with the least cover from where it is. The T sponsons stay frame.
 - The hangar draws the form (`hud.js`, render): `main.js` hands it `preview(fit)`, a ship
   built with `makeShip` for the current fit, and the hangar draws it with `drawForm`

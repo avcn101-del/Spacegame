@@ -1,7 +1,7 @@
 // PDC, torpedo, railgun. Each function advances one ship's weapon by dt.
 // Hits land on the rooms a ray meets from where the shot comes from (ship.shotFrom, lineOfFire).
 import { N } from '../numbers.js';
-import { alive, pdcCount, damage, lineOfFire, lineOfFireAt, exposed, shotFrom, aimFactor, crewSpeed, canAimRail } from './ship.js';
+import { alive, pdcCount, pdcAlive, pdcRooms, mountSees, damage, lineOfFire, lineOfFireAt, exposed, shotFrom, aimFactor, crewSpeed, canAimRail } from './ship.js';
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // 1 at point blank, 0 at PDC_RANGE and beyond.
@@ -29,25 +29,31 @@ function strike(battle, target, kind, amount, fromX, fromY, room = null) {
 }
 
 export function stepPdc(battle, ship, enemy, dt) {
-  const turrets = pdcCount(ship, enemy); // the mounts on the side that sees them
-  if (turrets === 0) return;
+  if (!pdcAlive(ship)) return;
   const aim = aimFactor(ship);
   const incoming = battle.projectiles.filter((p) => p.kind === 'torp' && p.target === ship.id && !p.dead);
-  // Guard mode with torpedoes inside PDC range: shoot them.
+  // Guard mode with torpedoes inside PDC range: shoot them. Each living mount shoots a torpedo
+  // in its own arc (a mount sees the torpedo, not the ship: a flanker meets only the mounts on
+  // the side it comes in on), nearest first, the mounts of one side spread over its torpedoes.
   if (ship.orders.pdc === 'guard' && incoming.length > 0) {
     incoming.sort((a, b) => dist(a, ship) - dist(b, ship));
-    for (let i = 0; i < turrets; i++) {
-      const t = incoming[i % incoming.length];
-      const d = dist(t, ship);
-      if (d > N.PDC_RANGE || t.dead) continue;
+    const inRange = incoming.filter((t) => dist(t, ship) <= N.PDC_RANGE);
+    let k = 0;
+    for (const m of pdcRooms(ship)) {
+      if (!alive(ship, m)) continue;
+      const seen = inRange.filter((t) => !t.dead && mountSees(ship, m, t.x, t.y));
+      if (seen.length === 0) continue;
+      const t = seen[k++ % seen.length];
       spawnTracers(battle, ship, t, dt);
-      if (battle.rng.chance(N.PDC_GUARD_KILL_RATE * pdcFactor(d) * aim * dt)) {
+      if (battle.rng.chance(N.PDC_GUARD_KILL_RATE * pdcFactor(dist(t, ship)) * aim * dt)) {
         t.dead = true;
         battle.emit({ type: 'torpKilled', x: t.x, y: t.y, by: ship.id });
       }
     }
     return;
   }
+  const turrets = pdcCount(ship, enemy); // the mounts whose arc holds the enemy
+  if (turrets === 0) return;
   // Otherwise rake the enemy hull if inside range. Guard with no torpedoes also rakes:
   // the turrets have nothing else to shoot. Guard just means "torpedoes first".
   const d = dist(ship, enemy);

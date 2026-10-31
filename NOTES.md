@@ -21,8 +21,6 @@ Ideas go here. They are not built until the owner asks.
 - Burn as a torpedo dodge (today it only beats the railgun).
 - PDC ammo: Guard spends rounds, a decision between Guard now and Rake later.
 - Lock time for tap-a-room: the sensors need a few seconds to lock a room, like the rail aim; moving or losing sensors drops it.
-- Guard by the torpedo's side, not the ship's: a flanking torpedo would meet only the mounts
-  on the side it comes in on. Candidate if Guard at 94 percent is boring (PR 25).
 - PDC variants per mount (plated, or fast): the PDC pick was removed with the six fixed mounts.
 - Stalemate after the form: two hulks, drives dead, tubes alive but tail-on, 200 s of nothing
   (brawler mirror seeds 2, 6, 20, 30). Candidates: tail-on tubes may fire at half rate; a

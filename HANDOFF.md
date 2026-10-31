@@ -98,8 +98,10 @@ work longer than about an hour, give the estimate and wait for go.
   owner on a screenshot: (6, 1) (13, 1) (19, 2) above the keel, (6, 7) (13, 7) (19, 6)
   below. Each is its own room pdc1..pdc6, 10 hp, unplated, one turret; it dies, tears and
   is tapped alone (tap near a one-cell mount within 8 px picks it). A mount fires by its
-  arc: above the keel when the enemy is top, bow or stern; below when bottom, bow or stern
-  ("every living mount fires" end-on). So broadside three guard, end-on all six. The PDC
+  arc: above the keel when the target is top, bow or stern; below when bottom, bow or stern
+  ("every living mount fires" end-on). Guard checks the arc against each torpedo (PR 26, the
+  owner: "a mount sees the torpedo, not the ship, that is how it really is"); Rake against
+  the ship. So broadside three guard, end-on all six. The PDC
   pick is gone from the catalog. The two T sponsons of draft 12 are Gun mount M, a weapon
   the game lacks: frame. The Belter has four mounts (10, 1) (15, 1) (10, 5) (15, 5), mine.
   Every letter that is not one of the seven job rooms is a frame room (hp FRAME_HP, no job,
@@ -127,8 +129,10 @@ kept only as history. After the form (30 seeds, win/lose/draw):
   avg 194 s (10 time draws); brawler vs sniper 0/12/18; brawler vs gunship 20/0/10; sniper
   vs sniper 0/1/29 (27 time draws); sniper vs gunship 29/0/1 (the Belter flies broadside,
   so 2 of 4 mounts fire where its deck had 3); gunship mirror 6/4/20. Torpedoes barely land
-  end-on. Not tuned; the owner plays first. Candidates if he says boring: halve
-  PDC_GUARD_KILL_RATE, or Guard counts the mounts that see the torpedo, not the ship.
+  end-on. Not tuned; the owner plays first. Candidate if he says boring: halve
+  PDC_GUARD_KILL_RATE. Guard by the torpedo's side (PR 26) changed little: brawler mirror
+  7/6/17 avg 200 s, sniper mirror 30 time draws, sniper vs gunship 30/0/0, brawler vs
+  gunship 18/1/11.
 - The AI presets run at `runAt: 2` pieces left and the break phase at 3 job rooms left;
   with 12 job rooms (Belter 9) both come much later than before. Left as is.
 - After the PDC mounts (PR 24; the pdc was six one-cell mounts on the hull edge, open to shots
@@ -178,8 +182,8 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    grid be read, does cover make a decision, is Guard at 94 percent boring (torpedoes never
    land end-on), is the stalemate still there (a hulk with its drive dead that cannot be
    finished; and now long time draws in every mirror).
-2. Only if the owner says so: Guard tuned by halving, or Guard by the torpedo's side; a
-   drive-dead ship with no weapon to bear is beaten (or tail-on tubes at half rate).
+2. Only if the owner says so: Guard tuned by halving; a drive-dead ship with no weapon to
+   bear is beaten (or tail-on tubes at half rate).
 3. The next rooms into the empty hardpoints, only when the owner names them (he said
    "discuss later"). Then the hangar picks per hardpoint, one at a time.
 4. The owner plays with fits and says which pick never gets chosen; a pick nobody takes is
