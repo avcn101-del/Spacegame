@@ -8,7 +8,7 @@ const $ = (sel) => document.querySelector(sel);
 const fmtClock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 const tap = (sel, fn) => $(sel).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 
-export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport }) {
+export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload }) {
   const el = {
     clock: $('#n-clock'), range: $('#n-range'), rate: $('#n-rate'), torps: $('#n-torps'), burns: $('#n-burns'),
     phase: $('#phase'), order: $('#order'), pause: $('#pause'),
@@ -28,6 +28,18 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   tap('#again', onNew); tap('#same', onRestart);
   for (const id of ['#pm-export', '#rs-export']) { tap(id, onExport); $(id).textContent = T.export; }
   for (const id of ['#pm-import', '#rs-import']) { tap(id, onImport); $(id).textContent = T.import; }
+  tap('#pm-auto', onAuto);
+  $('#export-title').textContent = T.exportTitle;
+  $('#export-copy').textContent = T.copy; $('#export-download').textContent = T.download; $('#export-close').textContent = T.close;
+  tap('#export-close', () => $('#exportbox').classList.remove('show'));
+  tap('#export-download', onDownload);
+  tap('#export-copy', () => {
+    const ta = $('#export-text');
+    ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length);
+    const done = () => api.toast(T.copied);
+    const fail = () => { try { document.execCommand('copy'); done(); } catch (e) { api.toast(T.copyFailed); } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, fail); else fail();
+  });
   $('#pm-resume').textContent = T.resume; $('#pm-restart').textContent = T.restart; $('#pm-new').textContent = T.newBattle;
   $('#again').textContent = T.again; $('#same').textContent = T.same;
   $('#pm-title').textContent = T.pausedTitle;
@@ -36,17 +48,19 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   $('#name-me').textContent = T.ships.me; $('#name-them').textContent = T.ships.them;
   for (const k of ['range', 'torps', 'burns', 'clock']) $(`#l-${k}`).textContent = T.numbers[k];
   $('#legend').innerHTML = Object.keys(T.legend)
-    .map((o) => `<li><b>${T.buttons[o]}</b> <span>${T.legend[o]}</span></li>`).join('');
+    .map((o) => `<li><b>${T.buttons[o] || o.toUpperCase()}</b> <span>${T.legend[o]}</span></li>`).join('');
 
   let toast = null; // {text, ttl}
   const hitTimers = { me: 0, them: 0 };
-  let replay = false;
+  let replay = false, auto = false;
 
-  return {
+  const api = {
+    showExport(text) { $('#export-text').value = text; $('#exportbox').classList.add('show'); },
+    setAuto(on) { auto = on; $('#pm-auto').textContent = on ? T.autoOff : T.auto; document.getElementById('orders').classList.toggle('replay', on || replay); },
     toast(text) { toast = { text, ttl: 2.0 }; },
     // Pop the silhouette panel of a ship that just took a big hit.
     hit(shipId) { hitTimers[shipId] = 0.8; },
-    setReplay(on) { replay = on; document.getElementById('orders').classList.toggle('replay', on); },
+    setReplay(on) { replay = on; document.getElementById('orders').classList.toggle('replay', on || auto); },
     draw(battle, paused, dtReal) {
       const me = battle.ships[0], them = battle.ships[1];
       el.clock.textContent = fmtClock(battle.t);
@@ -78,7 +92,10 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       else {
         const parts = [];
         parts.push(me.turnLeft > 0 ? `${T.order.turning} ${T.order[me.faceTarget].toLowerCase()}` : T.order[me.face]);
-        if (me.orders.run) parts.push(T.order.run); else parts.push(T.order[me.orders.range]);
+        if (me.orders.run) parts.push(T.order.run);
+        else if (me.move.speed === 0) parts.push(T.order.hold);
+        else parts.push(`${T.order[me.faceTarget === 'bow' ? 'closing' : me.faceTarget === 'tail' ? 'opening' : 'circling']} ${me.move.speed.toFixed(2)}`);
+        if (auto) parts.unshift(T.auto);
         parts.push(T.order[me.orders.pdc]);
         if (me.railAim >= 0) parts.push(T.order.aiming);
         line = parts.join(' · ');
@@ -89,7 +106,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       const B = el.buttons;
       const range = battle.range();
       for (const o of Object.keys(B)) {
-        const active = (o === me.orders.range && !me.orders.run) || o === me.orders.pdc || (o === 'run' && me.orders.run) || o === me.faceTarget;
+        const active = (o === 'hold' && me.move.speed === 0 && !me.orders.run) || o === me.orders.pdc || (o === 'run' && me.orders.run);
         B[o].classList.toggle('active', active);
       }
       setProgress(B.torps, me.torpReload > 0 ? 1 - me.torpReload / N.TORP_RELOAD : 1, `${me.torps}`);
@@ -99,7 +116,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       B.rail.classList.toggle('dead', !alive(me, 'rail') || !alive(me, 'sensors') || me.face !== 'bow' || me.turnLeft > 0);
       B.rail.classList.toggle('aiming', me.railAim >= 0);
       B.burn.classList.toggle('dead', !alive(me, 'drive') || me.burns === 0);
-      for (const o of ['close', 'hold', 'open', 'run', 'bow', 'side', 'tail']) B[o].classList.toggle('dead', !alive(me, 'drive'));
+      for (const o of ['hold', 'run']) B[o].classList.toggle('dead', !alive(me, 'drive'));
       for (const o of ['guard', 'rake']) B[o].classList.toggle('dead', !alive(me, 'pdc'));
       B.torps.classList.toggle('ready', me.torpReload === 0 && range <= N.TORP_RANGE && canFireTubes(me));
       B.rail.classList.toggle('ready', me.railCharge === 0 && me.railAim < 0 && range <= N.RAIL_RANGE && canAimRail(me));
@@ -116,6 +133,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       }
     },
   };
+  return api;
 }
 
 function setProgress(btn, frac, sub) {

@@ -17,7 +17,10 @@ export function makeShip(id, name, x, facing, design) {
     face: 'bow',        // which end points at the enemy: 'bow' | 'side' | 'tail'
     faceTarget: 'bow',
     turnLeft: 0,        // seconds of swing left; while > 0 the ship is exposed like broadside
-    orders: { range: 'close', pdc: 'guard', run: false },
+    // The move order: asked relative speed along the hull axis, km/s. Bow: closing; tail: opening;
+    // side: circling, dir +1 or -1. speed 0 is Hold.
+    move: { speed: 0, dir: 1, holdRange: null }, // holdRange: km to keep while circling or holding
+    orders: { pdc: 'guard', run: false },
     torps: N.TORP_COUNT,
     torpReload: 0,      // seconds until tubes are loaded
     railCharge: N.RAIL_START_CHARGE, // seconds until the railgun is ready
@@ -44,14 +47,6 @@ export const isBeaten = (ship) => !alive(ship, 'bridge') || !hasWeapons(ship);
 // Hit chance multiplier from sensors; reload and recharge speed from crew.
 export const aimFactor = (ship) => (alive(ship, 'sensors') ? 1 : N.SENSORS_DEAD_HIT);
 export const crewSpeed = (ship) => (alive(ship, 'crew') ? 1 : N.CREW_DEAD_SPEED);
-// Main drive pushes along the hull axis; thrusters push the rest at half strength.
-// toward: +1 accelerating toward the enemy, -1 away.
-export const accelFactor = (ship, toward) => {
-  const e = exposure(ship);
-  if (e === 'side') return N.OFF_AXIS_ACCEL;
-  return (e === 'bow') === (toward > 0) ? 1 : N.OFF_AXIS_ACCEL;
-};
-
 // The rooms a shot meets, in order, given where the enemy is.
 // Bow-on: from the bow. Tail-on: from the stern. Broadside: a random alive room, then another.
 export function lineOfFire(ship, rng) {

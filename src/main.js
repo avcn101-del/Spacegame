@@ -8,11 +8,14 @@ import { makeTactical, makeSilhouettePanel } from './render/canvas.js';
 import { makeHud } from './render/hud.js';
 import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
 import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
+import { attachDrag } from './input/drag.js';
 
 const params = new URLSearchParams(location.search);
 let seed = Number(params.get('seed')) || (Date.now() % 100000); // seed choice is outside the sim
 const enemyPreset = PRESETS[params.get('enemy')] ? params.get('enemy') : DEFAULT_PRESET; // ?enemy=sniper
 let replayer = null; // set while watching a recorded battle
+let autoPreset = PRESETS[params.get('auto')] ? params.get('auto') : null; // ?auto=brawler: the AI flies my ship
+let autoPilot = null;
 
 let battle, enemy, paused = false, slowmo = 0, acc = 0;
 const cssPx = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
@@ -25,9 +28,9 @@ const panelThem = makeSilhouettePanel(document.getElementById('sil-them'), 'them
 const renderers = [tactical, panelMe, panelThem];
 
 const hud = makeHud({
-  onOrder(o) {
-    if (replayer) return;
-    const why = battle.order('me', o);
+  onOrder(o, arg) {
+    if (replayer || autoPilot) return;
+    const why = battle.order('me', o, arg);
     if (why) hud.toast(T.refusal[why]);
     else if (o === 'torps') hud.toast(T.order.torpsAway);
     else if (o === 'burn') hud.toast(T.order.burn);
@@ -37,15 +40,22 @@ const hud = makeHud({
   onRestart() { start(); },
   onNew() { seed = (seed * 7919 + 13) % 100000; start(); },
   onExport() {
-    const data = exportReplay(battle, { enemy: enemyPreset, exportedAt: new Date().toISOString() });
-    const text = JSON.stringify(data);
-    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+    const data = exportReplay(battle, { enemy: enemyPreset, auto: autoPreset, exportedAt: new Date().toISOString() });
+    hud.showExport(JSON.stringify(data));
+  },
+  onDownload() {
+    const text = document.getElementById('export-text').value;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
     a.download = `battle-${battle.seed}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    hud.toast(T.copied);
+  },
+  onAuto() {
+    autoPreset = autoPreset ? null : DEFAULT_PRESET;
+    autoPilot = autoPreset ? makeEnemy('me', autoPreset) : null;
+    hud.setAuto(!!autoPilot);
+    paused = false;
   },
   onImport() {
     const text = prompt(T.importPrompt);
@@ -61,10 +71,12 @@ function start(replay = null) {
   battle.enemyPreset = enemyPreset;
   enemy = makeEnemy('them', enemyPreset);
   replayer = replay ? makeReplayer(replay) : null;
+  autoPilot = autoPreset && !replayer ? makeEnemy('me', autoPreset) : null;
   hud.setReplay(!!replayer);
+  hud.setAuto(!!autoPilot);
   paused = false; slowmo = 0; acc = 0;
   history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}`);
-  window.game = { battle, exportReplay: () => exportReplay(battle) }; // for debugging and tests
+  window.game = { battle, tactical, exportReplay: () => exportReplay(battle) }; // for debugging and tests
 }
 
 // Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
@@ -87,7 +99,14 @@ function frame(now) {
   acc += dtGame;
   let steps = 0;
   while (acc >= N.DT && steps < 8) {
-    if (replayer) replayer.step(battle); else enemy.step(battle, N.DT);
+    if (replayer) replayer.step(battle);
+    else {
+      // both AIs decide on the same state, then both act: fair
+      const o1 = autoPilot ? autoPilot.decide(battle, N.DT) : null;
+      const o2 = enemy.decide(battle, N.DT);
+      if (autoPilot) autoPilot.apply(battle, o1);
+      enemy.apply(battle, o2);
+    }
     battle.step(N.DT);
     acc -= N.DT; steps++;
   }
@@ -102,6 +121,12 @@ function frame(now) {
   hud.draw(battle, paused, dtReal);
   requestAnimationFrame(frame);
 }
+
+attachDrag(document.getElementById('tactical'), tactical, () => battle, (arg) => {
+  if (replayer || autoPilot) return;
+  const why = battle.order('me', 'move', arg);
+  if (why) hud.toast(T.refusal[why]);
+});
 
 start();
 requestAnimationFrame(frame);

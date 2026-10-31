@@ -11,13 +11,17 @@ export const N = {
   // --- space ---
   START_RANGE: 12,       // far enough that approach takes about 30 to 45 s
   ESCAPE_RANGE: 16,      // past this, a running ship is gone
+  DRAG_FULL_PX: 120,     // a drag this long (CSS px) asks for MAX_SPEED
+  DRAG_DEAD_PX: 12,      // shorter than this is a tap, not a drag
   ACCEL: 0.06,           // main drive, km/s^2; sets how fast range changes
   RUN_ACCEL_MULT: 2,     // Run dumps everything into the drive, so the gap grows
-  MAX_SPEED: 0.15,       // closing speed cap per ship; two ships close 9 km in about 30 s
-  RANGE_CLOSE: 1.5,      // where Close settles: inside PDC range, knife fight
-  RANGE_OPEN: 9,         // where Open settles: outside PDC, inside torpedo range
-  RANGE_TOLERANCE: 0.3,  // autopilot stops adjusting inside this band
-  LATERAL_DAMP: 1.0,     // per second; autopilot bleeds off sideways drift
+  MAX_SPEED: 0.3,        // the longest drag asks for this relative speed, km/s; 9 km in 30 s
+  RANGE_MIN: 0.5,        // autopilot never closes past this; ships do not ram
+  TAIL_DRIVE_MULT: 0.5,  // backing off tail-on while still fighting gets half the drive; only Run gives everything, so a chaser can always catch up
+  AUTOPILOT_GAIN: 2.0,   // per second; how hard the autopilot chases the asked relative velocity
+  RANGE_CLOSE: 1.5,      // where the enemy AI wants to be when closing: inside PDC range
+  RANGE_OPEN: 9,         // where the enemy AI wants to be when opening: outside PDC, inside torpedo range
+  RANGE_TOLERANCE: 0.3,  // the AI stops adjusting inside this band
 
   // --- ship ---
   ROOM_HP: 10,           // a room dies to one torpedo or one slug

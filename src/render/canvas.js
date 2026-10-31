@@ -20,6 +20,8 @@ const V = {
   MAX_SCALE: 55,       // px per km; at knife range the strip still shows both rings
   MARK_LEN: 14,        // px, the top-down mark length
   STAR_PX_PER_KM: 30,  // parallax base: how far the far layer slides per km of camera travel
+  GHOST_RAY_PX: 170,   // px, the faint guide rays while dragging a move order
+  GHOST_ARC_PX: 22,    // px, radius of the circling arc drawn around the enemy mark
 };
 
 // --- deterministic numbers ----------------------------------------------------
@@ -40,23 +42,33 @@ const C = {
   white: [255, 255, 255], hot: [255, 230, 200], fire: [255, 154, 60], ember: [255, 110, 30],
   spark: [255, 200, 130], steel: [90, 100, 112], drive: [190, 225, 255],
   me: [191, 227, 255], them: [255, 160, 80], warn: [255, 60, 60],
+  amber: [255, 176, 96], tailRed: [255, 96, 80],
 };
+// The drag ghost's color per face: bow is the 'me' blue-white, side amber, tail red-ish.
+const GHOST_COL = { bow: C.me, side: C.amber, tail: C.tailRed };
 
 // Nose angle offset from the bearing to the enemy, per face. 'side' is
-// +PI/2: the hull lies across the line of fire. A turn sweeps linearly
-// through these, so bow -> tail passes through side, as the sim treats it.
+// +-PI/2: the hull lies across the line of fire, nose leading the circling
+// direction (move.dir), so the mark shows which way the ship goes round.
 const FACE_OFFSET = { bow: 0, side: Math.PI / 2, tail: Math.PI };
+function faceOffset(face, dir) {
+  if (face === 'side') return (dir < 0 ? -1 : 1) * Math.PI / 2;
+  return FACE_OFFSET[face] !== undefined ? FACE_OFFSET[face] : 0;
+}
 
 // Where the ship's nose points on the map, in radians, given the bearing to
-// the enemy: the current face, or, while turning, a smooth swing from the
-// old face to the target over FACE_TURN_TIME.
+// the enemy: the current face, or, while turning, a smooth swing the short
+// way round from the old face to the target over FACE_TURN_TIME (bow -> tail
+// passes through side, as the sim treats it).
 function noseAngle(ship, bearing) {
-  const from = FACE_OFFSET[ship.face] !== undefined ? FACE_OFFSET[ship.face] : 0;
-  const to = FACE_OFFSET[ship.faceTarget] !== undefined ? FACE_OFFSET[ship.faceTarget] : from;
+  const dir = ship.move ? ship.move.dir : 1;
+  const from = faceOffset(ship.face, dir);
+  const to = faceOffset(ship.faceTarget, dir);
   let k = 1;
   if (ship.turnLeft > 0 && N.FACE_TURN_TIME > 0) k = clamp01(1 - ship.turnLeft / N.FACE_TURN_TIME);
   const ease = k * k * (3 - 2 * k);
-  return bearing + lerp(from, to, ease);
+  const d = Math.atan2(Math.sin(to - from), Math.cos(to - from));
+  return bearing + from + d * ease;
 }
 
 // --- canvas sizing -----------------------------------------------------------
@@ -367,6 +379,16 @@ function drawStars(ctx, stars, cam, w, h, time) {
 // opts.inset: () => ({top, right, bottom, left}) in CSS px, the HUD-covered
 // margins; the ships are centered and fitted inside the remaining rect,
 // the starfield still covers the whole canvas. Default: no inset.
+//
+// Returns {draw, onEvent, toScreen, toWorld, shipScreen, setGhost}:
+// - toScreen(wx, wy) -> {x, y}: world km to CSS px of the canvas, current camera.
+// - toWorld(sx, sy) -> {x, y}: the inverse.
+// - shipScreen(shipId) -> {x, y} of that ship's mark from the last drawn
+//   battle, or null before the first draw.
+// - setGhost(ghost): null, or {sx, sy, ex, ey, face, speed, dir}, the move
+//   order being dragged (CSS px start and finger, face 'bow'|'side'|'tail',
+//   speed 0..1 of MAX_SPEED, dir +1/-1). Drawn over the map each frame until
+//   cleared; it rides with the camera and draws while paused (dtReal 0).
 export function makeTactical(canvas, opts = {}) {
   const ctx = canvas.getContext('2d');
   const inset = typeof opts.inset === 'function' ? opts.inset : () => null;
@@ -376,10 +398,14 @@ export function makeTactical(canvas, opts = {}) {
   let last = null; // the battle from the last draw, read-only, to resolve ship ids in events
   const stars = makeStars();
   const toScreen = (ax, ay) => ({ x: rect.x + rect.w / 2 + (ax - cam.x) * cam.scale, y: rect.y + rect.h / 2 + (ay - cam.y) * cam.scale });
+  const toWorld = (sx, sy) => ({ x: cam.x + (sx - rect.x - rect.w / 2) / cam.scale, y: cam.y + (sy - rect.y - rect.h / 2) / cam.scale });
   const fx = makeFx(toScreen);
   const pending = []; // delayed secondary explosions: {ax, ay, delay}
   const tint = (id) => (id === 'me' ? C.me : C.them);
   const shipOf = (id) => (last ? (last.shipById ? last.shipById(id) : last.ships.find((s) => s.id === id)) : null);
+  const shipScreen = (id) => { const s = shipOf(id); return s ? toScreen(s.x, s.y) : null; };
+  let ghost = null; // the move order being dragged, see setGhost
+  const setGhost = (g) => { ghost = g || null; };
 
   function draw(battle, dtReal) {
     const dt = clamp(dtReal || 0, 0, V.MAX_DT);
@@ -427,8 +453,100 @@ export function makeTactical(canvas, opts = {}) {
     drawMarks(battle);
     fx.draw(ctx);
     ctx.restore();
+    if (ghost) drawGhost(battle); // input overlay: outside the shake, so the finger point stays put
     const wa = fx.white();
     if (wa > 0) { ctx.fillStyle = `rgba(255,240,225,${wa})`; ctx.fillRect(0, 0, w, h); }
+  }
+
+  // The move order under the finger: guide rays for the three zones, an
+  // arrow from the 'me' mark in the drag direction as long as the asked
+  // speed, a faint ghost of the mark turned to the asked facing at its end,
+  // and for 'side' a small arc round the enemy showing the circling direction.
+  function drawGhost(battle) {
+    const me = battle.shipById ? battle.shipById('me') : battle.ships[0];
+    const them = battle.enemyOf ? battle.enemyOf(me) : battle.ships[1];
+    if (!me || !them) return;
+    const p = toScreen(me.x, me.y), q = toScreen(them.x, them.y);
+    const bearing = Math.atan2(q.y - p.y, q.x - p.x);
+    const face = GHOST_COL[ghost.face] ? ghost.face : 'bow';
+    const col = GHOST_COL[face];
+    const dir = ghost.dir < 0 ? -1 : 1;
+    const speed = clamp01(ghost.speed || 0);
+    const pulse = 0.75 + 0.25 * Math.sin(time * 6);
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // guide rays: toward the enemy, away, and the two across. Very faint.
+    ctx.strokeStyle = 'rgba(190,210,235,0.11)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 7]);
+    ctx.beginPath();
+    for (const o of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+      const a = bearing + o;
+      ctx.moveTo(p.x + Math.cos(a) * V.MARK_LEN, p.y + Math.sin(a) * V.MARK_LEN);
+      ctx.lineTo(p.x + Math.cos(a) * V.GHOST_RAY_PX, p.y + Math.sin(a) * V.GHOST_RAY_PX);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // the arrow: along the finger's drag, length = asked speed. No drag yet: along the face itself.
+    const ddx = (ghost.ex || 0) - (ghost.sx || 0), ddy = (ghost.ey || 0) - (ghost.sy || 0);
+    const nose = bearing + faceOffset(face, dir);
+    const ang = Math.hypot(ddx, ddy) > 0.5 ? Math.atan2(ddy, ddx) : nose;
+    const len = speed * N.DRAG_FULL_PX;
+    const ex = p.x + Math.cos(ang) * len, ey = p.y + Math.sin(ang) * len;
+    if (len > 2) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = rgba(col, 0.22 * pulse);
+      ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.strokeStyle = rgba(col, 0.9);
+      ctx.lineWidth = 1.5;
+      const ah = Math.min(9, 3 + len * 0.1);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey);
+      ctx.moveTo(ex, ey); ctx.lineTo(ex - Math.cos(ang - 0.45) * ah, ey - Math.sin(ang - 0.45) * ah);
+      ctx.moveTo(ex, ey); ctx.lineTo(ex - Math.cos(ang + 0.45) * ah, ey - Math.sin(ang + 0.45) * ah);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ghost mark just past the arrow tip (or over the ship when holding), turned to the asked facing
+    const off = len > 2 ? V.MARK_LEN * 0.8 : 0;
+    const gx = ex + Math.cos(ang) * off, gy = ey + Math.sin(ang) * off;
+    ctx.save();
+    ctx.globalAlpha = 0.25 + 0.3 * pulse;
+    ctx.fillStyle = rgba(col, 1);
+    drawShipMark(ctx, me, gx, gy, V.MARK_LEN, nose);
+    ctx.restore();
+
+    // circling: a short arc round the enemy mark, starting on my side, swept the way the ship will go
+    if (face === 'side') {
+      const r = V.GHOST_ARC_PX;
+      const a0 = bearing + Math.PI - dir * 0.35, a1 = a0 + dir * 1.3;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = rgba(col, 0.75 * pulse);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(q.x, q.y, r, a0, a1, dir < 0); ctx.stroke();
+      const tx = q.x + Math.cos(a1) * r, ty = q.y + Math.sin(a1) * r;
+      const ta = a1 + dir * Math.PI / 2; // tangent at the arc's end, the direction of travel
+      ctx.beginPath();
+      ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(ta - 0.5) * 6, ty - Math.sin(ta - 0.5) * 6);
+      ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(ta + 0.5) * 6, ty - Math.sin(ta + 0.5) * 6);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // the finger: a faint ring where it is now
+    if (Number.isFinite(ghost.ex) && Number.isFinite(ghost.ey)) {
+      ctx.strokeStyle = rgba(col, 0.18);
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(ghost.ex, ghost.ey, 13, 0, 6.2832); ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function drawRangeRings(battle) {
@@ -578,14 +696,17 @@ export function makeTactical(canvas, opts = {}) {
         ctx.restore();
       }
 
-      // thrust plume: out of the stern of the mark, opposite the nose, as long
-      // as |thrust|. A ship facing tail-on and burning away points its plume
-      // at the enemy, which is what it would look like. None when coasting.
+      // thrust plume: thrust > 0 pushes nose-ward, so the exhaust leaves the
+      // stern, as long as the thrust. Thrust < 0 is braking: a shorter retro
+      // plume out of the bow. A ship facing tail-on and burning away points
+      // its plume at the enemy, which is what it would look like. None when coasting.
       const th = s.pieces.drive.alive ? (s.thrust || 0) : 0;
       if (Math.abs(th) > 0.05) {
-        const sx = Math.cos(ang + Math.PI), sy = Math.sin(ang + Math.PI);
+        const back = th > 0;
+        const pa = ang + (back ? Math.PI : 0);
+        const sx = Math.cos(pa), sy = Math.sin(pa);
         const flick = 0.78 + 0.22 * hash01(Math.floor(time * 30) + (s.id === 'me' ? 0 : 7));
-        const pl = (5 + 14 * Math.abs(th)) * flick;
+        const pl = (back ? 5 + 14 * th : 3 + 7 * -th) * flick;
         const x0 = p.x + sx * V.MARK_LEN * 0.5, y0 = p.y + sy * V.MARK_LEN * 0.5;
         const x1 = x0 + sx * pl, y1 = y0 + sy * pl;
         ctx.save();
@@ -628,6 +749,15 @@ export function makeTactical(canvas, opts = {}) {
     const s = shipOf(id), e = shipOf(otherId(id));
     if (!s || !e) return Math.PI;
     return noseAngle(s, Math.atan2(e.y - s.y, e.x - s.x)) + Math.PI;
+  }
+  // A Burn kicks the ship across the line of fire: dir +1 is the bearing to
+  // the enemy turned +90 degrees. The exhaust goes the opposite way. With the
+  // ships unknown, fall back to the fight line being the x axis.
+  function burnExhaustDir(id, dir) {
+    const sign = dir < 0 ? -1 : 1;
+    const s = shipOf(id), e = shipOf(otherId(id));
+    const bearing = s && e ? Math.atan2(e.y - s.y, e.x - s.x) : 0;
+    return bearing + sign * Math.PI / 2 + Math.PI;
   }
 
   function onEvent(ev) {
@@ -696,11 +826,12 @@ export function makeTactical(canvas, opts = {}) {
         break;
       }
       case 'burn': {
-        // lateral kick: exhaust goes opposite to the burn direction (world y)
+        // lateral kick across the line of fire: exhaust goes opposite to the burn direction
         const col = tint(ev.by);
+        const out = burnExhaustDir(ev.by, ev.dir);
         fx.flash(a, { r: 10, grow: 10, life: 0.4, col: C.white, col2: C.drive });
-        fx.sparks(a, 16, { dir: ev.dir > 0 ? -Math.PI / 2 : Math.PI / 2, spread: 0.7, speedMin: 120, speedMax: 260, lifeMin: 0.25, lifeMax: 0.5, size: 1.5, col: C.drive });
-        fx.sparks(a, 6, { dir: ev.dir > 0 ? -Math.PI / 2 : Math.PI / 2, spread: 0.3, speedMin: 60, speedMax: 120, lifeMin: 0.2, lifeMax: 0.4, col });
+        fx.sparks(a, 16, { dir: out, spread: 0.7, speedMin: 120, speedMax: 260, lifeMin: 0.25, lifeMax: 0.5, size: 1.5, col: C.drive });
+        fx.sparks(a, 6, { dir: out, spread: 0.3, speedMin: 60, speedMax: 120, lifeMin: 0.2, lifeMax: 0.4, col });
         break;
       }
       case 'torpLaunch': {
@@ -720,7 +851,7 @@ export function makeTactical(canvas, opts = {}) {
     }
   }
 
-  return { draw, onEvent };
+  return { draw, onEvent, toScreen, toWorld, shipScreen, setGhost };
 }
 
 // --- silhouette panel --------------------------------------------------------------
