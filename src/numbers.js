@@ -40,8 +40,8 @@ export const N = {
   PDC_TRACER_RATE: 14,   // tracers drawn per second per turret; purely visual
 
   // --- torpedo ---
-  TORP_COUNT: 6,         // per ship, per battle; the stock runs out, so the fight ends
-  TORP_SALVO: 2,         // fired in pairs so two turrets each have a target
+  TORP_COUNT: 12,        // per ship, per battle: three salvos; the stock runs out, so the fight ends
+  TORP_SALVO: 4,         // four at once saturate one or two PDC turrets: about three in four get through a Guard, not one in two
   TORP_RELOAD: 20,       // between salvos; gives the enemy time to answer
   TORP_RANGE: 10,        // launch only inside this; approach phase is "torpedo range only"
   TORP_SPEED: 1.5,       // relative to its target; crosses PDC range in 2 s, so Guard has a chance, not a certainty
