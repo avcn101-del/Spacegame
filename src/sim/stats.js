@@ -22,6 +22,7 @@ export function makeStats() {
       case 'railMiss': s[other(ev.ship)].railDodged += 1; break;
       case 'burn': s[ev.by].burns += 1; break;
       case 'pieceDead':
+        if (ev.piece.startsWith('frame:')) break; // frame is structure, not a room: the count is job rooms
         s[ev.ship].piecesLost += 1;
         s.timeline.push({ t: Math.round(t * 10) / 10, ship: ev.ship, piece: ev.piece, cause: ev.cause });
         break;

@@ -1,20 +1,25 @@
 // PDC, torpedo, railgun. Each function advances one ship's weapon by dt.
-// Hits land on the rooms the shot meets (ship.lineOfFire): the exposed end first.
+// Hits land on the rooms a ray meets from where the shot comes from (ship.shotFrom, lineOfFire).
 import { N } from '../numbers.js';
-import { alive, pdcCount, damage, lineOfFire, lineOfFireAt, exposedEnd, exposure, aimFactor, crewSpeed, canAimRail } from './ship.js';
+import { alive, pdcCount, damage, lineOfFire, lineOfFireAt, exposed, shotFrom, aimFactor, crewSpeed, canAimRail } from './ship.js';
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // 1 at point blank, 0 at PDC_RANGE and beyond.
 const pdcFactor = (dist) => clamp01(1 - dist / N.PDC_RANGE);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-// Full damage to the first room in line, SPILL of it to the next. Emits hit and death events.
-// A chosen room (alive) is first in line instead of the exposed end.
-function strike(battle, target, kind, amount, room = null) {
-  const rooms = room && alive(target, room) ? lineOfFireAt(target, room) : lineOfFire(target, battle.rng);
+const isFrame = (room) => room.startsWith('frame:');
+// Full damage to the first room on the ray from (fromX, fromY), SPILL of it to the next, unless the
+// first is frame: frame soaks the blast. A chosen room (alive) picks the ray with the least cover in
+// front of it; the cover still takes the hit first. Emits hit and death events.
+function strike(battle, target, kind, amount, fromX, fromY, room = null) {
+  const dir = shotFrom(target, fromX, fromY);
+  let rooms = room && alive(target, room) ? lineOfFireAt(target, room, dir, battle.rng) : [];
+  if (rooms.length === 0) rooms = lineOfFire(target, battle.rng, dir);
   if (rooms.length === 0) return;
-  const hits = [[rooms[0], amount], [rooms[1], amount * N.SPILL]].filter(([r]) => r);
-  battle.emit({ type: kind, x: target.x, y: target.y, ship: target.id, piece: rooms[0], spill: rooms[1] || null });
+  const spill = rooms[1] && !isFrame(rooms[0]) ? rooms[1] : null;
+  const hits = [[rooms[0], amount], [spill, amount * N.SPILL]].filter(([r]) => r);
+  battle.emit({ type: kind, x: target.x, y: target.y, ship: target.id, piece: rooms[0], spill });
   for (const [room, dmg] of hits) {
     const r = damage(target, room, dmg);
     if (r.died) battle.pieceDied(target, room, kind === 'torpHit' ? 'torp' : 'rail');
@@ -46,11 +51,12 @@ export function stepPdc(battle, ship, enemy, dt) {
   const d = dist(ship, enemy);
   if (d > N.PDC_RANGE) return;
   spawnTracers(battle, ship, enemy, dt, turrets);
-  // End-on: the exposed room, always. Broadside: the chosen room if there is one, else pick one
-  // room and chew on it until it dies.
-  if (exposure(enemy) === 'side' && ship.target && alive(enemy, ship.target)) ship.rakeTarget = ship.target;
-  else if (exposure(enemy) !== 'side' || !ship.rakeTarget || !alive(enemy, ship.rakeTarget)) {
-    ship.rakeTarget = lineOfFire(enemy, battle.rng)[0] || null;
+  // The chosen room when the turrets can see it (a ray from here meets it first); else the first
+  // room of a random ray from here, chewed until it dies or the hull turns it out of sight.
+  const dir = shotFrom(enemy, ship.x, ship.y);
+  if (ship.target && alive(enemy, ship.target) && exposed(enemy, ship.target, dir)) ship.rakeTarget = ship.target;
+  else if (!ship.rakeTarget || !alive(enemy, ship.rakeTarget) || !exposed(enemy, ship.rakeTarget, dir)) {
+    ship.rakeTarget = lineOfFire(enemy, battle.rng, dir)[0] || null;
   }
   if (!ship.rakeTarget) return;
   const r = damage(enemy, ship.rakeTarget, N.PDC_RAKE_DPS * pdcFactor(d) * aim * turrets * dt);
@@ -86,7 +92,7 @@ export function launchTorps(battle, ship, enemy) {
       x: ship.x, y: ship.y + side * 0.15,
       vx: ship.vx + ship.facing * 0.3, vy: ship.vy + side * 0.4,
       aim: aimFactor(ship), // the shooter's sensors at launch decide whether it finds its mark
-      room: ship.target && alive(enemy, ship.target) ? ship.target : null, // the room it goes for, else the exposed end
+      room: ship.target && alive(enemy, ship.target) ? ship.target : null, // the room it goes for, else whatever its ray meets
       side, dove: false,    // a buried room: swing wide on this side, then dive in; dove once past the shoulder
       dead: false, age: 0,
     });
@@ -96,12 +102,13 @@ export function launchTorps(battle, ship, enemy) {
   battle.emit({ type: 'torpLaunch', x: ship.x, y: ship.y, by: ship.id, count: n });
 }
 
-// A torpedo sent at a room that is not the exposed end slows to TORP_FLANK_SPEED, swings wide to
-// a point TORP_FLANK beside the target (across the line from the shooter), then turns in: slow
-// enough to make the turn, a longer and slower flight inside PDC range, so more of them die.
+// A torpedo sent at a room that is buried from where it is (no ray from there meets it first) slows
+// to TORP_FLANK_SPEED, swings wide to a point TORP_FLANK beside the target (across the line from the
+// shooter), then turns in: slow enough to make the turn, a longer and slower flight inside PDC
+// range, so more of them die. It strikes from wherever it is when it goes off.
 // Returns {x, y, speed}: the point it homes on right now and its speed cap.
 function torpAim(battle, t, target) {
-  const buried = t.room && alive(target, t.room) && exposedEnd(target) !== null && exposedEnd(target) !== t.room;
+  const buried = t.room && alive(target, t.room) && !exposed(target, t.room, shotFrom(target, t.x, t.y));
   if (!buried) return { x: target.x, y: target.y, speed: N.TORP_SPEED };
   const slow = N.TORP_SPEED * N.TORP_FLANK_SPEED;
   if (t.dove) return { x: target.x, y: target.y, speed: slow };
@@ -138,7 +145,7 @@ export function stepTorp(battle, t, dt) {
       battle.emit({ type: 'torpMiss', x: t.x, y: t.y, ship: target.id });
       return;
     }
-    strike(battle, target, 'torpHit', N.ROOM_HP, t.room);
+    strike(battle, target, 'torpHit', N.ROOM_HP, t.x, t.y, t.room); // from where it actually is
   }
 }
 
@@ -170,7 +177,8 @@ export function stepSlug(battle, s, dt) {
   if (d <= stepLen) {
     s.x = s.tx; s.y = s.ty; s.dead = true;
     const target = battle.shipById(s.target);
-    if (s.hit) strike(battle, target, 'railHit', N.ROOM_HP);
+    const shooter = battle.shipById(s.owner);
+    if (s.hit) strike(battle, target, 'railHit', N.ROOM_HP, shooter.x, shooter.y); // the rail ignores ship.target
     else battle.emit({ type: 'railMiss', x: s.x, y: s.y, ship: target.id });
     return;
   }

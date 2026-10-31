@@ -2,7 +2,7 @@
 // step(dt) is deterministic given the seed and the order log.
 import { N } from '../numbers.js';
 import { makeRng } from '../rng.js';
-import { makeShip, alive, isBeaten, alivePieces, turnShip, faceFor, angleDiff, tornRooms, tearOff } from './ship.js';
+import { makeShip, alive, isBeaten, alivePieces, turnShip, faceFor, angleDiff, cutOff, tearOff, meanX } from './ship.js';
 import { DESIGNS, DEFAULT_DESIGN } from '../ships/index.js';
 import { refusal, apply } from './orders.js';
 import * as W from './weapons.js';
@@ -61,13 +61,14 @@ export function makeBattle(seed, ships = {}) {
     const foe = b.enemyOf(ship);
     if (foe.target === piece) foe.target = null; // the room they were going for is gone: back to the exposed end
     b.emit({ type: 'pieceDead', x: ship.x, y: ship.y, ship: ship.id, piece, cause });
-    // The tear rule: rooms cut off from the bridge by this hole break away with it. One event
-    // per end so the renderer and the toast see a section go, not three rooms.
-    const torn = tornRooms(ship);
+    // The tear rule: cells cut off from the bridge by this hole break away (cell.cut, silent); a
+    // room left with no cell tears off. One event per end so the renderer and the toast see a
+    // section go, not three rooms. The end: the torn room's cells against the bridge's, bow at +x.
+    const torn = cutOff(ship);
     if (torn.length === 0) return;
-    const i = ship.roomOrder.indexOf('bridge');
+    const bx = meanX(ship, 'bridge');
     for (const end of ['bow', 'stern']) {
-      const pieces = torn.filter((r) => (ship.roomOrder.indexOf(r) < i) === (end === 'bow'));
+      const pieces = torn.filter((r) => (meanX(ship, r) > bx) === (end === 'bow'));
       if (pieces.length === 0) continue;
       for (const r of pieces) tearOff(ship, r); // all first: a torn room is dead, so the nested check finds nothing more
       for (const r of pieces) b.pieceDied(ship, r, 'tear');

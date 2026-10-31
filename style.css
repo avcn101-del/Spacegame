@@ -1,7 +1,7 @@
 :root {
   --bg: #05070c; --panel: rgba(11,16,24,0.72); --line: #1d2a3a; --text: #c9d6e6; --dim: #5d7187;
   --me: #7fc4ff; --them: #ff9a4a; --warn: #ff4d4d; --ok: #6fe0a0; --font: "SF Mono", Menlo, Consolas, monospace;
-  --top: 34px; --bottom: 72px; --side: 72px;
+  --top: 34px; --bottom: 72px; --side: 100px;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow: hidden; }
@@ -19,14 +19,14 @@ header { position: absolute; top: 0; left: 0; right: 0; height: var(--top); disp
 .panel { position: absolute; top: calc(var(--top) + 6px); bottom: calc(var(--bottom) + 26px); width: var(--side); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; display: flex; flex-direction: column; transition: transform 0.15s ease-out; }
 .panel.me { left: max(6px, env(safe-area-inset-left)); transform-origin: left center; }
 .panel.them { right: max(6px, env(safe-area-inset-right)); transform-origin: right center; }
-.panel.hit { transform: scale(1.35); z-index: 2; }
+.panel.hit { transform: scale(1.2); z-index: 2; }
 .panel .name { font-size: 9px; letter-spacing: 0.15em; padding: 3px 4px; color: var(--dim); text-align: center; white-space: nowrap; overflow: hidden; }
 .panel.me .name { color: var(--me); } .panel.them .name { color: var(--them); }
 .panel canvas { flex: 1; width: 100%; min-height: 0; display: block; }
 .panel .nums { display: flex; flex-direction: column; gap: 3px; padding: 2px 6px 5px; }
 .panel .nums .num { flex-direction: row; justify-content: space-between; align-items: baseline; }
 .panel .nums .v { font-size: 15px; }
-#order { position: absolute; left: var(--side); right: var(--side); bottom: var(--bottom); font-size: 12px; letter-spacing: 0.08em; text-align: center; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); text-shadow: 0 0 6px #000; }
+#order { position: absolute; left: calc(var(--side) + 10px); right: calc(var(--side) + 10px); bottom: var(--bottom); font-size: 12px; letter-spacing: 0.08em; text-align: center; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); text-shadow: 0 0 6px #000; }
 #order.warn { color: var(--warn); animation: blink 0.5s steps(2) infinite; }
 #order.toast { color: var(--ok); } #order.paused { color: var(--dim); }
 @keyframes blink { to { opacity: 0.4; } }
