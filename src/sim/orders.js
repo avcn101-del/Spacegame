@@ -53,7 +53,7 @@ export function refusal(ship, order, ctx, arg) {
     case 'target': {
       const room = arg && arg.room;
       if (room === null || room === undefined) return ship.target === null ? 'noTarget' : null;
-      if (!ctx.enemy || !(room in ctx.enemy.pieces)) return 'badTarget';
+      if (!ctx.enemy || !ctx.enemy.roomOrder.includes(room)) return 'badTarget'; // job rooms only: frame is not targetable
       if (!alive(ctx.enemy, room)) return 'roomDead';
       if (ship.target === room) return 'sameTarget';
       return null;

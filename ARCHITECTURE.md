@@ -13,10 +13,10 @@ src/numbers.js        every tunable number, one-line reason each
 src/rng.js            seeded random, the only random source
 src/text.js           all player-facing English strings
 src/ships/index.js    every design by id: tachi, belter; a battle names its two, a replay records them
-src/ships/tachi.js    a ship as data (rooms, and the form: draft 12 as rows of letters): rooms bow to stern, bridge in the middle; kind per slot; armor (plated, double hp), bulkhead (aft wall spill does not cross); turrets per PDC deck; torps stock; accel fraction
+src/ships/tachi.js    a ship as data (rooms, and the form: draft 12 as rows of letters): rooms bow to stern, bridge in the middle; kind per slot; armor (plated, double hp); turrets per PDC deck; torps stock; accel fraction
 src/ships/belter.js   the Belter gunship: no rail, three turrets, 16 torpedoes, half drive, no plating, six rooms
 src/ships/catalog.js  the hangar's catalog: two variants per slot kind (launcher, pdc, gun, drive); a fit picks one each; parseFit / fitString
-src/sim/ship.js       rooms, facing, exposure, line of fire, damage, the tear rule, "is beaten"
+src/sim/ship.js       rooms, the form as cells, facing, rays (shotFrom, lineOfFire), damage, the tear rule (cutOff), "is beaten"
 src/sim/orders.js     the orders: refusal() and apply(); 'move' carries {heading, speed}
 src/input/drag.js     drag on the map -> move order; input only
 src/input/tap.js      tap on a silhouette panel -> target order or room info; input only
@@ -29,7 +29,8 @@ src/ai/enemy.js       makeEnemy(shipId, preset): decide/apply/step, same orders
 tools/selfplay.mjs    20 seeds AI vs AI, determinism check
 tools/arena.mjs       preset vs preset over many seeds: the balance tool
 tools/replay.mjs      replay a battle JSON headless, print stats and orders
-src/render/silhouette.js  Roci outline, pieces lit or dark
+src/render/form.js    the form drawn as a grid in a panel: cells lit, dark, adrift; roomAtPoint for the tap
+src/render/silhouette.js  Roci outline (the tactical mark and the art tables)
 src/render/canvas.js  tactical strip, tracers, impacts, debris, shake
 src/render/hud.js     four numbers, current order, buttons, pause, result, the hangar overlay (onFit hands the fit back; main.js keeps it in the URL `?fit=` and localStorage)
 ```
@@ -50,31 +51,35 @@ src/render/hud.js     four numbers, current order, buttons, pause, result, the h
   `roomOrder` (bow to stern; Tachi: rail, sensors, pdc, bridge, crew, tubes,
   drive; Belter: sensors, pdc, bridge, crew, tubes, drive)
   and `pieces` map of room id to `{hp, maxHp, alive, torn?}` (`torn`: it broke
-  off and drifts), `armor` and `bulkheadAft` maps of room id to true
-  (plated rooms; walls that stop spill); `heading` / `headingTarget` radians on the map (0 is
+  off and drifts; frame rooms `frame:<letter><n>` included), `armor` map of room id to true
+  (plated rooms); `form {w, h}`, `cells[y][x]` (null or `{room, cut}`), `frames` (see "The
+  form" below); `heading` / `headingTarget` radians on the map (0 is
   +x), `turnLeft` seconds of swing left, `face` (`bow | side | tail`: what the
   enemy sees, derived every step from heading versus bearing, `BOW_CONE`);
   `move {speed, coast}`; `orders {pdc, run}`,
   `torps, torpReload, railCharge, railAim (-1 idle or seconds aiming),
   burns, thrust`; `target` is the enemy room this ship's weapons go for, or
-  null (the exposed end). The sim clears it when that room dies.
-- The one geometry rule: a shot meets the rooms from the exposed end
-  (`lineOfFire`). Bow-on: rail first. Tail-on: drive first. Broadside or
-  turning: a random room, spill into its neighbour. PDC chews the first
-  room; torpedo and rail kill the first and wound the next.
-- The tear rule: when a room dies, every living room with no path to the
-  bridge through living rooms tears off (`tornRooms`, `tearOff`): hp 0, not
-  alive, `torn` true, the tubes take the torpedo stock with them. One
-  `pieceDead {cause: 'tear'}` per room, then one `tear {ship, end: 'bow'|'stern',
-  pieces}` per end. The bridge is in the middle, so a cut loses at most three
-  rooms: pdc dead loses rail and sensors, crew dead loses tubes and drive.
-- Tap-a-room: a `target` order names an enemy room. A torpedo carries the
-  room it was sent at (`room`); if that room is not the exposed end it slows
+  null (whatever the ray meets). The sim clears it when that room dies.
+- The one geometry rule: a shot is a ray through the form from where it really
+  comes from (`shotFrom`, `lineOfFire`, `lineOfFireAt`): along a row from the
+  bow or the stern, along a column from a side. The first living cell's room
+  takes the hit; `SPILL` into the next room on the ray unless the first is
+  frame, which soaks it. PDC chews the first room of its ray; torpedo and rail
+  kill the first and wound the next.
+- The tear rule: when a room dies, flood from the bridge over living cells;
+  cells not reached are `cut`, a room with no living cell left tears off
+  (`cutOff`, `tearOff`): hp 0, not alive, `torn` true, the tubes take the
+  torpedo stock with them. One `pieceDead {cause: 'tear'}` per room, then one
+  `tear {ship, end: 'bow'|'stern', pieces}` per end (by mean cell x against the
+  bridge), only when a room tore. Pieces may include frame ids.
+- Tap-a-room: a `target` order names an enemy job room (frame is refused). A
+  torpedo carries the room it was sent at (`room`); while that room is not
+  `exposed` from where the torpedo is (no ray from there meets it first) it slows
   to `TORP_FLANK_SPEED`, swings out `TORP_FLANK` beside the target on its
-  launch side, then turns in and hits that room (spill into its neighbour):
-  longer and slower inside PDC range, so more are shot down. Broadside, every
-  room is exposed and there is no detour. PDCs chew the chosen room only when
-  the enemy is broadside or turning. The railgun ignores it. Torpedoes have a
+  launch side, then turns in; on impact it takes the ray with the least cover
+  to that room, and the cover takes the hit first: longer and slower inside PDC
+  range, so more are shot down. PDCs chew the chosen room while a ray from
+  the shooter meets it first. The railgun ignores it. Torpedoes have a
   proximity fuse (`TORP_FUSE`): they go off at closest approach.
 - `projectiles`: `{kind: 'torp', owner, target, x, y, vx, vy, room, side, dove}`
   and `{kind: 'slug', owner, target, x, y, tx, ty, hit}`.
@@ -97,7 +102,8 @@ src/render/hud.js     four numbers, current order, buttons, pause, result, the h
   aiming noBurns aimingNoBurn alreadyPdc alreadyHolding badMove
   tailNoTubes noSensors railNeedsBow badTarget roomDead sameTarget noTarget
   over`. `target` takes `{room}` (null clears). Replay version 4 adds it;
-  version 6 adds `ships {me, them}` design ids; version 7 makes each `{design, fit}`.
+  version 6 adds `ships {me, them}` design ids; version 7 makes each `{design, fit}`;
+  version 8 is the form (older replays diverge).
 
 ## The form: a ship as a grid of cells (decided 2026-10-31, replaces "not the 2D grid")
 
