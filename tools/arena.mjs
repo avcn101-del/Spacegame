@@ -17,15 +17,15 @@ function fight(meP, themP, seed) {
 }
 
 function series(meP, themP) {
-  const r = { win: 0, lose: 0, draw: 0, escaped: 0, time: 0, min: Infinity, max: 0 };
+  const r = { win: 0, lose: 0, draw: 0, escaped: 0, time: 0, min: Infinity, max: 0, apart: 0, timeout: 0 };
   for (let s = 1; s <= seeds; s++) {
     const b = fight(meP, themP, s);
-    r[b.result.kind]++; r.time += b.t; r.min = Math.min(r.min, b.t); r.max = Math.max(r.max, b.t);
+    r[b.result.kind]++; r.time += b.t; if (b.result.reason === 'apart') r.apart++; if (b.result.reason === 'time') r.timeout++; r.min = Math.min(r.min, b.t); r.max = Math.max(r.max, b.t);
   }
   return r;
 }
 
-const fmt = (r) => `win ${String(r.win).padStart(3)}  lose ${String(r.lose).padStart(3)}  draw ${String(r.draw).padStart(3)}  esc ${String(r.escaped).padStart(3)}  avg ${(r.time / seeds).toFixed(0).padStart(4)}s  ${r.min.toFixed(0)}..${r.max.toFixed(0)}s`;
+const fmt = (r) => `win ${String(r.win).padStart(3)}  lose ${String(r.lose).padStart(3)}  draw ${String(r.draw).padStart(3)} (apart ${r.apart}, time ${r.timeout})  esc ${String(r.escaped).padStart(3)}  avg ${(r.time / seeds).toFixed(0).padStart(4)}s  ${r.min.toFixed(0)}..${r.max.toFixed(0)}s`;
 
 if (process.argv.includes('all')) {
   const names = Object.keys(PRESETS);

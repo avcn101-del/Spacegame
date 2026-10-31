@@ -3,20 +3,22 @@
 import { N } from '../numbers.js';
 import { alive, canAimRail, canFireTubes } from './ship.js';
 
-export const ORDERS = ['close', 'hold', 'open', 'bow', 'side', 'tail', 'guard', 'rake', 'torps', 'rail', 'burn', 'run'];
+export const ORDERS = ['move', 'hold', 'guard', 'rake', 'torps', 'rail', 'burn', 'run'];
+// 'move' takes an argument {face: 'bow'|'side'|'tail', speed: km/s >= 0, dir: 1|-1}.
 
 // Returns null if allowed, else a short reason key (see text.js).
-export function refusal(ship, order, ctx) {
+export function refusal(ship, order, ctx, arg) {
   const drive = alive(ship, 'drive');
   switch (order) {
-    case 'close': case 'hold': case 'open':
+    case 'move':
       if (!drive) return 'noDrive';
       if (ship.orders.run) return 'running';
-      if (ship.orders.range === order) return 'alreadyRange';
+      if (!arg || !['bow', 'side', 'tail'].includes(arg.face) || !(arg.speed >= 0)) return 'badMove';
       return null;
-    case 'bow': case 'side': case 'tail':
+    case 'hold':
       if (!drive) return 'noDrive';
-      if (ship.faceTarget === order) return 'alreadyFacing';
+      if (ship.orders.run) return 'running';
+      if (ship.move.speed === 0) return 'alreadyHolding';
       return null;
     case 'guard': case 'rake':
       if (!alive(ship, 'pdc')) return 'noPdc';
@@ -51,16 +53,15 @@ export function refusal(ship, order, ctx) {
 }
 
 // Apply an order to a ship. Assumes refusal() returned null.
-export function apply(ship, order, battle) {
+export function apply(ship, order, battle, arg) {
   switch (order) {
-    case 'close': case 'hold': case 'open':
-      ship.orders.range = order; break;
-    case 'bow': case 'side': case 'tail':
-      ship.faceTarget = order;
-      ship.turnLeft = N.FACE_TURN_TIME;
-      ship.railAim = -1; // swinging the hull throws off the aim
-      battle.emit({ type: 'turn', x: ship.x, y: ship.y, by: ship.id, to: order });
+    case 'move':
+      // circling and holding lock the current range; bow and tail change it
+      ship.move = { speed: Math.min(N.MAX_SPEED, arg.speed), dir: arg.dir < 0 ? -1 : 1, holdRange: arg.face === 'side' ? battle.range() : null };
+      setFace(ship, arg.face, battle);
       break;
+    case 'hold':
+      ship.move = { speed: 0, dir: ship.move.dir, holdRange: battle.range() }; break;
     case 'guard': case 'rake':
       ship.orders.pdc = order; break;
     case 'torps':
@@ -71,7 +72,16 @@ export function apply(ship, order, battle) {
       battle.burn(ship); break;
     case 'run':
       ship.orders.run = true;
-      if (ship.faceTarget !== 'tail') { ship.faceTarget = 'tail'; ship.turnLeft = N.FACE_TURN_TIME; ship.railAim = -1; }
+      ship.move = { speed: N.MAX_SPEED, dir: ship.move.dir, holdRange: null };
+      setFace(ship, 'tail', battle);
       break;
   }
+}
+
+function setFace(ship, face, battle) {
+  if (ship.faceTarget === face) return;
+  ship.faceTarget = face;
+  ship.turnLeft = N.FACE_TURN_TIME;
+  ship.railAim = -1; // swinging the hull throws off the aim
+  battle.emit({ type: 'turn', x: ship.x, y: ship.y, by: ship.id, to: face });
 }

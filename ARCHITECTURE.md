@@ -14,7 +14,8 @@ src/rng.js            seeded random, the only random source
 src/text.js           all player-facing English strings
 src/ships/tachi.js    a ship as data: rooms bow to stern, hp each
 src/sim/ship.js       rooms, facing, exposure, line of fire, damage, "is beaten"
-src/sim/orders.js     the six orders: refusal() and apply()
+src/sim/orders.js     the orders: refusal() and apply(); 'move' carries {face, speed, dir}
+src/input/drag.js     drag on the map -> move order; input only
 src/sim/weapons.js    pdc, torpedo, railgun
 src/sim/battle.js     makeBattle(seed): state, step(dt), phases, result
 src/sim/stats.js      per-side counters fed by battle.emit()
@@ -64,7 +65,7 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   ship goes first each step: a fixed order gave the first ship a 60/40 edge.
 - `battle.order(shipId, order)` returns null if accepted or a refusal key:
   `noDrive running noPdc noTubes noTorps reloading tooFar noRail charging
-  aiming noBurns aimingNoBurn alreadyRange alreadyPdc alreadyFacing
+  aiming noBurns aimingNoBurn alreadyPdc alreadyHolding badMove
   tailNoTubes noSensors railNeedsBow over`.
 
 ## Render module contract
@@ -72,8 +73,13 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
 - `silhouette.js`: `drawSilhouette(ctx, ship, box, fx)` where `box` is
   `{x, y, w, h}` on the canvas and `fx` is `{flash: {piece: 0..1}}`;
   `piecePoint(piece, box, facing)` returns the canvas point of a piece.
-- `canvas.js`: `makeTactical(canvas)` and `makeSilhouettePanel(canvas,
-  shipId)`, each returning `{draw(battle, dtReal), onEvent(ev)}`. They
-  own their own particles, shake and flashes. They never mutate battle.
+- `canvas.js`: `makeTactical(canvas, {inset})` returns `{draw, onEvent,
+  toScreen, toWorld, shipScreen, setGhost}`; `makeSilhouettePanel(canvas,
+  shipId, {orientation})` returns `{draw, onEvent}`. They own their own
+  particles, shake and flashes. They never mutate battle.
+- Movement: one `move` order `{face, speed, dir}`; the autopilot chases
+  the asked relative velocity (bow closing, tail opening at half drive,
+  side circling with a locked range). `hold` locks the range. `run` is
+  tail at full drive. The drag input maps a finger vector to this order.
 - `main.js` owns time: real dt, pause, slow-mo on `railHit` and
   `pieceDead`, and calls `battle.step(N.DT)` in fixed steps.
