@@ -104,7 +104,7 @@ export const T = {
   },
   again: 'NEW BATTLE', same: 'SAME SEED', seed: 'seed',
   // The hangar: one of two for each slot that has a choice. Names and one line each.
-  hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, then launch.', launch: 'LAUNCH', close: 'CLOSE', hint: 'Tap a marked part to swap it.' },
+  hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, pick the enemy, then launch.', enemy: 'ENEMY', launch: 'LAUNCH', close: 'CLOSE', hint: 'Tap a marked part to swap it.' },
   slots: { launcher: 'Tubes', gun: 'Railgun', drive: 'Drive' },
   catalog: {
     quad: { name: 'Quad tubes', line: 'Four at once swamp a Guard.' },
@@ -114,6 +114,16 @@ export const T = {
     corvette: { name: 'Corvette drive', line: 'The stock drive.' },
     hot: { name: 'Hot drive', line: 'Twice the push, so the range is yours; one Burn fewer to dodge with.' },
   },
+  // The enemy pick in the hangar: one per AI preset (ai/presets.js), a name and how it fights.
+  enemies: {
+    brawler: { name: 'Brawler', line: 'Closes, rakes, fires everything, gambles on the rail. The default.' },
+    sniper: { name: 'Sniper', line: 'Stays out, guards, lets the rail do the work; goes for your drive.' },
+    turtle: { name: 'Turtle', line: 'Closes broadside behind its PDCs; torpedoes only once your PDCs are gone.' },
+    gunship: { name: 'Belter gunship', line: 'No rail, no plating, sixteen torpedoes; closes broadside. Not too hard.' },
+    berserker: { name: 'Berserker', line: 'Never runs, never dodges, fires the rail the moment it can.' },
+  },
+  // A preset's knobs as plain stats for the enemy list.
+  enemyStats: (p) => `${p.ship === 'belter' ? 'Belter' : 'Tachi'}, ${p.range === 'open' ? 'keeps range' : 'closes'}, torpedoes ${p.torps === 'always' ? 'always' : p.torps === 'guardDown' ? 'after your PDCs' : 'never'}, ${p.runAt > 0 ? 'runs when beaten' : 'never runs'}`,
   // A variant's numbers, from its catalog entry, for the hangar's list.
   variantStats: {
     launcher: (v) => `salvo ${num(v.salvo)}, every ${num(v.reload)} s, stock ${num(v.torps)}`,

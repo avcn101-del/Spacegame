@@ -16,7 +16,9 @@ import { attachTap } from './input/tap.js';
 
 const params = new URLSearchParams(location.search);
 let seed = Number(params.get('seed')) || (Date.now() % 100000); // seed choice is outside the sim
-const enemyPreset = PRESETS[params.get('enemy')] ? params.get('enemy') : DEFAULT_PRESET; // ?enemy=sniper, ?enemy=gunship
+// The enemy: the URL wins (?enemy=sniper, ?enemy=gunship), else the last one picked in the hangar on this phone.
+const storedEnemy = (() => { try { return localStorage.getItem('enemy'); } catch (e) { return null; } })();
+let enemyPreset = [params.get('enemy'), storedEnemy].find((k) => PRESETS[k]) || DEFAULT_PRESET;
 const myShip = DESIGNS[params.get('ship')] ? params.get('ship') : DEFAULT_DESIGN; // ?ship=belter: fly the gunship yourself
 // The fit from the hangar: the URL wins, else the last one chosen on this phone, else stock.
 const storedFit = (() => { try { return localStorage.getItem('fit'); } catch (e) { return null; } })();
@@ -65,12 +67,14 @@ const hud = makeHud({
     hud.setAuto(!!autoPilot);
     paused = false;
   },
-  onFit(fit) {
+  onFit(fit, foe) {
     myFit = { ...DEFAULT_FIT, ...fit };
-    try { localStorage.setItem('fit', fitString(myFit)); } catch (e) { /* no storage: the URL still carries it */ }
+    if (PRESETS[foe]) enemyPreset = foe;
+    try { localStorage.setItem('fit', fitString(myFit)); localStorage.setItem('enemy', enemyPreset); } catch (e) { /* no storage: the URL still carries it */ }
     start();
   },
   // The hangar's drawing: the ship I would fly with this fit (a throwaway, not the battle's).
+  presets: PRESETS,
   preview(fit) { return makeShip('me', T.ships.me, 0, +1, DESIGNS[myShip], { ...DEFAULT_FIT, ...fit }); },
   onImport() {
     const text = prompt(T.importPrompt);
@@ -84,6 +88,7 @@ function start(replay = null) {
   if (replay) seed = replay.seed;
   battle = makeBattle(seed, replay ? replay.ships : { me: { design: myShip, fit: myFit }, them: { design: PRESETS[enemyPreset].ship } });
   hud.setFit(battle.designs.me.fit);
+  hud.setEnemy(enemyPreset);
   battle.enemyPreset = enemyPreset;
   enemy = makeEnemy('them', enemyPreset);
   replayer = replay ? makeReplayer(replay) : null;

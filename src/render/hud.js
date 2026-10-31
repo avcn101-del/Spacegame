@@ -10,7 +10,7 @@ const $ = (sel) => document.querySelector(sel);
 const fmtClock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 const tap = (sel, fn) => $(sel).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 
-export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview }) {
+export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview, presets }) {
   const el = {
     clock: $('#n-clock'), range: $('#n-range'), rate: $('#n-rate'), torps: $('#n-torps'), burns: $('#n-burns'),
     phase: $('#phase'), order: $('#order'), pause: $('#pause'),
@@ -33,7 +33,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   tap('#pm-auto', onAuto);
   // The hangar: the ship's form (preview(fit) builds it), a tap on a marked part toggles that slot's
   // variant; LAUNCH hands the fit back and starts a new battle. No pick rows: every slot is on the drawing.
-  let fit = {}, sel = null, hits = [];
+  let fit = {}, sel = null, hits = [], foe = null; // foe: the enemy preset picked here
   for (const id of ['#pm-hangar', '#rs-hangar']) { tap(id, () => api.showHangar(fit)); $(id).textContent = T.hangar.button; }
   $('#hg-title').textContent = T.hangar.title; $('#hg-launch').textContent = T.hangar.launch; $('#hg-close').textContent = T.hangar.close;
   const cv = $('#hg-canvas');
@@ -41,6 +41,26 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   // 40 px tall); a row picks, redraws and closes; a tap anywhere else closes it.
   const list = $('#hg-list');
   const closeList = () => { list.classList.remove('show'); list.textContent = ''; };
+  // The enemy pick: the same list, its rows the AI presets, above the button row.
+  const markFoe = () => { $('#hg-enemy').textContent = `${T.hangar.enemy}: ${(T.enemies[foe] || { name: foe }).name.toUpperCase()}`; };
+  const openFoes = () => {
+    list.textContent = '';
+    for (const key of Object.keys(presets)) {
+      const c = T.enemies[key] || { name: key, line: '' }, row = document.createElement('div');
+      row.className = 'opt' + (foe === key ? ' cur' : '');
+      row.innerHTML = `<b>${c.name}</b> <i>${T.enemyStats(presets[key])}</i><span>${c.line}</span>`;
+      row.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); foe = key; closeList(); markFoe(); });
+      list.appendChild(row);
+    }
+    list.classList.add('show');
+    const box = list.offsetParent.getBoundingClientRect(), b = $('#hg-enemy').getBoundingClientRect();
+    const x = Math.max(0, Math.min(box.width - list.offsetWidth, b.left - box.left));
+    list.style.left = `${Math.round(x)}px`; list.style.top = `${Math.round(Math.max(0, b.top - box.top - list.offsetHeight - 4))}px`;
+  };
+  $('#hg-enemy').addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (list.classList.contains('show')) closeList(); else openFoes();
+  });
   const openList = (hit) => {
     const slot = hit.slot;
     list.textContent = '';
@@ -77,7 +97,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   let hangarOpen = false;
   const closeHangar = () => { hangarOpen = false; closeList(); $('#hangar').classList.remove('show'); };
   tap('#hg-close', closeHangar);
-  tap('#hg-launch', () => { closeHangar(); onFit(fit); });
+  tap('#hg-launch', () => { closeHangar(); onFit(fit, foe); });
   // Redraw the previewed ship for this fit and say what the last tapped slot now holds.
   const markFit = (f) => {
     const ship = preview(f);
@@ -119,7 +139,8 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
 
   const api = {
     showExport(text) { $('#export-text').value = text; $('#exportbox').classList.add('show'); },
-    showHangar(f) { closeList(); fit = { ...f }; sel = null; hangarOpen = true; $('#hangar').classList.add('show'); markFit(fit); },
+    showHangar(f) { closeList(); fit = { ...f }; sel = null; hangarOpen = true; $('#hangar').classList.add('show'); markFit(fit); markFoe(); },
+    setEnemy(key) { foe = key; },
     setFit(f) { fit = { ...f }; },
     setAuto(on) { auto = on; $('#pm-auto').textContent = on ? T.autoOff : T.auto; document.getElementById('orders').classList.toggle('replay', on || replay); },
     toast(text, ttl = 2.0) { toast = { text, ttl }; },
