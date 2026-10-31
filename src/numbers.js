@@ -25,11 +25,11 @@ export const N = {
   // --- ship ---
   ROOM_HP: 10,           // a room dies to one torpedo or one slug
   ARMOR_HP_MULT: 2,      // a plated room takes two torpedoes, not one; which rooms are plated is the ship's design
-  FRAME_HP: 5,           // a frame room (structure, an empty hardpoint) dies to one torpedo and soaks it: cover costs the enemy one hit per layer
+  FRAME_HP: 5,           // a frame room (structure, an empty hardpoint) is cover: it takes half a torpedo, the rest carries into the room behind
   FACE_TURN_TIME: 4,     // seconds to swing the hull 90 degrees; a bigger swing takes proportionally longer
   BOW_CONE: 45,          // degrees off the bearing to the enemy that still count as bow-on (or tail-on at the other end); between is broadside
   OFF_AXIS_ACCEL: 0.5,   // thrusters push half as hard as the main drive; facing the wrong way is slow
-  SPILL: 0.5,            // torpedo and rail: share of damage that carries into the next room on the ray; frame soaks it
+  SPILL: 0.5,            // torpedo and rail: share of damage that carries into the next room on the ray (from frame, what its hp did not absorb carries instead)
   SENSORS_DEAD_HIT: 0.5, // with sensors gone, PDC and torpedoes hit this fraction as often
   CREW_DEAD_SPEED: 0.5,  // with crew gone, reload and recharge run at this speed
 

@@ -66,7 +66,9 @@ work longer than about an hour, give the estimate and wait for go.
   relative to the enemy; HOLD coasts. Face from heading versus bearing,
   BOW_CONE 45.
 - Tap-a-room: torpedoes flank to a room that is not the exposed end at half
-  speed (most die under a Guard); PDCs chew it broadside; rail ignores it.
+  speed (most die under a Guard); PDCs chew it broadside; the rail aims at it too
+  (since the form, 2026-10-31: on the chain the rail ignored the tap; on the grid that was
+  a random ray into frame, battle 97424: five rail hits, five into frame).
 - Torpedoes: salvos of four, stock of twelve, proximity fuse, speed cap
   relative to the target. TORP_DAMAGE 5 was measured and parked: it still
   lost rail and sensors to the same three hits.
@@ -89,7 +91,8 @@ work longer than about an hour, give the estimate and wait for go.
   building like Cosmoteer but with a fixed form and fixed hardpoints, the player picks a
   variant per hardpoint (the hangar is already that, per slot). Cells are geometry, hp stays
   on the room; a shot is a ray along a row or a column from where it really comes from; the
-  first cell's room takes it, SPILL into the next unless the first is frame, which soaks it.
+  first cell's room takes it, SPILL into the next; frame is cover, not a wall: what its hp
+  (FRAME_HP 5) does not absorb carries into the room behind.
   Every letter that is not one of the seven job rooms is a frame room (hp FRAME_HP, no job,
   not targetable, blocks spill): bulkheads, spine, hull frame, and the empty hardpoints
   (reactors, heat sink, shield generator, cockpit, workshop) that later rooms will fill ("các
@@ -110,10 +113,15 @@ work longer than about an hour, give the estimate and wait for go.
 Everything below the first bullet was measured before the form and is void for balance;
 kept only as history. After the form (30 seeds, win/lose/draw):
 
-- brawler vs brawler 9/12/9 (7 time draws), avg 124 s (was 19/9, 40 s); brawler vs
-  gunship 26/4/0; sniper vs gunship 5/21/4; sniper vs sniper 6/9/15; brawler
-  (tripleDeck) vs gunship 28/2/0; turtle vs turtle 14/8/8 (was 30 draws). Selfplay avg
-  113 s. `arena all` takes 11 s.
+- After the form, with the rail aiming and frame carrying (PR 23): brawler vs brawler
+  12/11/7 (5 time draws), avg 95 s (chain: 19/9, 40 s); brawler vs gunship 27/2/1; sniper
+  vs gunship 6/21/3; sniper vs sniper 9/10/11; brawler (tripleDeck) vs gunship 25/5/0;
+  turtle vs turtle 14/8/8. With frame soaking everything (PR 22 alone) the mirror was
+  9/12/9 at 124 s.
+- Battle 97424 (the owner, PR 22 rules): them lost the drive at 34 s and sat as a hulk for
+  200 s; the owner's five rail hits all went into frame; 10 of 12 torpedoes shot down each
+  side; draw by time. Under PR 23 rules the same orders put a rail hit through frame into
+  the bridge from the side (cover 1 layer); from the bow the bridge has four layers.
 - The new stalemate: both brawlers turn stern after a salvo, both drives die (the drive is
   at the stern, unplated, frame beside it), each is a hulk tail-on with tubes alive at the
   bow and torpedoes left; it cannot fire tail-on and cannot turn, nothing happens until 240
@@ -136,17 +144,24 @@ kept only as history. After the form (30 seeds, win/lose/draw):
   hot drive 14/14 for the brawler, 13/9 for the sniper. Informational: the
   owner judges on the phone.
 - The owner's replays this session: 46641, 7852, 20531, 89957 (stern turn
-  cost the AI drive, tubes, crew to one salvo), 40817 and 29836 (gunship).
+  cost the AI drive, tubes, crew to one salvo), 40817 and 29836 (gunship); 97424 (the
+  first on the form, see above).
 
 ## Next, in this order, each only if the owner says a battle was boring without it
 
-1. The owner plays the form on the phone and says three things: can the grid be read at
-   9 x 7 px a cell, does cover (frame in front of the bridge) make a decision, and what to
-   do with the stalemate (two hulks, drives dead, tubes alive tail-on).
-2. The next rooms into the empty hardpoints, only when the owner names them (he said
+1. The owner plays the form with the rail aiming and frame as cover (PR 23) and says three
+   things: can the grid be read at 9 x 7 px a cell, does cover make a decision, is the
+   stalemate still there (a hulk with its drive dead that cannot be finished).
+2. Agreed with the owner (2026-10-31), in this order after he plays: PDC becomes the six hull
+   mounts of draft 12 ((6,1) (13,1) (24,3) top, (6,7) (13,7) (24,5) bottom), the T sponsons
+   (Gun mount M, a weapon the game lacks) go back to frame, the hangar pick lights 2 or 3 of
+   the six mounts; then the hangar draws the form with the picks on their hardpoints (tap a
+   hardpoint to change it); then, only if the stalemate stays: a ship with its drive dead and
+   no weapon it can bring to bear is beaten (or tail-on tubes fire at half rate).
+3. The next rooms into the empty hardpoints, only when the owner names them (he said
    "discuss later"). Then the hangar picks per hardpoint, one at a time.
-3. The owner plays with fits and says which pick never gets chosen; a pick nobody takes is
+4. The owner plays with fits and says which pick never gets chosen; a pick nobody takes is
    removed or doubled again, not tuned finely. Then PDC ammo (NOTES).
-4. Open: a drive-dead ship drifting past 20 km is a draw today; should it be
+5. Open: a drive-dead ship drifting past 20 km is a draw today; should it be
    a win for the side that still flies. Louder now (see the stalemate).
 Not the 2D grid, not 2 v 2 (both in NOTES).
