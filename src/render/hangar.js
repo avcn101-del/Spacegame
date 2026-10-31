@@ -2,7 +2,7 @@
 // marked and labelled (ARCHITECTURE.md "The hangar draws the form"). Pure canvas, no state:
 // hud.js keeps the fit and the selection and calls drawHangar again on every change.
 import { drawForm, cellRect, ROOM_COLORS } from './form.js';
-import { T } from '../text.js';
+import { T, roomKey } from '../text.js';
 
 const SLOT_OF = { rail: 'gun', tubes: 'launcher', drive: 'drive' }; // room -> the slot that picks it
 const CELL_MAX = 20;     // px: about 600 px for the Tachi's 28 columns
@@ -31,6 +31,33 @@ export function hardpoints(ship) {
   return out;
 }
 
+// Every job room's 4-connected cell groups (frame has no label): {room, cells}, biggest group of a room first.
+export function roomGroups(ship) {
+  const { w, h } = ship.form, out = [], seen = new Set();
+  const room = (x, y) => (ship.cells[y] && ship.cells[y][x] ? ship.cells[y][x].room : null);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const r = room(x, y);
+    if (!r || r.startsWith('frame:') || seen.has(x + ',' + y)) continue;
+    const cells = [], stack = [[x, y]];
+    while (stack.length) {
+      const [a, b] = stack.pop();
+      if (a < 0 || b < 0 || a >= w || b >= h || seen.has(a + ',' + b) || room(a, b) !== r) continue;
+      seen.add(a + ',' + b); cells.push([a, b]);
+      stack.push([a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]);
+    }
+    out.push({ room: r, cells });
+  }
+  return out.sort((a, b) => b.cells.length - a.cells.length);
+}
+
+// The room under a canvas point (any cell, frame included), or null on void / off the form.
+export function roomAtCell(ship, px, py, W, H) {
+  const box = hangarBox(ship, W, H), cw = box.w / ship.form.w, ch = box.h / ship.form.h;
+  const x = Math.floor((px - box.x) / cw), y = Math.floor((py - box.y) / ch);
+  if (x < 0 || y < 0 || x >= ship.form.w || y >= ship.form.h) return null;
+  return ship.cells[y][x] ? ship.cells[y][x].room : null;
+}
+
 // The box the form is drawn in, centred in a W x H canvas: cells as big as fit, at most CELL_MAX.
 export function hangarBox(ship, W, H) {
   const cell = Math.max(4, Math.min(CELL_MAX, (W - 16) / ship.form.w, (H - 2 * MARGIN) / ship.form.h));
@@ -57,6 +84,20 @@ export function drawHangar(ctx, ship, fit, sel, W, H) {
   ctx.clearRect(0, 0, W, H);
   drawForm(ctx, ship, box, { exposure: false });
 
+  // room names: inside the room when the text fits, else (below) beside it on a leader line
+  ctx.save();
+  ctx.font = LABEL_FONT; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+  const groups = roomGroups(ship), named = new Set(), outside = [];
+  for (const g of groups) {
+    const key = roomKey(g.room), text = key === 'pdc' ? T.hangar.pdc : T.pieces[key], b = boundsOf(ship, g.cells, box);
+    if (ctx.measureText(text).width + 2 <= b.w && 9 <= b.h) {
+      ctx.fillStyle = 'rgba(6,8,15,0.88)';
+      ctx.fillText(text, b.x + b.w / 2, b.y + b.h / 2 + 0.5);
+    } else if (key !== 'pdc' && !named.has(g.room)) outside.push({ g, key, text, b });
+    named.add(g.room);
+  }
+  ctx.restore();
+
   const hp = hardpoints(ship).map((p) => ({ ...p, b: boundsOf(ship, p.cells, box) }));
   const mid = box.y + box.h / 2;
 
@@ -76,6 +117,7 @@ export function drawHangar(ctx, ship, fit, sel, W, H) {
   ctx.font = LABEL_FONT; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   const labels = [];
   const seen = new Set();
+  const used = { top: [], bottom: [] }; // x spans the variant labels take, for the room names beside
   for (const p of hp) {
     if (seen.has(p.slot)) continue;
     seen.add(p.slot);
@@ -91,6 +133,7 @@ export function drawHangar(ctx, ship, fit, sel, W, H) {
     for (let i = row.length - 1, lim = W - 2; i >= 0; i--) { row[i].x = Math.min(row[i].x, lim - row[i].tw); lim = row[i].x - LABEL_GAP; }
     for (const l of row) {
       l.y = top ? 3 : H - 3 - LABEL_H;
+      used[top ? 'top' : 'bottom'].push([l.x, l.x + l.tw]);
       const col = ROOM_COLORS[ROOM_OF_SLOT[l.p.slot]] || [255, 255, 255];
       const on = l.p.slot === sel;
       const fromY = top ? l.p.b.y - 1.5 : l.p.b.y + l.p.b.h + 1.5, toY = top ? l.y + LABEL_H : l.y;
@@ -103,6 +146,23 @@ export function drawHangar(ctx, ship, fit, sel, W, H) {
       ctx.fillStyle = on ? '#ffffff' : rgb(col, 1);
       ctx.fillText(l.text, l.x + LABEL_PAD, l.y + LABEL_H / 2 + 0.5);
     }
+  }
+  // a room name that does not fit inside: a small label in the margin, clear of the variant labels
+  for (const o of outside) {
+    const top = o.b.y + o.b.h / 2 < mid, cx = o.b.x + o.b.w / 2, tw = ctx.measureText(o.text).width + 2 * LABEL_PAD;
+    let x = Math.max(2, Math.min(W - 2 - tw, cx - tw / 2));
+    const row = used[top ? 'top' : 'bottom'];
+    for (let i = 0; i < 8 && row.some(([a, c]) => x < c + LABEL_GAP && x + tw > a - LABEL_GAP); i++) {
+      const hit = row.find(([a, c]) => x < c + LABEL_GAP && x + tw > a - LABEL_GAP);
+      x = hit[1] + LABEL_GAP; // slide right past it
+    }
+    x = Math.min(x, W - 2 - tw); row.push([x, x + tw]);
+    const y = top ? 3 : H - 3 - LABEL_H, col = ROOM_COLORS[roomKey(o.g.room)] || [255, 255, 255];
+    ctx.strokeStyle = rgb(col, 0.5); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx, top ? o.b.y : o.b.y + o.b.h); ctx.lineTo(Math.max(x + 3, Math.min(x + tw - 3, cx)), top ? y + LABEL_H : y); ctx.stroke();
+    ctx.fillStyle = 'rgba(6,8,15,0.9)'; ctx.fillRect(x, y, tw, LABEL_H);
+    ctx.strokeStyle = rgb(col, 0.6); ctx.strokeRect(x + 0.5, y + 0.5, tw - 1, LABEL_H - 1);
+    ctx.fillStyle = rgb(col, 1); ctx.fillText(o.text, x + LABEL_PAD, y + LABEL_H / 2 + 0.5);
   }
   ctx.restore();
 
