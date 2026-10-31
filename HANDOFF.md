@@ -32,15 +32,19 @@ work longer than about an hour, give the estimate and wait for go.
   `window.game` exposes `battle`, `tactical`, `panels.me/them` (with
   `roomAt(x, y)`), `exportReplay()`. Force a tear in the browser with
   `b.pieceDied(ship, 'pdc', 'torp')` after setting the room dead.
+- Parallel work (the owner asked, to save quota): the parent session writes the contract
+  into ARCHITECTURE.md, then spawns an Opus agent for `src/sim` and a Sonnet agent for
+  `src/render` on the same tree with disjoint files, reviews both, runs the checks, merges.
+  The form PR was built this way.
 - Replays: the owner pastes exported JSON into chat; save it to the scratchpad
   and run `node tools/replay.mjs file.json`, or a small node script that
   replays and prints per-hit events (face of the target, PDC count, range) to
-  answer "why". Replay version 7: `ships {me, them}` are `{design, fit}`;
+  answer "why". Replay version 8 (the form); version 7 replays diverge. `ships {me, them}` are `{design, fit}`;
   pass `r.ships` to `makeBattle(seed, ships)` or the replay diverges. Older
   replays diverge anyway (the sim changed).
-- Rendering (`src/render/canvas.js`, `silhouette.js`) follows the state
-  contract in ARCHITECTURE.md; `silhouette.js` holds one art table per design
-  (`ART`, picked from `ship.design`). Sim and AI never import render.
+- Rendering (`src/render/canvas.js`, `form.js`, `silhouette.js`) follows the state
+  contract in ARCHITECTURE.md; the panels draw the form from `ship.cells` (`form.js`),
+  `silhouette.js` keeps the tactical mark and the art tables. Sim and AI never import render.
 
 ## What the owner decided (do not re-ask)
 
@@ -80,14 +84,43 @@ work longer than about an hour, give the estimate and wait for go.
   (15 km, 40 s) / quick (10 km, 20 s), drive corvette (3 Burns) / hot (twice
   the push, 2 Burns). Every variant number is the stock one doubled or
   halved. No buying, no points. The owner has not played it yet.
+- The form (2026-10-31, replaces "not the 2D grid"): the ship is draft 12 of the owner's
+  "Roci form" artifact, a 28 x 9 grid of cells with fixed hardpoints; the direction is ship
+  building like Cosmoteer but with a fixed form and fixed hardpoints, the player picks a
+  variant per hardpoint (the hangar is already that, per slot). Cells are geometry, hp stays
+  on the room; a shot is a ray along a row or a column from where it really comes from; the
+  first cell's room takes it, SPILL into the next unless the first is frame, which soaks it.
+  Every letter that is not one of the seven job rooms is a frame room (hp FRAME_HP, no job,
+  not targetable, blocks spill): bulkheads, spine, hull frame, and the empty hardpoints
+  (reactors, heat sink, shield generator, cockpit, workshop) that later rooms will fill ("các
+  room khác, discuss later"). Sensors are the antenna cell (10, 2). Tear: flood from the bridge
+  over living cells; cut cells drift, a room with no cell left tears off. Targeting is by room
+  (tap), never by cell. The Belter has its own 20 x 7 form (mine, the owner has not judged it).
+  Panels are 100 px wide; cells about 9 x 7 px. No diagonal rays (NOTES). The owner accepted
+  that every arena number before this is void.
 - Guardrails: three lines before any system (decision it creates, what stops
-  it, what it costs); numbers file under 80 (now 52); sim under 2000 lines
-  (now about 690); at most 12 battle buttons (now 7; hangar picks are not
+  it, what it costs); numbers file under 80 (now 71); sim under 2000 lines
+  (now about 780); at most 12 battle buttons (now 7; hangar picks are not
   battle buttons); one layer per PR with battles and three lines from the
-  owner in between; no physics tests, only arena and replay; not the 2D grid;
+  owner in between; no physics tests, only arena and replay;
   no flares (parked in NOTES with its three lines).
 
 ## Facts measured (keep consistent)
+
+Everything below the first bullet was measured before the form and is void for balance;
+kept only as history. After the form (30 seeds, win/lose/draw):
+
+- brawler vs brawler 9/12/9 (7 time draws), avg 124 s (was 19/9, 40 s); brawler vs
+  gunship 26/4/0; sniper vs gunship 5/21/4; sniper vs sniper 6/9/15; brawler
+  (tripleDeck) vs gunship 28/2/0; turtle vs turtle 14/8/8 (was 30 draws). Selfplay avg
+  113 s. `arena all` takes 11 s.
+- The new stalemate: both brawlers turn stern after a salvo, both drives die (the drive is
+  at the stern, unplated, frame beside it), each is a hulk tail-on with tubes alive at the
+  bow and torpedoes left; it cannot fire tail-on and cannot turn, nothing happens until 240
+  s. Not fixed: open item 3 below is now this question. Also seen: both PDCs dead at 1.8 km,
+  rail alive, the AI stays broadside, the rail never fires.
+- The bridge is covered from all four directions (frame or tubes in front); pdc is exposed
+  from all four; drive from the stern only; tubes from bow, top and bottom.
 
 - Burn does not dodge torpedoes. Guard kills about 45 percent of a direct
   salvo at 3 km; flank torpedoes (a buried room) die about 85 percent. The
@@ -107,10 +140,13 @@ work longer than about an hour, give the estimate and wait for go.
 
 ## Next, in this order, each only if the owner says a battle was boring without it
 
-1. The owner plays with fits from the hangar and says which pick never gets
-   chosen; a pick nobody takes is removed or doubled again, not tuned finely.
-2. PDC ammo (in NOTES): Guard spends rounds, a decision between Guard now
-   and Rake later.
-3. Open: a drive-dead ship drifting past 20 km is a draw today; should it be
-   a win for the side that still flies.
+1. The owner plays the form on the phone and says three things: can the grid be read at
+   9 x 7 px a cell, does cover (frame in front of the bridge) make a decision, and what to
+   do with the stalemate (two hulks, drives dead, tubes alive tail-on).
+2. The next rooms into the empty hardpoints, only when the owner names them (he said
+   "discuss later"). Then the hangar picks per hardpoint, one at a time.
+3. The owner plays with fits and says which pick never gets chosen; a pick nobody takes is
+   removed or doubled again, not tuned finely. Then PDC ammo (NOTES).
+4. Open: a drive-dead ship drifting past 20 km is a draw today; should it be
+   a win for the side that still flies. Louder now (see the stalemate).
 Not the 2D grid, not 2 v 2 (both in NOTES).

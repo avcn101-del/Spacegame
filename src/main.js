@@ -104,6 +104,8 @@ document.addEventListener('pointerdown', function once() {
   });
 }, { once: false });
 
+const isFrame = (room) => room.startsWith('frame:');
+
 let last = performance.now();
 function frame(now) {
   const dtReal = Math.min(0.1, (now - last) / 1000);
@@ -127,10 +129,16 @@ function frame(now) {
   }
   // Drain events to renderers; slow-mo and panel pop on the big beats.
   for (const ev of battle.events) {
-    if (ev.type === 'railHit' || ev.type === 'pieceDead') slowmo = N.SLOWMO_TIME;
-    if (ev.type === 'railHit' || ev.type === 'torpHit' || ev.type === 'pieceDead') hud.hit(ev.ship);
-    if (ev.type === 'pieceDead' && ev.cause !== 'tear') hud.toast(`${T.lost[ev.ship]} ${T.pieces[ev.piece].toUpperCase()} ${T.gone}: ${T.roomDead[ev.piece]}.`, 3);
-    if (ev.type === 'tear') hud.toast(`${T.lost[ev.ship]} ${T.tear[ev.end]}: ${ev.pieces.map((r) => T.pieces[r].toLowerCase()).join(', ')} ${T.adrift}.`, 4);
+    const frameDead = ev.type === 'pieceDead' && isFrame(ev.piece); // a frame room dying is a flash, not a beat or a line
+    if (ev.type === 'railHit' || (ev.type === 'pieceDead' && !frameDead)) slowmo = N.SLOWMO_TIME;
+    if (ev.type === 'railHit' || ev.type === 'torpHit' || (ev.type === 'pieceDead' && !frameDead)) hud.hit(ev.ship);
+    if (ev.type === 'pieceDead' && ev.cause !== 'tear' && !frameDead) hud.toast(`${T.lost[ev.ship]} ${T.pieces[ev.piece].toUpperCase()} ${T.gone}: ${T.roomDead[ev.piece]}.`, 3);
+    if (ev.type === 'tear') {
+      const names = [...new Set(ev.pieces.map((r) => (T.pieces[r] || T.pieces.frame).toLowerCase()))]; // frame rooms fold into one word
+      hud.toast(ev.pieces.every(isFrame)
+        ? `${T.lost[ev.ship]} ${T.frameAdrift}.`
+        : `${T.lost[ev.ship]} ${T.tear[ev.end]}: ${names.join(', ')} ${T.adrift}.`, 4);
+    }
     for (const r of renderers) r.onEvent(ev);
   }
   battle.events.length = 0;

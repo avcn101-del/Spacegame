@@ -759,8 +759,8 @@ export function drawShipMark(ctx, ship, x, y, scale, angle) {
   const pieces = ship.pieces || {};
   const order = ship.roomOrder || A.bowToStern;
   let dead = 0;
-  for (const k in pieces) if (!pieces[k].alive) dead++;
-  const total = Object.keys(pieces).length || order.length;
+  for (const k of order) if (pieces[k] && !pieces[k].alive) dead++; // job rooms only: frame rooms are not in the count
+  const total = order.length;
   const dim = dead > total / 2;
   const color = typeof ctx.fillStyle === 'string' ? ctx.fillStyle : COLORS.edge;
   ctx.save();

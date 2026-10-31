@@ -7,9 +7,8 @@
 
 import { N } from '../numbers.js';
 import { exposure } from '../sim/ship.js';
-import {
-  drawSilhouette, piecePoint, drawShipMark, shipPoint, landmark, SHIP_ASPECT, COLORS, roomAtPoint, drawRoomBracket,
-} from './silhouette.js';
+import { drawShipMark, COLORS } from './silhouette.js';
+import { drawForm, roomPoint, roomBounds, roomAtPoint, roomBracket } from './form.js';
 
 // Visual-only knobs. Not game numbers, so they live here, not in numbers.js.
 const V = {
@@ -821,16 +820,20 @@ export function makeTactical(canvas, opts = {}) {
 
 // --- silhouette panel --------------------------------------------------------------
 
-// One ship's profile filling the canvas, pieces lit or dark, with the
-// impact spectacle anchored in panel px. shipId is 'me' or 'them'.
-// opts.orientation: 'horizontal' (default, wide canvas, bow toward the enemy)
-// or 'vertical' (tall thin canvas on the phone's short edge, bow up).
+// One ship's form (its cell grid, form.js) filling the canvas, bow up, rooms lit or dark,
+// with the impact spectacle anchored in panel px. shipId is 'me' or 'them'. The panel is
+// always the tall thin one on the phone's short edge (opts.orientation is kept, ignored).
+const PANEL = {
+  PAD: 4,          // px around the grid, sides
+  SIDE_PAD: 9,     // px each side kept free for the side chevrons
+  FORE: 12,        // px above the bow for the bow chevron and the muzzle
+  AFT: 22,         // px below the stern for the tail chevron and the plume
+  CELL_ASPECT: 1.5, // widest a cell may be against its height: 1 is square cells, the form then fills less of the panel
+};
 export function makeSilhouettePanel(canvas, shipId, opts = {}) {
   const ctx = canvas.getContext('2d');
-  const orientation = opts.orientation === 'vertical' ? 'vertical' : 'horizontal';
-  const vertical = orientation === 'vertical';
   let w = 0, h = 0, time = 0;
-  let box = null, facing = shipId === 'them' ? -1 : 1, layoutFacing = 0;
+  let box = null, facing = shipId === 'them' ? -1 : 1, layoutFacing = 0, layoutDesign = null;
   const toScreen = (ax, ay) => ({ x: ax, y: ay });
   const fx = makeFx(toScreen);
   const flash = {};      // room -> 0..1, decays each frame; keys appear as rooms are hit
@@ -840,49 +843,66 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
   const bump = (piece, v) => { flash[piece] = Math.max(flash[piece] || 0, v); };
   const shortSide = () => Math.min(box.w, box.h); // the hull thickness in px, the effects' scale unit
 
-  // The ship box, leaving room past the stern for the thrust plume and the
-  // tail chevron (`aft`) and past the bow for the muzzle and the bow chevron
-  // (`fore`), both as fractions of ship length, so nothing is clipped.
+  // The grid box: cells fill the panel, rows bow to stern top to bottom, with room above for
+  // the bow chevron and below for the plume. Cell height is what the height allows; the width
+  // is what the panel allows, at most CELL_ASPECT times the height.
   function layout() {
-    const pad = 6, aft = 0.24, fore = 0.20, extra = 1 + aft + fore;
-    if (vertical) {
-      const avail = h - 2 * pad;
-      const len = Math.max(1, Math.min(avail / extra, (w - 2 * pad) * SHIP_ASPECT));
-      const thick = len / SHIP_ASPECT;
-      const slack = (avail - len * extra) / 2;
-      box = { x: (w - thick) / 2, y: pad + slack + len * fore, w: thick, h: len }; // bow up, plume room below
-    } else {
-      const avail = w - 2 * pad;
-      const len = Math.max(1, Math.min(avail / extra, (h - 2 * pad) * SHIP_ASPECT));
-      const thick = len / SHIP_ASPECT;
-      const slack = (avail - len * extra) / 2;
-      box = { x: pad + slack + len * (facing === 1 ? aft : fore), y: (h - thick) / 2, w: len, h: thick };
-    }
+    const form = ship ? ship.form : { w: 28, h: 9 };
+    const cols = form.h, rows = form.w;
+    const ch = Math.max(1, (h - 2 * PANEL.PAD - PANEL.FORE - PANEL.AFT) / rows);
+    const cw = Math.max(1, Math.min((w - 2 * PANEL.SIDE_PAD) / cols, ch * PANEL.CELL_ASPECT));
+    const bh = ch * rows, slack = (h - 2 * PANEL.PAD - PANEL.FORE - PANEL.AFT - bh) / 2;
+    box = { x: (w - cw * cols) / 2, y: PANEL.PAD + PANEL.FORE + Math.max(0, slack), w: cw * cols, h: bh };
     layoutFacing = facing;
+    layoutDesign = ship ? ship.design : null;
   }
   // Events can arrive before the first draw: lay out from the element size.
   function ensureBox() {
     if (box) return;
-    w = canvas.clientWidth || canvas.width || (vertical ? 64 : 220);
-    h = canvas.clientHeight || canvas.height || (vertical ? 240 : 90);
+    w = canvas.clientWidth || canvas.width || 100;
+    h = canvas.clientHeight || canvas.height || 240;
     layout();
   }
-  const design = () => (ship ? ship.design : 'tachi');
-  const at = (piece) => { ensureBox(); const p = piecePoint(piece, box, facing, orientation, design()); return { ax: p.x, ay: p.y }; };
-  const mark = (name) => { ensureBox(); const l = landmark(name, design()); const p = shipPoint(l[0], l[1], box, facing, orientation); return { ax: p.x, ay: p.y }; };
-  const fwd = () => (vertical ? -Math.PI / 2 : facing === 1 ? 0 : Math.PI); // bow direction on the canvas, radians
-  const aft = () => fwd() + Math.PI;                                          // stern direction
-  // direction pointing out of the hull at a landmark (thruster puffs)
-  const outward = (name) => {
-    const c = shipPoint(0.5, 0, box, facing, orientation), m = mark(name);
-    return Math.atan2(m.ay - c.y, m.ax - c.x);
-  };
-  // the side of the hull the broadside chevrons sit on (ship-local +v), as a canvas direction
-  const sideDir = () => {
+  // Effects anchor at the room's cells; before the first draw there is no ship, so the middle.
+  const at = (room) => {
     ensureBox();
-    const c = shipPoint(0.5, 0, box, facing, orientation), o = shipPoint(0.5, 1, box, facing, orientation);
-    return Math.atan2(o.y - c.y, o.x - c.x);
+    const p = ship ? roomPoint(ship, room, box) : { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+    return { ax: p.x, ay: p.y };
   };
+  // Named points around the grid for the effects that are not on a room: the bow, the nozzle,
+  // the attitude ports at the corners, the tube bays at the edges of the tube room.
+  const mark = (name) => {
+    ensureBox();
+    const L = box.x, R = box.x + box.w, T = box.y, B = box.y + box.h, cx = (L + R) / 2;
+    const underR = facing === 1; // the burn kick leans to the underside: the right edge for 'me', the left for 'them'
+    let x = cx, y = (T + B) / 2;
+    switch (name) {
+      case 'bow': case 'muzzle': y = T; break;
+      case 'nozzle': y = B; break;
+      case 'thrusterBowTop': x = L; y = T + box.h * 0.2; break;
+      case 'thrusterBowBottom': x = R; y = T + box.h * 0.2; break;
+      case 'thrusterSternTop': x = L; y = T + box.h * 0.8; break;
+      case 'thrusterSternBottom': x = R; y = T + box.h * 0.8; break;
+      case 'underside': x = underR ? R : L; break;
+      case 'topside': x = underR ? L : R; break;
+      case 'tubeTop': case 'tubeBottom': {
+        const tb = ship && roomBounds(ship, 'tubes', box);
+        if (tb) { x = name === 'tubeTop' ? tb.x : tb.x + tb.w; y = tb.y + tb.h / 2; }
+        break;
+      }
+      default: break;
+    }
+    return { ax: x, ay: y };
+  };
+  const fwd = () => -Math.PI / 2;     // bow direction on the canvas: up
+  const aft = () => fwd() + Math.PI;  // stern direction
+  // direction pointing out of the hull at a named point (thruster puffs)
+  const outward = (name) => {
+    const m = mark(name);
+    return Math.atan2(m.ay - (box.y + box.h / 2), m.ax - (box.x + box.w / 2));
+  };
+  // the side the broadside chevrons sit on, as a canvas direction: right for 'me', left for 'them'
+  const sideDir = () => (facing === 1 ? 0 : Math.PI);
   // Travel direction of enemy fire across this panel: down the hull from the
   // bow when bow-on, up from the stern when tail-on, across it when broadside.
   const incomingDir = () => {
@@ -898,7 +918,7 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     ship = battle.shipById ? battle.shipById(shipId) : battle.ships.find((s) => s.id === shipId);
     const enemy = battle.enemyOf ? battle.enemyOf(ship) : battle.ships.find((s) => s !== ship);
     facing = ship.facing === -1 ? -1 : 1;
-    if (size.w !== w || size.h !== h || !box || layoutFacing !== facing) { w = size.w; h = size.h; layout(); }
+    if (size.w !== w || size.h !== h || !box || layoutFacing !== facing || layoutDesign !== ship.design) { w = size.w; h = size.h; layout(); }
 
     // timers
     for (const p in flash) if (flash[p] > 0) flash[p] = Math.max(0, flash[p] - dt * 3.5);
@@ -915,7 +935,6 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     // the one cue that matters: their railgun is aiming at this ship
     const warnP = enemy && enemy.railAim >= 0 && enemy.pieces.rail.alive ? clamp01(enemy.railAim / N.RAIL_AIM_TIME) : 0;
     const warn = warnP > 0 ? (0.35 + 0.65 * warnP) * (0.6 + 0.4 * Math.sin(time * (6 + 14 * warnP))) : 0;
-    const pdcActive = !!(battle.tracers && battle.tracers.some((t) => t.owner === shipId));
 
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, w, h);
@@ -929,19 +948,16 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     const so = fx.shakeOffset(time);
     ctx.save();
     ctx.translate(so.x, so.y);
-    drawSilhouette(ctx, ship, box, {
-      flash, t: time, warn, bg: COLORS.bg, orientation,
-      active: { pdc: pdcActive },
-    });
+    drawForm(ctx, ship, box, { flash, t: time, warn });
     // the room the other side's weapons are going for, in that side's color
     const aimed = enemy && enemy.target && ship.pieces[enemy.target] && ship.pieces[enemy.target].alive ? enemy.target : null;
-    if (aimed) drawRoomBracket(ctx, aimed, box, facing, orientation, shipId === 'them' ? COLORS.me : COLORS.them, time, ship.design);
-    // lingering embers on freshly dead pieces, on top of the silhouette's own dim ember
+    if (aimed) roomBracket(ctx, ship, aimed, box, shipId === 'them' ? COLORS.me : COLORS.them, time);
+    // lingering embers on freshly dead pieces
     if (embers.length) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       for (const e of embers) {
-        const p = piecePoint(e.piece, box, facing, orientation, ship.design);
+        const p = roomPoint(ship, e.piece, box);
         const k = e.ttl / e.life;
         const r = shortSide() * 0.16;
         const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
@@ -1038,6 +1054,12 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
         if (!mine) break;
         bump(ev.piece, 0.8);
         const a = at(ev.piece);
+        // a frame room dies often and quietly: its cells flash and a few chips fly, no blast, no ember
+        if (ev.piece.startsWith('frame:')) {
+          fx.debris(a, 4, { speedMin: 30 * k, speedMax: 90 * k });
+          fx.smoke(a, 2, {});
+          break;
+        }
         fx.debris(a, 8, { speedMin: 30 * k, speedMax: 110 * k });
         fx.smoke(a, 4, {});
         pending.push({ kind: 'death', piece: ev.piece, delay: 0.15 });
@@ -1065,8 +1087,8 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
         const ang = incomingDir() + side * 0.05;
         const across = ship && ship.face && exposure(ship) === 'side';
         const p = across
-          ? shipPoint(side > 0 ? 1.12 : -0.12, 0, box, facing, orientation)
-          : shipPoint(0.5, side * 1.05, box, facing, orientation);
+          ? { x: box.x + box.w / 2, y: side > 0 ? box.y - 6 : box.y + box.h + 6 }
+          : { x: box.x + box.w * (0.5 + side * 0.525), y: box.y + box.h / 2 };
         const a = { ax: clamp(p.x, 4, w - 4), ay: clamp(p.y, 4, h - 4) };
         if (torp) {
           const col = shipId === 'me' ? C.them : C.me;
@@ -1131,7 +1153,7 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
   }
 
   // The room under a canvas point (CSS px, relative to the canvas), or null. For tap-a-room.
-  const roomAt = (x, y) => { ensureBox(); return roomAtPoint(x, y, box, facing, orientation, design()); };
+  const roomAt = (x, y) => { ensureBox(); return ship ? roomAtPoint(ship, x, y, box) : null; };
 
   return { draw, onEvent, roomAt };
 }

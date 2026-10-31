@@ -74,14 +74,14 @@ export const T = {
     badTarget: 'No such room.', roomDead: 'That room is already gone.', sameTarget: 'Already going for it.', noTarget: 'No room targeted.',
   },
   warn: { railAimingAtUs: 'ENEMY RAILGUN AIMING. BURN?' , torpsIncoming: 'TORPEDOES INCOMING' },
-  pieces: { rail: 'Railgun', sensors: 'Sensors', bridge: 'Bridge', pdc: 'PDC deck', crew: 'Crew', tubes: 'Tubes', drive: 'Drive' },
+  pieces: { rail: 'Railgun', sensors: 'Sensors', bridge: 'Bridge', pdc: 'PDC deck', crew: 'Crew', tubes: 'Tubes', drive: 'Drive', frame: 'Frame' },
   // One line when a room dies: whose, which, and what it costs them from now on.
   roomDead: {
     rail: 'no railgun', sensors: 'rail blind, torpedoes and PDCs hit half as often', bridge: 'beaten',
     pdc: 'no Guard, no Rake', crew: 'reload and recharge at half speed', tubes: 'no torpedoes', drive: 'adrift, no turning, no Burn',
   },
   // One line when a section tears off: whose, which end, what went with it.
-  tear: { bow: 'BOW TORE OFF', stern: 'STERN TORE OFF' }, adrift: 'adrift',
+  tear: { bow: 'BOW TORE OFF', stern: 'STERN TORE OFF' }, adrift: 'adrift', frameAdrift: 'frame adrift',
   lost: { me: 'OUR', them: 'THEIR' }, gone: 'GONE',
   roomInfo: {
     rail: 'One shot kills a room. Bow only. Dead: no railgun.',
