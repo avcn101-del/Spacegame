@@ -189,6 +189,40 @@ What the sim exposes (render reads, never writes):
 - Panels (PR 34): `--side` 100 px to 130 px; the panels draw the form bigger; tactical inset
   follows the CSS variable.
 
+## AP rounds and the close-up view (PR 37 sim, PR 38 render; parallel agents)
+
+Sim (Opus agent; owns `src/sim/*`, `src/ships/catalog.js`, `src/numbers.js`, `src/ai/*` if needed):
+- A new catalog slot `rounds` with two variants: `he` (the stock: today's Rake exactly: chews the
+  first living cell's room on the ray, frame included, at `PDC_RAKE_DPS`) and `ap` (Rake pierces
+  frame: it chews the first living JOB room on the ray, skipping frame cells, at `PDC_RAKE_DPS / 2`).
+  `DEFAULT_FIT.rounds = 'he'`, so stock fits, old URLs and old replays (no `rounds`) behave as today:
+  `node tools/arena.mjs all seeds=30` must print the same numbers before and after. Replay version
+  unchanged. The ship carries `ship.rounds` ('he' | 'ap') and its rake dps; the sim reads the ship.
+  With AP, a tapped room counts as reachable for Rake when it is the first non-frame living room on
+  some ray from the shooter's side. Guard is unchanged.
+- Hit events gain `at: [x, y]`, the grid cell where the shot met the hull (the first living cell on
+  the ray), on `torpHit`, `railHit` and `pdcHit` (for AP the job room's first cell). Additive only:
+  no rule or rng change.
+- No new number unless needed (AP is the stock dps halved, one line of reason in catalog.js).
+
+Render (Sonnet agent; owns new `src/render/closeup.js`, `index.html`, `style.css`, `src/main.js`,
+`src/render/hud.js` for the view button only, `T.view` in `src/text.js` only; may add exports to
+`form.js`/`canvas.js` without changing their behaviour):
+- A view button in the top bar, `CLOSE-UP` / `TAC`. TAC is today's screen, unchanged. The close-up
+  covers the tactical map and both side panels (the area between the top bar and the order line);
+  the top numbers, the order line, toasts and the order buttons stay and work. Drag-to-steer is off
+  in the close-up; pause works. The view only changes when the button is pressed.
+- A fixed stage: my ship on the left half, bow right; theirs on the right half, bow left (mirrored);
+  each form horizontal, as big as fits (Tachi about 14 px cells; a bigger form scales down). Whatever
+  the real range and headings. The side chevrons show where the fire comes from (`shotFrom`).
+- Impact fx on the cell (`ev.at`, else a cell of `ev.piece`), from the side the shot came from:
+  torpedo: flash, shockwave, debris, and a smaller burst on the spill room; rail: a slug streak
+  across the stage then a punch along the ray; PDC: tracer streams from my living mounts' cells to the
+  raked cell with sparks; Guard: tracers at the torpedoes and a pop on `torpKilled`; pieceDead: the
+  room's cells burst; tear: the cut cells drift away (form.js already draws cut cells adrift).
+  Torpedoes in flight cross the gap between the hulls (position as a share of their real distance).
+- Tap-a-room on their hull in the close-up targets it, like the panel (`closeup.roomAt(x, y)`).
+
 ## Render module contract
 
 - `silhouette.js`: one art table per design (profile, rooms as shapes,
