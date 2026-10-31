@@ -2,7 +2,7 @@
 // step(dt) is deterministic given the seed and the order log.
 import { N } from '../numbers.js';
 import { makeRng } from '../rng.js';
-import { makeShip, alive, isBeaten, alivePieces, turnShip, faceFor, angleDiff, cutOff, tearOff, meanX } from './ship.js';
+import { makeShip, alive, isBeaten, hullGone, alivePieces, turnShip, faceFor, angleDiff, cutOff, tearOff, meanX } from './ship.js';
 import { DESIGNS, DEFAULT_DESIGN } from '../ships/index.js';
 import { refusal, apply } from './orders.js';
 import * as W from './weapons.js';
@@ -67,10 +67,13 @@ export function makeBattle(seed, ships = {}) {
     const torn = cutOff(ship);
     if (torn.length === 0) return;
     const bx = meanX(ship, 'bridge');
+    // Both ends torn off first: a torn room is dead, so the nested pieceDied's cutOff finds nothing
+    // more to tear (tearing one end first let the nested call tear the other end, then this loop
+    // tore it again: the stern's events twice, battle 68).
+    for (const r of torn) tearOff(ship, r);
     for (const end of ['bow', 'stern']) {
       const pieces = torn.filter((r) => (meanX(ship, r) > bx) === (end === 'bow'));
       if (pieces.length === 0) continue;
-      for (const r of pieces) tearOff(ship, r); // all first: a torn room is dead, so the nested check finds nothing more
       for (const r of pieces) b.pieceDied(ship, r, 'tear');
       b.emit({ type: 'tear', x: ship.x, y: ship.y, ship: ship.id, end, pieces });
     }
@@ -164,12 +167,14 @@ function updatePhase(b) {
   b.stats.onPhase(b.phase, b.t);
 }
 
+const beatenBy = (ship) => (!alive(ship, 'bridge') ? 'bridge' : hullGone(ship) ? 'hull' : 'disarmed');
+
 function endCheck(b) {
   const [me, them] = b.ships;
   const meOut = isBeaten(me), themOut = isBeaten(them);
   if (meOut && themOut) b.result = { kind: 'draw', reason: 'both' };
-  else if (themOut) b.result = { kind: 'win', reason: alive(them, 'bridge') ? 'disarmed' : 'bridge' };
-  else if (meOut) b.result = { kind: 'lose', reason: alive(me, 'bridge') ? 'disarmed' : 'bridge' };
+  else if (themOut) b.result = { kind: 'win', reason: beatenBy(them) };
+  else if (meOut) b.result = { kind: 'lose', reason: beatenBy(me) };
   else if (b.range() > N.ESCAPE_RANGE) {
     if (me.orders.run && !them.orders.run) b.result = { kind: 'escaped', reason: 'me' };
     else if (them.orders.run && !me.orders.run) b.result = { kind: 'escaped', reason: 'them' };

@@ -25,6 +25,7 @@ export const N = {
   // --- ship ---
   ROOM_HP: 10,           // a room dies to one torpedo or one slug
   ARMOR_HP_MULT: 2,      // a plated room takes two torpedoes, not one; which rooms are plated is the ship's design
+  HULL_BEATEN_FRACTION: 0.5, // a ship with half its cells cut away is finished (the owner, battle 68: a bridge and one mount left is no ship)
   FRAME_HP: 5,           // a frame room (structure, an empty hardpoint) is cover: it takes half a torpedo, the rest carries into the room behind
   FACE_TURN_TIME: 4,     // seconds to swing the hull 90 degrees; a bigger swing takes proportionally longer
   BOW_CONE: 45,          // degrees off the bearing to the enemy that still count as bow-on (or tail-on at the other end); between is broadside

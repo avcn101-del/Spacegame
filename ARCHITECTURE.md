@@ -16,7 +16,7 @@ src/ships/index.js    every design by id: tachi, belter; a battle names its two,
 src/ships/tachi.js    a ship as data (rooms, and the form: draft 12 as rows of letters): rooms bow to stern, bridge in the middle; kind per slot; armor (plated, double hp); turrets per PDC deck; torps stock; accel fraction
 src/ships/belter.js   the Belter gunship: no rail, three turrets, 16 torpedoes, half drive, no plating, six rooms
 src/ships/catalog.js  the hangar's catalog: two variants per slot kind (launcher, pdc, gun, drive); a fit picks one each; parseFit / fitString
-src/sim/ship.js       rooms, the form as cells, facing, rays (shotFrom, lineOfFire), damage, the tear rule (cutOff), "is beaten"
+src/sim/ship.js       rooms, the form as cells, facing, rays (shotFrom, lineOfFire), damage, the tear rule (cutOff), "is beaten" (no bridge, half the cells cut, or no weapon)
 src/sim/orders.js     the orders: refusal() and apply(); 'move' carries {heading, speed}
 src/input/drag.js     drag on the map -> move order; input only
 src/input/tap.js      tap on a silhouette panel -> target order or room info; input only

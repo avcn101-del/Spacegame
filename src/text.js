@@ -97,8 +97,8 @@ export const T = {
     drive: 'Dead: no moving, no turning, no Burn.',
   },
   result: {
-    win: { bridge: 'PELLA IS DEAD. Her bridge is gone.', disarmed: 'PELLA IS BEATEN. Nothing left to shoot with.' },
-    lose: { bridge: 'ROCINANTE IS DEAD. The bridge is gone.', disarmed: 'ROCINANTE IS BEATEN. Nothing left to shoot with.' },
+    win: { bridge: 'PELLA IS DEAD. Her bridge is gone.', disarmed: 'PELLA IS BEATEN. Nothing left to shoot with.', hull: 'PELLA IS FINISHED. Half her hull is adrift.' },
+    lose: { bridge: 'ROCINANTE IS DEAD. The bridge is gone.', disarmed: 'ROCINANTE IS BEATEN. Nothing left to shoot with.', hull: 'ROCINANTE IS FINISHED. Half the hull is adrift.' },
     escaped: { me: 'WE GOT AWAY. Live to fight dirty another day.', them: 'PELLA RAN. She will be back.' },
     draw: { both: 'BOTH SHIPS DEAD IN THE BLACK.', apart: 'BOTH SHIPS BROKE OFF.', time: 'STALEMATE. Both ships drift apart.' },
   },

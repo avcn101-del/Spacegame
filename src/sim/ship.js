@@ -144,7 +144,14 @@ export function turnShip(ship, dt) {
   return false;
 }
 export const hasWeapons = (ship) => alive(ship, 'rail') || pdcAlive(ship) || (alive(ship, 'tubes') && ship.torps > 0);
-export const isBeaten = (ship) => !alive(ship, 'bridge') || !hasWeapons(ship);
+// Share of the form's cells cut away from the bridge (cell.cut): half gone and the ship is finished.
+export function cutShare(ship) {
+  let all = 0, cut = 0;
+  for (const row of ship.cells) for (const c of row) if (c) { all += 1; if (c.cut) cut += 1; }
+  return all ? cut / all : 0;
+}
+export const hullGone = (ship) => cutShare(ship) >= N.HULL_BEATEN_FRACTION;
+export const isBeaten = (ship) => !alive(ship, 'bridge') || hullGone(ship) || !hasWeapons(ship);
 // Hit chance multiplier from sensors; reload and recharge speed from crew.
 export const aimFactor = (ship) => (alive(ship, 'sensors') ? 1 : N.SENSORS_DEAD_HIT);
 export const crewSpeed = (ship) => (alive(ship, 'crew') ? 1 : N.CREW_DEAD_SPEED);
