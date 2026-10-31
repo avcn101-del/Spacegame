@@ -15,7 +15,7 @@ const WARN = '#ff3b3b';
 // One colour per job room. Visual only.
 export const ROOM_COLORS = {
   rail: [143, 208, 255], sensors: [110, 225, 190], pdc: [255, 208, 112], bridge: [235, 242, 255],
-  crew: [140, 225, 130], tubes: [255, 150, 90], drive: [170, 150, 255],
+  crew: [140, 225, 130], tubes: [255, 84, 110], drive: [170, 150, 255],
 };
 // A room's colour: every PDC mount (pdc1 .. pdc6) is pdc yellow; frame has none (steel).
 export const roomColor = (room) => ROOM_COLORS[isPdc(room) ? 'pdc' : room];

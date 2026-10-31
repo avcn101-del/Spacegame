@@ -98,6 +98,10 @@ work longer than about an hour, give the estimate and wait for go.
   height is bound by the panel height (28 rows in about 194 px), so the gain is small; my panel
   is shorter than theirs (TORPS and BURNS under it). Orbit at range in place of HOLD: parked in
   NOTES with its three lines (it hands the steering decision to the autopilot).
+- Arc colours (PR 35, the owner): tubes are red (255, 84, 110), not orange ("looks like the yellow");
+  RAIL, TORPS, GUARD and RAKE buttons wear their room's colour, the same as the arc and the panel
+  room. The PDC arc is four sectors, each shaded by and labelled with the living mounts that see
+  it (bow and stern every mount, a broadside that side's): where a torpedo is easiest to stop.
 - The form (2026-10-31, replaces "not the 2D grid"): the ship is draft 12 of the owner's
   "Roci form" artifact, a 28 x 9 grid of cells with fixed hardpoints; the direction is ship
   building like Cosmoteer but with a fixed form and fixed hardpoints, the player picks a
