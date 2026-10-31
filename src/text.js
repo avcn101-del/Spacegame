@@ -99,4 +99,17 @@ export const T = {
     draw: { both: 'BOTH SHIPS DEAD IN THE BLACK.', apart: 'BOTH SHIPS BROKE OFF.', time: 'STALEMATE. Both ships drift apart.' },
   },
   again: 'NEW BATTLE', same: 'SAME SEED', seed: 'seed',
+  // The hangar: one of two for each slot that has a choice. Names and one line each.
+  hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, then launch.', launch: 'LAUNCH', close: 'CLOSE' },
+  slots: { launcher: 'Tubes', pdc: 'PDC deck', gun: 'Railgun', drive: 'Drive' },
+  catalog: {
+    quad: { name: 'Quad tubes', line: 'Four a salvo, every 20 s. Swamps a Guard.' },
+    twin: { name: 'Twin tubes', line: 'Two a salvo, every 10 s. A Guard kills a bigger share; a wasted salvo costs two.' },
+    twinDeck: { name: 'Twin deck', line: 'Two turrets behind plate.' },
+    tripleDeck: { name: 'Triple deck', line: 'Three turrets, no plate: the bow tears off to one torpedo.' },
+    longRail: { name: 'Long rail', line: '15 km, one shot every 40 s. Outranges their torpedoes.' },
+    quickRail: { name: 'Quick rail', line: '10 km, one shot every 20 s. Inside their torpedo range.' },
+    corvette: { name: 'Corvette drive', line: 'Three Burns.' },
+    hot: { name: 'Hot drive', line: 'Twice the push, two Burns.' },
+  },
 };

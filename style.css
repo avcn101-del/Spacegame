@@ -67,3 +67,12 @@ nav#orders.replay button { opacity: 0.35; pointer-events: none; }
 #export-text { width: min(720px, 90vw); height: 110px; font: 10px var(--font); color: var(--text); background: #060a12; border: 1px solid var(--line); border-radius: 4px; padding: 6px; resize: none; user-select: text; -webkit-user-select: text; }
 #tactical { touch-action: none; }
 #exportbox { background: rgba(3,5,10,0.97); z-index: 5; }
+
+/* hangar: one row per slot, two picks, the chosen one lit */
+#hg-slots { display: flex; flex-direction: column; gap: 6px; width: min(680px, 92vw); }
+#hg-slots .slot { display: grid; grid-template-columns: 70px 1fr 1fr; gap: 6px; align-items: stretch; }
+#hg-slots .slot .k { font-size: 10px; letter-spacing: 0.15em; color: var(--dim); align-self: center; text-align: left; }
+#hg-slots .pick { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 5px 8px; text-align: left; }
+#hg-slots .pick .n { font-size: 11px; letter-spacing: 0.1em; }
+#hg-slots .pick .d { font-size: 9px; color: var(--dim); line-height: 1.25; }
+#hg-slots .pick.on { border-color: var(--me); background: #10243a; }

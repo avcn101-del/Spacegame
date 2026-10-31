@@ -21,6 +21,15 @@ Ideas go here. They are not built until the owner asks.
 - Burn as a torpedo dodge (today it only beats the railgun).
 - PDC ammo: Guard spends rounds, a decision between Guard now and Rake later.
 - Lock time for tap-a-room: the sensors need a few seconds to lock a room, like the rail aim; moving or losing sensors drops it.
+- 2 v 2 (the owner asked). Everything assumes one enemy: `enemyOf`, the
+  face from one bearing, two silhouette panels on the short edges, tap-a-room
+  on one ship, torpedo targets, the AI's rule table, replays. Four ships means
+  a new layout, an order for "which enemy", and a battle twice as long to read
+  on a phone. Not before the 1 v 1 is fun for a month.
+- The enemy AI almost never fires its railgun: 3 shots in 30 sniper vs
+  brawler battles (it re-orders headings, so the aim is lost; the gamble is
+  0.1). Keeping the bow while the rail is charged made the sniper lose more
+  (measured in the hangar PR, reverted). The human is the rail user.
 - Flares or decoys against torpedoes (the owner asked after battle 20531, where
   Guard killed 8 of 8). Decision it creates: pop a flare before their salvo
   and keep Raking instead of switching to Guard. What stops it: a small stock,

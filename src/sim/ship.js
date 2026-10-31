@@ -1,6 +1,7 @@
 // A ship: an ordered chain of rooms from bow to stern, a position, a velocity,
 // a facing, the current orders. Pure data and functions. No DOM.
 import { N } from '../numbers.js';
+import { CATALOG } from '../ships/catalog.js';
 
 export const FACES = ['bow', 'side', 'tail'];
 
@@ -12,12 +13,32 @@ export function faceFor(off) {
   return a <= cone ? 'bow' : a >= Math.PI - cone ? 'tail' : 'side';
 }
 
-export function makeShip(id, name, x, facing, design) {
+// fit: slot kind -> variant key from the catalog, for the slots of this design that have one;
+// a variant overrides the room's turrets and armor, or the ship's tubes, rail and drive numbers.
+export function makeShip(id, name, x, facing, design, fit = {}) {
   const pieces = {}, armor = {}, bulkheadAft = {}, turrets = {};
-  for (const r of design.rooms) { pieces[r.id] = { hp: r.hp, maxHp: r.hp, alive: true }; if (r.armor) armor[r.id] = true; if (r.bulkhead) bulkheadAft[r.id] = true; if (r.turrets) turrets[r.id] = r.turrets; }
+  const v = (kind) => (CATALOG[kind] && CATALOG[kind][fit[kind]]) || null; // the fitted variant of a kind, if any
+  let salvo = N.TORP_SALVO, reloadTime = N.TORP_RELOAD, torps = design.torps === undefined ? N.TORP_COUNT : design.torps;
+  let railRange = N.RAIL_RANGE, railRecharge = N.RAIL_RECHARGE;
+  let accel = design.accel === undefined ? 1 : design.accel, burns = N.BURNS;
+  for (const r of design.rooms) {
+    const x = v(r.kind);
+    const plated = x && x.armor !== undefined ? x.armor : !!r.armor;
+    const hp = N.ROOM_HP * (plated ? N.ARMOR_HP_MULT : 1);
+    pieces[r.id] = { hp, maxHp: hp, alive: true };
+    if (plated) armor[r.id] = true;
+    if (r.bulkhead) bulkheadAft[r.id] = true;
+    const t = x && x.turrets !== undefined ? x.turrets : r.turrets;
+    if (t) turrets[r.id] = t;
+    if (x && r.kind === 'launcher') { salvo = x.salvo; reloadTime = x.reload; torps = x.torps; }
+    if (x && r.kind === 'gun') { railRange = x.range; railRecharge = x.recharge; }
+    if (x && r.kind === 'drive') { accel = x.accel; burns = x.burns; }
+  }
   return {
-    id, name, design: design.id,
-    accel: design.accel === undefined ? 1 : design.accel, // fraction of ACCEL this hull's drive gives
+    id, name, design: design.id, fit: { ...fit },
+    accel,              // fraction of ACCEL this hull's drive gives
+    salvo, reloadTime,  // torpedoes per salvo, seconds between salvos
+    railRange, railRecharge, // km, seconds
     turrets,            // room id -> PDC turrets on that deck; all fire broadside, half (rounded up) end-on
     roomOrder: design.rooms.map((r) => r.id), // bow first
     x, y: 0,            // km; the fight line is the x axis
@@ -34,11 +55,11 @@ export function makeShip(id, name, x, facing, design) {
     // it. coast: thrust off, velocity kept (Hold).
     move: { speed: 0, coast: true },
     orders: { pdc: 'guard', run: false },
-    torps: design.torps === undefined ? N.TORP_COUNT : design.torps,
+    torps,
     torpReload: 0,      // seconds until tubes are loaded
     railCharge: N.RAIL_START_CHARGE, // seconds until the railgun is ready
     railAim: -1,        // -1 idle, else seconds spent aiming
-    burns: N.BURNS,
+    burns,
     lastBurnT: -1,      // game time of the last Burn; a Burn during the enemy's aim means a miss
     railAimStart: -1,   // game time the current aim began
     thrust: 0,          // -1..1 along x, what the drive is doing right now (for the renderer)

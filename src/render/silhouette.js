@@ -160,6 +160,8 @@ const TACHI_DECO = {
   pdcHinges: [[0.63, 0.73, -0.44], [0.63, 0.73, 0.44]], // u0, u1, v of each dome's hinge line
   railGroove: [0.80, 1.08, 0.26],
   sensorWhisker: [[0.80, -0.50], [0.86, -0.50]], sensorDot: [0.8025, -0.56],
+  // a third turret (the triple deck fit): a smaller dome on the keel, aft of the first
+  thirdTurret: [[[0.60, 0.36], [0.68, 0.36], [0.67, 0.46], [0.65, 0.52], [0.63, 0.52], [0.61, 0.46]], [[0.64, 0.51], [0.74, 0.51], [0.74, 0.475], [0.64, 0.475]]],
 };
 
 // defineArt: profile, rooms (a function of the profile), draw order (stern first, so what
@@ -495,9 +497,10 @@ function drawRoom(ctx, name, ship, box, facing, fx, t) {
     ctx.strokeStyle = plated ? COLORS.edgeBright : COLORS.edge;
     tracePoly(ctx, body, box, facing);
     ctx.stroke();
-    // fittings: always lit steel
-    for (let i = 1; i < def.shapes.length; i++) {
-      tracePoly(ctx, def.shapes[i], box, facing);
+    // fittings: always lit steel; a PDC deck fitted with more turrets than the art has grows one
+    const extra = name === 'pdc' && A.deco.thirdTurret && ship.turrets && ship.turrets.pdc > 2 ? A.deco.thirdTurret : [];
+    for (const shape of [...def.shapes.slice(1), ...extra]) {
+      tracePoly(ctx, shape, box, facing);
       ctx.fillStyle = COLORS.steelLight;
       ctx.fill();
       ctx.strokeStyle = COLORS.edge;
