@@ -23,11 +23,18 @@ export function makeBattle(seed) {
   b.shipById = (id) => (id === 'me' ? b.ships[0] : b.ships[1]);
   b.enemyOf = (ship) => (ship.id === 'me' ? b.ships[1] : b.ships[0]);
   b.range = () => Math.hypot(b.ships[0].x - b.ships[1].x, b.ships[0].y - b.ships[1].y);
+  // km/s; negative means closing
+  b.rangeRate = () => {
+    const [m, t] = b.ships;
+    const dx = t.x - m.x, dy = t.y - m.y, r = Math.hypot(dx, dy) || 1e-6;
+    return (dx * (t.vx - m.vx) + dy * (t.vy - m.vy)) / r;
+  };
   b.launchTorps = (ship) => W.launchTorps(b, ship, b.enemyOf(ship));
   b.burn = (ship) => {
     ship.burns -= 1;
     const dir = ship.vy >= 0 ? 1 : -1; // keep burning the same way to build speed
     ship.vy += dir * N.BURN_SPEED;
+    ship.lastBurnT = b.t;
     b.events.push({ type: 'burn', x: ship.x, y: ship.y, by: ship.id, dir });
   };
   b.pieceDied = (ship, piece, cause) => {
@@ -72,6 +79,7 @@ function step(b, dt) {
 
 function moveShip(b, ship, enemy, dt) {
   const drive = alive(ship, 'drive');
+  ship.thrust = 0;
   if (drive) {
     const toEnemy = Math.sign(enemy.x - ship.x) || ship.facing;
     const range = b.range();
@@ -91,6 +99,7 @@ function moveShip(b, ship, enemy, dt) {
       }
     }
     ship.vx += ax * dt;
+    ship.thrust = Math.max(-1, Math.min(1, ax / N.ACCEL));
     // lateral damping: autopilot bleeds off burn drift
     ship.vy -= ship.vy * N.LATERAL_DAMP * dt;
   }

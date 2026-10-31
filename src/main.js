@@ -11,9 +11,13 @@ const params = new URLSearchParams(location.search);
 let seed = Number(params.get('seed')) || (Date.now() % 100000); // seed choice is outside the sim
 
 let battle, enemy, paused = false, slowmo = 0, acc = 0;
-const tactical = makeTactical(document.getElementById('tactical'));
-const panelMe = makeSilhouettePanel(document.getElementById('sil-me'), 'me');
-const panelThem = makeSilhouettePanel(document.getElementById('sil-them'), 'them');
+const cssPx = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
+const tactical = makeTactical(document.getElementById('tactical'), {
+  // the part of the screen not covered by HUD; the camera fits the ships in here
+  inset: () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + 26, left: cssPx('--side') + 8, right: cssPx('--side') + 8 }),
+});
+const panelMe = makeSilhouettePanel(document.getElementById('sil-me'), 'me', { orientation: 'vertical' });
+const panelThem = makeSilhouettePanel(document.getElementById('sil-them'), 'them', { orientation: 'vertical' });
 const renderers = [tactical, panelMe, panelThem];
 
 const hud = makeHud({
@@ -24,8 +28,9 @@ const hud = makeHud({
     else if (o === 'burn') hud.toast(T.order.burn);
   },
   onPause() { paused = !paused; },
-  onAgain() { seed = (seed * 7919 + 13) % 100000; start(); },
-  onSame() { start(); },
+  onResume() { paused = false; },
+  onRestart() { start(); },
+  onNew() { seed = (seed * 7919 + 13) % 100000; start(); },
 });
 
 function start() {
@@ -34,6 +39,16 @@ function start() {
   paused = false; slowmo = 0; acc = 0;
   history.replaceState(null, '', `?seed=${seed}`);
 }
+
+// Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
+document.addEventListener('pointerdown', function once() {
+  document.removeEventListener('pointerdown', once);
+  const el = document.documentElement;
+  const fs = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : Promise.reject();
+  Promise.resolve(fs).catch(() => {}).then(() => {
+    if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+  });
+}, { once: false });
 
 let last = performance.now();
 function frame(now) {
@@ -49,9 +64,10 @@ function frame(now) {
     battle.step(N.DT);
     acc -= N.DT; steps++;
   }
-  // Drain events to renderers; slow-mo on the big beats.
+  // Drain events to renderers; slow-mo and panel pop on the big beats.
   for (const ev of battle.events) {
     if (ev.type === 'railHit' || ev.type === 'pieceDead') slowmo = N.SLOWMO_TIME;
+    if (ev.type === 'railHit' || ev.type === 'torpHit' || ev.type === 'pieceDead') hud.hit(ev.ship);
     for (const r of renderers) r.onEvent(ev);
   }
   battle.events.length = 0;

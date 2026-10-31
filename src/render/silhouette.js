@@ -113,7 +113,16 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // --- coordinate mapping -----------------------------------------------------
 
 // Ship-local (u, v) -> canvas point inside box, honoring facing.
-export function shipPoint(u, v, box, facing) {
+// orientation 'horizontal' (default): box is wide, bow right for facing 1,
+// left for -1. 'vertical': box is tall, bow UP for both ships; facing
+// mirrors the lateral axis instead, so 'me' (facing 1) has pdcL on the left
+// and 'them' (facing -1) has its pdcL on the right. This matches what
+// drawSilhouette produces by rotating the horizontal drawing by -facing*90deg.
+export function shipPoint(u, v, box, facing, orientation = 'horizontal') {
+  if (orientation === 'vertical') {
+    const vv = facing === -1 ? -v : v;
+    return { x: box.x + box.w * (0.5 + vv * 0.5), y: box.y + box.h * (1 - u) };
+  }
   const uu = facing === -1 ? 1 - u : u;
   return { x: box.x + uu * box.w, y: box.y + box.h * (0.5 + v * 0.5) };
 }
@@ -128,10 +137,11 @@ function tracePoly(ctx, poly, box, facing) {
 }
 
 // Canvas point at the center of a piece. Used to spawn debris.
-export function piecePoint(piece, box, facing) {
+// The trailing orientation argument is optional and defaults to horizontal.
+export function piecePoint(piece, box, facing, orientation = 'horizontal') {
   const def = PIECE_DEFS[piece];
   const c = def ? def.center : [0.5, 0];
-  return shipPoint(c[0], c[1], box, facing);
+  return shipPoint(c[0], c[1], box, facing, orientation);
 }
 
 // --- damage decoration, cached per piece in ship-local space -----------------
@@ -233,6 +243,10 @@ function drawDetails(ctx, name, ship, box, facing, lit, t) {
       ctx.fillStyle = grad;
       ctx.beginPath(); ctx.ellipse(g.x, g.y, s * 0.22, s * 0.2, 0, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
+      // thrust plume: only while the drive is actually accelerating, so a
+      // ship with no plume reads as coasting or stationary
+      const thrust = Math.abs(ship.thrust || 0);
+      if (thrust > 0.05) drawPlume(ctx, P, thrust, t);
     }
   } else if (name === 'pdcL' || name === 'pdcR') {
     // barrel muzzle tick and a hinge line on the dome
@@ -246,6 +260,28 @@ function drawDetails(ctx, name, ship, box, facing, lit, t) {
     ctx.strokeStyle = lit ? 'rgba(20,24,30,0.9)' : 'rgba(10,12,16,0.9)';
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   }
+}
+
+// Blue-white Epstein plume out of the drive cone, along -u. Length scales
+// with |thrust| (up to about a fifth of the ship length) and flickers on a
+// hashed 30 Hz clock, so it is deterministic and freezes when time does.
+function drawPlume(ctx, P, thrust, t) {
+  const flick = 0.78 + 0.22 * hash01(Math.floor(t * 30));
+  const len = (0.05 + 0.17 * thrust) * flick;
+  const n = P(-0.02, 0), tip = P(-0.02 - len, 0);
+  const a = P(-0.02, -0.15), b = P(-0.02, 0.15);
+  const a2 = P(-0.02, -0.06), b2 = P(-0.02, 0.06), tip2 = P(-0.02 - len * 0.65, 0);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createLinearGradient(n.x, n.y, tip.x, tip.y);
+  g.addColorStop(0, `rgba(170,210,255,${0.7 * flick})`);
+  g.addColorStop(0.5, `rgba(110,160,255,${0.35 * flick})`);
+  g.addColorStop(1, 'rgba(80,130,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(tip.x, tip.y); ctx.lineTo(b.x, b.y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = `rgba(235,245,255,${0.75 * flick})`;
+  ctx.beginPath(); ctx.moveTo(a2.x, a2.y); ctx.lineTo(tip2.x, tip2.y); ctx.lineTo(b2.x, b2.y); ctx.closePath(); ctx.fill();
+  ctx.restore();
 }
 
 // Which pieces glow as "active" from ship state alone. fx.active can add.
@@ -366,9 +402,25 @@ function drawPiece(ctx, name, ship, box, facing, fx, t) {
 
 // fx = { flash: {piece: 0..1}, t: seconds for pulsing (optional),
 //        warn: 0..1 red outline (optional), active: {piece: bool} (optional),
-//        bg: background color for bitten chunks (optional) }
+//        bg: background color for bitten chunks (optional),
+//        orientation: 'horizontal' (default) | 'vertical' (tall box, bow up) }
 export function drawSilhouette(ctx, ship, box, fx = {}) {
   const facing = ship.facing === -1 ? -1 : 1;
+  if (fx.orientation === 'vertical') {
+    // Rotate the horizontal drawing: -90deg for facing 1, +90deg for facing -1.
+    // Both put the bow up; the sign keeps each ship's pdcL on its own side.
+    // shipPoint(..., 'vertical') is the closed form of this same transform.
+    ctx.save();
+    ctx.translate(box.x + box.w / 2, box.y + box.h / 2);
+    ctx.rotate(-facing * Math.PI / 2);
+    drawHorizontal(ctx, ship, { x: -box.h / 2, y: -box.w / 2, w: box.h, h: box.w }, fx, facing);
+    ctx.restore();
+    return;
+  }
+  drawHorizontal(ctx, ship, box, fx, facing);
+}
+
+function drawHorizontal(ctx, ship, box, fx, facing) {
   const t = fx.t || 0;
   const bridgeAlive = !ship.pieces || ship.pieces.bridge.alive;
   ctx.save();

@@ -43,15 +43,16 @@ export const N = {
   RAIL_RECHARGE: 40,     // about three shots per battle
   RAIL_START_CHARGE: 20, // capacitors are empty at battle start; first shot comes in the knife fight, not the approach
   RAIL_AIM_TIME: 3,      // the window the target has to Burn
-  RAIL_DODGE_SPEED: 0.3, // target lateral speed above this at fire time means a miss
+  // A Burn at any moment during the enemy's aim makes the shot miss: readable, no timing trick.
   RAIL_SLUG_SPEED: 8,    // visual flight; near instant at these ranges
 
   // --- burn ---
   BURNS: 3,              // per battle; a scarce dodge, not a habit
-  BURN_SPEED: 0.8,       // lateral kick, km/s; well above RAIL_DODGE_SPEED
+  BURN_SPEED: 0.8,       // lateral kick, km/s; what the dodge looks like on the map
 
   // --- enemy ---
   AI_TICK: 1.0,          // the enemy thinks once a second, like a crew, not a computer
-  AI_BURN_CHANCE: 0.6,   // per tick while a railgun is aiming at it; it is not perfect
+  AI_BURN_CHANCE: 0.3,   // per tick while a railgun is aiming at it; about two in three shots dodged
+  AI_RAIL_GAMBLE: 0.3,   // chance per tick to fire the railgun at a target that could still dodge
   AI_RUN_PIECES: 2,      // runs when this few pieces are left and it is losing
 };

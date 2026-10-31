@@ -19,7 +19,9 @@ export function makeShip(id, name, x, facing) {
     railCharge: N.RAIL_START_CHARGE, // seconds until the railgun is ready
     railAim: -1,        // -1 idle, else seconds spent aiming
     burns: N.BURNS,
-    burnCooldown: 0,    // seconds of lateral kick still "fresh" (for dodge check)
+    lastBurnT: -1,      // game time of the last Burn; a Burn during the enemy's aim means a miss
+    railAimStart: -1,   // game time the current aim began
+    thrust: 0,          // -1..1 along x, what the drive is doing right now (for the renderer)
     rakeTarget: null,   // piece name the PDCs are chewing on
     tracerAcc: 0,       // accumulates tracer spawns
   };
@@ -30,7 +32,6 @@ export const alivePieces = (ship) => PIECES.filter((p) => ship.pieces[p].alive);
 export const pdcCount = (ship) => (alive(ship, 'pdcL') ? 1 : 0) + (alive(ship, 'pdcR') ? 1 : 0);
 export const hasWeapons = (ship) => alive(ship, 'rail') || pdcCount(ship) > 0 || (alive(ship, 'tubes') && ship.torps > 0);
 export const isBeaten = (ship) => !alive(ship, 'bridge') || !hasWeapons(ship);
-export const lateralSpeed = (ship) => Math.abs(ship.vy);
 
 // Pick which piece a hit lands on. Bridge is armored (lower weight).
 export function pickPiece(ship, rng) {
