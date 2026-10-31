@@ -42,7 +42,10 @@ nav button.ready { border-color: var(--ok); color: var(--ok); }
 nav button.aiming { border-color: var(--warn); color: var(--warn); }
 nav button.dead { opacity: 0.3; }
 nav button.danger { border-color: #4a2020; color: #ff8a8a; }
-nav button.progress::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: var(--p, 0%); background: currentColor; opacity: 0.8; }
+nav button.progress::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: var(--p, 0%); background: var(--accent, currentColor); opacity: 0.8; }
+/* a weapon button wears its room's colour (form.js ROOM_COLORS), the same as its arc and its room on the panel */
+#btn-rail { --accent: rgb(143,208,255); } #btn-torps { --accent: rgb(255,84,110); } #btn-guard, #btn-rake { --accent: rgb(255,208,112); }
+#btn-rail .label, #btn-torps .label, #btn-guard .label, #btn-rake .label { color: var(--accent); }
 #pause { height: 26px; font-size: 11px; letter-spacing: 0.15em; }
 #pause.on { border-color: var(--ok); color: var(--ok); }
 .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(3,5,10,0.78); padding: 16px; }

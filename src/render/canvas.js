@@ -7,7 +7,7 @@
 
 import { N } from '../numbers.js';
 import { exposure, alive, pdcRooms, mountSide } from '../sim/ship.js';
-import { drawArcs, railKm } from './arcs.js';
+import { drawArcs, drawPdcCounts, railKm } from './arcs.js';
 import { drawShipMark, COLORS } from './silhouette.js';
 import { drawForm, roomPoint, roomBounds, roomAtPoint, roomBracket } from './form.js';
 
@@ -504,6 +504,7 @@ export function makeTactical(canvas, opts = {}) {
 
     // my firing arcs at the asked heading, to scale, and what bears on them at this range
     drawArcs(ctx, me, p.x, p.y, ang, (a) => a.km * cam.scale, 0.07, 0.35);
+    drawPdcCounts(ctx, me, p.x, p.y, ang, (a) => a.km * cam.scale);
     const dx = them.x - me.x, dy = them.y - me.y, range = battle.range();
     const ly = -dx * Math.sin(ang) + dy * Math.cos(ang), ends = face !== 'side'; // ly < 0: the enemy is on my top side
     const mounts = pdcRooms(me).filter((r) => alive(me, r) && (ends || mountSide(me, r) === (ly < 0 ? 'top' : 'bottom'))).length;

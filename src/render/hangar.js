@@ -3,7 +3,7 @@
 // hud.js keeps the fit and the selection and calls drawHangar again on every change.
 import { drawForm, cellRect, ROOM_COLORS } from './form.js';
 import { T, roomKey } from '../text.js';
-import { drawArcs } from './arcs.js';
+import { drawArcs, drawPdcCounts } from './arcs.js';
 
 const SLOT_OF = { rail: 'gun', tubes: 'launcher', drive: 'drive' }; // room -> the slot that picks it
 const CELL_MAX = 20;     // px: about 600 px for the Tachi's 28 columns
@@ -87,6 +87,9 @@ export function drawHangar(ctx, ship, fit, sel, W, H) {
   const R = { rail: box.w * 0.55, tubes: box.w * 0.36, pdc: box.h * 0.62 };
   drawArcs(ctx, ship, box.x + box.w / 2, box.y + box.h / 2, 0, (a) => R[a.key], 0.16, 0.55);
   drawForm(ctx, ship, box, { exposure: false });
+  // PDC mounts per sector, just past the hull: ahead of the bow, astern, above and below
+  const endOn = (a) => Math.abs(Math.cos((a.a0 + a.a1) / 2)) > 0.5;
+  drawPdcCounts(ctx, ship, box.x + box.w / 2, box.y + box.h / 2, 0, (a) => (endOn(a) ? box.w / 2 + 12 : box.h / 2 + 2), 1);
 
   // room names: inside the room when the text fits, else (below) beside it on a leader line
   ctx.save();
