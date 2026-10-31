@@ -8,7 +8,7 @@ const $ = (sel) => document.querySelector(sel);
 const fmtClock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 const tap = (sel, fn) => $(sel).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 
-export function makeHud({ onOrder, onPause, onResume, onRestart, onNew }) {
+export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport }) {
   const el = {
     clock: $('#n-clock'), range: $('#n-range'), rate: $('#n-rate'), torps: $('#n-torps'), burns: $('#n-burns'),
     phase: $('#phase'), order: $('#order'), pause: $('#pause'),
@@ -26,6 +26,8 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew }) {
   tap('#pause', onPause);
   tap('#pm-resume', onResume); tap('#pm-restart', onRestart); tap('#pm-new', onNew);
   tap('#again', onNew); tap('#same', onRestart);
+  for (const id of ['#pm-export', '#rs-export']) { tap(id, onExport); $(id).textContent = T.export; }
+  for (const id of ['#pm-import', '#rs-import']) { tap(id, onImport); $(id).textContent = T.import; }
   $('#pm-resume').textContent = T.resume; $('#pm-restart').textContent = T.restart; $('#pm-new').textContent = T.newBattle;
   $('#again').textContent = T.again; $('#same').textContent = T.same;
   $('#pm-title').textContent = T.pausedTitle;
@@ -38,11 +40,13 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew }) {
 
   let toast = null; // {text, ttl}
   const hitTimers = { me: 0, them: 0 };
+  let replay = false;
 
   return {
     toast(text) { toast = { text, ttl: 2.0 }; },
     // Pop the silhouette panel of a ship that just took a big hit.
     hit(shipId) { hitTimers[shipId] = 0.8; },
+    setReplay(on) { replay = on; document.getElementById('orders').classList.toggle('replay', on); },
     draw(battle, paused, dtReal) {
       const me = battle.ships[0], them = battle.ships[1];
       el.clock.textContent = fmtClock(battle.t);
@@ -69,6 +73,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew }) {
       if (toast) { line = toast.text; cls = 'toast'; }
       else if (them.railAim >= 0 && alive(them, 'rail')) { line = T.warn.railAimingAtUs; cls = 'warn'; }
       else if (battle.projectiles.some((p) => p.kind === 'torp' && p.target === 'me')) { line = T.warn.torpsIncoming; cls = 'warn'; }
+      else if (replay) { line = T.replayLine; cls = 'paused'; }
       else if (paused) { line = T.paused; cls = 'paused'; }
       else {
         const parts = [];
@@ -102,7 +107,8 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew }) {
       if (battle.result) {
         const r = battle.result;
         el.resultText.textContent = T.result[r.kind][r.reason];
-        el.resultSeed.textContent = `${T.seed} ${battle.seed} · ${fmtClock(battle.t)}`;
+        el.resultSeed.textContent = `${T.seed} ${battle.seed} · ${fmtClock(battle.t)}${battle.enemyPreset ? ` · ${T.enemyLabel} ${battle.enemyPreset}` : ''}`;
+        if (!el.result.classList.contains('show')) renderStats(battle.stats);
         el.result.className = 'overlay show ' + r.kind;
       } else {
         el.result.className = 'overlay';
@@ -114,4 +120,14 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew }) {
 function setProgress(btn, frac, sub) {
   btn.style.setProperty('--p', `${Math.round(Math.max(0, Math.min(1, frac)) * 100)}%`);
   btn.querySelector('.sub').textContent = sub;
+}
+
+function renderStats(st) {
+  const row = (label, f) => `<tr><th>${label}</th><td class="me">${f(st.me)}</td><td class="them">${f(st.them)}</td></tr>`;
+  document.getElementById('stats').innerHTML =
+    `<tr><th></th><td class="me">${T.ships.me}</td><td class="them">${T.ships.them}</td></tr>` +
+    row(T.stats.torps, (s) => `${s.torpsFired} / ${s.torpsShotDown} / ${s.torpsLanded}`) +
+    row(T.stats.rail, (s) => `${s.railFired} / ${s.railLanded} / ${s.railDodged}`) +
+    row(T.stats.burns, (s) => s.burns) +
+    row(T.stats.pieces, (s) => s.piecesLost);
 }

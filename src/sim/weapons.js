@@ -23,7 +23,7 @@ export function stepPdc(battle, ship, enemy, dt) {
       spawnTracers(battle, ship, t, dt);
       if (battle.rng.chance(N.PDC_GUARD_KILL_RATE * pdcFactor(d) * dt)) {
         t.dead = true;
-        battle.events.push({ type: 'torpKilled', x: t.x, y: t.y, by: ship.id });
+        battle.emit({ type: 'torpKilled', x: t.x, y: t.y, by: ship.id });
       }
     }
     return;
@@ -40,7 +40,7 @@ export function stepPdc(battle, ship, enemy, dt) {
   ship.hitAcc = (ship.hitAcc || 0) + dt * 6 * pdcFactor(d);
   while (ship.hitAcc >= 1) {
     ship.hitAcc -= 1;
-    battle.events.push({ type: 'pdcHit', x: enemy.x, y: enemy.y, ship: enemy.id, piece: ship.rakeTarget });
+    battle.emit({ type: 'pdcHit', x: enemy.x, y: enemy.y, ship: enemy.id, piece: ship.rakeTarget });
   }
   if (r.died) battle.pieceDied(enemy, r.piece, 'pdc');
 }
@@ -72,7 +72,7 @@ export function launchTorps(battle, ship, enemy) {
   }
   ship.torps -= n;
   ship.torpReload = N.TORP_RELOAD;
-  battle.events.push({ type: 'torpLaunch', x: ship.x, y: ship.y, by: ship.id, count: n });
+  battle.emit({ type: 'torpLaunch', x: ship.x, y: ship.y, by: ship.id, count: n });
 }
 
 export function stepTorp(battle, t, dt) {
@@ -91,7 +91,7 @@ export function stepTorp(battle, t, dt) {
     const piece = pickPiece(target, battle.rng);
     if (piece) {
       const r = damage(target, piece, N.PIECE_HP);
-      battle.events.push({ type: 'torpHit', x: target.x, y: target.y, ship: target.id, piece });
+      battle.emit({ type: 'torpHit', x: target.x, y: target.y, ship: target.id, piece });
       if (r.died) battle.pieceDied(target, piece, 'torp');
     }
   }
@@ -115,7 +115,7 @@ export function stepRail(battle, ship, enemy, dt) {
     tx: enemy.x, ty: hit ? enemy.y : enemy.y - Math.sign(enemy.vy || 1) * 0.6, aimStart: ship.railAimStart,
     dead: false, age: 0,
   });
-  battle.events.push({ type: 'railFire', x: ship.x, y: ship.y, by: ship.id });
+  battle.emit({ type: 'railFire', x: ship.x, y: ship.y, by: ship.id });
 }
 
 export function stepSlug(battle, s, dt) {
@@ -129,11 +129,11 @@ export function stepSlug(battle, s, dt) {
       const piece = pickPiece(target, battle.rng);
       if (piece) {
         const r = damage(target, piece, N.PIECE_HP);
-        battle.events.push({ type: 'railHit', x: target.x, y: target.y, ship: target.id, piece });
+        battle.emit({ type: 'railHit', x: target.x, y: target.y, ship: target.id, piece });
         if (r.died) battle.pieceDied(target, piece, 'rail');
       }
     } else {
-      battle.events.push({ type: 'railMiss', x: s.x, y: s.y, ship: target.id });
+      battle.emit({ type: 'railMiss', x: s.x, y: s.y, ship: target.id });
     }
     return;
   }

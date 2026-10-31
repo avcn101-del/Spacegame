@@ -6,9 +6,13 @@ import { makeBattle } from './sim/battle.js';
 import { makeEnemy } from './ai/enemy.js';
 import { makeTactical, makeSilhouettePanel } from './render/canvas.js';
 import { makeHud } from './render/hud.js';
+import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
+import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
 
 const params = new URLSearchParams(location.search);
 let seed = Number(params.get('seed')) || (Date.now() % 100000); // seed choice is outside the sim
+const enemyPreset = PRESETS[params.get('enemy')] ? params.get('enemy') : DEFAULT_PRESET; // ?enemy=sniper
+let replayer = null; // set while watching a recorded battle
 
 let battle, enemy, paused = false, slowmo = 0, acc = 0;
 const cssPx = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
@@ -22,6 +26,7 @@ const renderers = [tactical, panelMe, panelThem];
 
 const hud = makeHud({
   onOrder(o) {
+    if (replayer) return;
     const why = battle.order('me', o);
     if (why) hud.toast(T.refusal[why]);
     else if (o === 'torps') hud.toast(T.order.torpsAway);
@@ -31,13 +36,35 @@ const hud = makeHud({
   onResume() { paused = false; },
   onRestart() { start(); },
   onNew() { seed = (seed * 7919 + 13) % 100000; start(); },
+  onExport() {
+    const data = exportReplay(battle, { enemy: enemyPreset, exportedAt: new Date().toISOString() });
+    const text = JSON.stringify(data);
+    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    a.download = `battle-${battle.seed}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    hud.toast(T.copied);
+  },
+  onImport() {
+    const text = prompt(T.importPrompt);
+    if (!text) return;
+    try { start(parseReplay(text)); } catch (e) { hud.toast(T.importBad); }
+  },
 });
 
-function start() {
+// start() begins a fresh battle; start(replay) watches a recorded one.
+function start(replay = null) {
+  if (replay) seed = replay.seed;
   battle = makeBattle(seed);
-  enemy = makeEnemy('them');
+  battle.enemyPreset = enemyPreset;
+  enemy = makeEnemy('them', enemyPreset);
+  replayer = replay ? makeReplayer(replay) : null;
+  hud.setReplay(!!replayer);
   paused = false; slowmo = 0; acc = 0;
-  history.replaceState(null, '', `?seed=${seed}`);
+  history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}`);
+  window.game = { battle, exportReplay: () => exportReplay(battle) }; // for debugging and tests
 }
 
 // Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
@@ -60,7 +87,7 @@ function frame(now) {
   acc += dtGame;
   let steps = 0;
   while (acc >= N.DT && steps < 8) {
-    enemy.step(battle, N.DT);
+    if (replayer) replayer.step(battle); else enemy.step(battle, N.DT);
     battle.step(N.DT);
     acc -= N.DT; steps++;
   }

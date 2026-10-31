@@ -29,6 +29,14 @@ export const T = {
   pausedTitle: 'PAUSED. GIVE ORDERS, THEN RESUME.',
   paused: 'PAUSED. Give orders, then resume.',
   rotate: 'ROTATE YOUR PHONE TO LANDSCAPE',
+  export: 'EXPORT', import: 'IMPORT', copied: 'Replay copied to clipboard and downloaded.',
+  importPrompt: 'Paste a replay JSON:', importBad: 'That is not a replay.',
+  replaying: 'REPLAY', replayLine: 'REPLAY. Watching a recorded battle.',
+  enemyLabel: 'enemy',
+  stats: {
+    title: 'STATS', torps: 'Torpedoes fired / shot down / landed', rail: 'Railgun fired / landed / dodged',
+    burns: 'Burns', pieces: 'Pieces lost',
+  },
   order: {
     close: 'Closing', hold: 'Holding range', open: 'Opening range',
     guard: 'PDC on guard', rake: 'PDC raking hull',
