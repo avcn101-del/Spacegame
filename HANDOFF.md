@@ -121,8 +121,19 @@ work longer than about an hour, give the estimate and wait for go.
 
 ## Facts measured (keep consistent)
 
-Everything below the first bullet was measured before the form and is void for balance;
+Everything below the second bullet was measured before the form and is void for balance;
 kept only as history. After the form (30 seeds, win/lose/draw):
+
+- Guard at 0.375 (PR 28, the owner: 94 percent is too boring; "half of (0.5 + 0.25)"). Why it
+  was 94: before PR 25 the Tachi guarded with 2 turrets broadside and 1 end-on; six mounts
+  made that 3 and 6 with the same rate per mount, and the AI's stern turn sends most
+  torpedoes in end-on (5.4 mounts saw the torpedo at the average kill). Measured at 1.0 /
+  0.5 / 0.375 / 0.25, brawler mirror: 98 / 85 / 75 / 61 percent of torpedoes killed, time
+  draws 15 / 11 / 5 / 2. At 0.375: brawler mirror 10/13/7 avg 144 s; brawler vs gunship
+  25/0/5; sniper mirror 12/13/5 (was 30 time draws); sniper vs gunship 29/0/1; gunship
+  mirror 14/9/7; quickRail brawler vs gunship 24/0/6. Turtle mirror and berserker mirror
+  unchanged (no torpedo dies there). Script: a node file that replays the arena and counts
+  torpKilled by shotFrom and the mounts that see it.
 
 - After the six independent mounts firing by arc (PR 25): Guard kills about 94 percent of
   torpedoes (was 58): bow-on all six guard where one turret did. brawler vs brawler 7/10/13
@@ -178,12 +189,11 @@ kept only as history. After the form (30 seeds, win/lose/draw):
 
 ## Next, in this order, each only if the owner says a battle was boring without it
 
-1. The owner plays PR 25 (six mounts by arc, the hangar list with stats) and says: can the
-   grid be read, does cover make a decision, is Guard at 94 percent boring (torpedoes never
-   land end-on), is the stalemate still there (a hulk with its drive dead that cannot be
-   finished; and now long time draws in every mirror).
-2. Only if the owner says so: Guard tuned by halving; a drive-dead ship with no weapon to
-   bear is beaten (or tail-on tubes at half rate).
+1. The owner plays PR 28 (Guard at 0.375) and says: can the grid be read, does cover make a
+   decision, does one torpedo in a salvo landing feel right, is the stalemate still there (a
+   hulk with its drive dead that cannot be finished; time draws are fewer now, not gone).
+2. Only if the owner says so: a drive-dead ship with no weapon to bear is beaten (or tail-on
+   tubes at half rate).
 3. The next rooms into the empty hardpoints, only when the owner names them (he said
    "discuss later"). Then the hangar picks per hardpoint, one at a time.
 4. The owner plays with fits and says which pick never gets chosen; a pick nobody takes is
