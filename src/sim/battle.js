@@ -2,7 +2,8 @@
 // step(dt) is deterministic given the seed and the order log.
 import { N } from '../numbers.js';
 import { makeRng } from '../rng.js';
-import { makeShip, alive, isBeaten, alivePieces } from './ship.js';
+import { makeShip, alive, isBeaten, alivePieces, accelFactor } from './ship.js';
+import { TACHI } from '../ships/tachi.js';
 import { refusal, apply } from './orders.js';
 import * as W from './weapons.js';
 import { makeStats } from './stats.js';
@@ -12,8 +13,8 @@ export function makeBattle(seed) {
     seed, rng: makeRng(seed),
     t: 0,
     ships: [
-      makeShip('me', 'Rocinante', -N.START_RANGE / 2, +1),
-      makeShip('them', 'Pella', +N.START_RANGE / 2, -1),
+      makeShip('me', 'Rocinante', -N.START_RANGE / 2, +1, TACHI),
+      makeShip('them', 'Pella', +N.START_RANGE / 2, -1, TACHI),
     ],
     projectiles: [], tracers: [],
     events: [],      // drained by the renderer every frame
@@ -68,7 +69,8 @@ function step(b, dt) {
   // Alternate who shoots first each step: a fixed order gave the first ship a 60/40 edge in mirror matches.
   b.stepNo += 1;
   for (const s of (b.stepNo % 2 ? b.ships : [b.ships[1], b.ships[0]])) {
-    if (s.torpReload > 0) s.torpReload = Math.max(0, s.torpReload - dt);
+    if (s.torpReload > 0) s.torpReload = Math.max(0, s.torpReload - dt * (alive(s, 'crew') ? 1 : N.CREW_DEAD_SPEED));
+    if (s.turnLeft > 0) { s.turnLeft -= dt; if (s.turnLeft <= 0) { s.turnLeft = 0; s.face = s.faceTarget; } }
     W.stepRail(b, s, b.enemyOf(s), dt);
     W.stepPdc(b, s, b.enemyOf(s), dt);
   }
@@ -91,15 +93,18 @@ function moveShip(b, ship, enemy, dt) {
     const toEnemy = Math.sign(enemy.x - ship.x) || ship.facing;
     const range = b.range();
     let ax = 0;
-    const accel = N.ACCEL * (ship.orders.run ? N.RUN_ACCEL_MULT : 1);
+    const base = N.ACCEL * (ship.orders.run ? N.RUN_ACCEL_MULT : 1);
+    // main drive pushes along the hull; the wrong way round, thrusters push at half
+    const accel = (toward) => base * accelFactor(ship, toward);
     if (ship.orders.run) {
-      ax = -toEnemy * accel;
+      ax = -toEnemy * accel(-1);
     } else {
       const want = ship.orders.range === 'close' ? N.RANGE_CLOSE
         : ship.orders.range === 'open' ? N.RANGE_OPEN : null;
       if (want !== null) {
         const err = range - want; // positive: too far
-        if (Math.abs(err) > N.RANGE_TOLERANCE) ax = toEnemy * Math.sign(err) * accel;
+        const toward = Math.sign(err); // +1 need to close, -1 need to open
+        if (Math.abs(err) > N.RANGE_TOLERANCE) ax = toEnemy * toward * accel(toward);
         else ax = -ship.vx * 2; // settle: kill relative drift
       } else {
         ax = -ship.vx * 2; // hold: stop
@@ -118,7 +123,7 @@ function moveShip(b, ship, enemy, dt) {
 
 function updatePhase(b) {
   const r = b.range();
-  const crippled = b.ships.some((s) => alivePieces(s).length <= 3);
+  const crippled = b.ships.some((s) => alivePieces(s).length <= 3); // 3 of 7 rooms left
   if (crippled) b.phase = 'break';
   else if (r <= N.PDC_RANGE) b.phase = 'knife';
   else if (b.phase !== 'knife') b.phase = 'approach';

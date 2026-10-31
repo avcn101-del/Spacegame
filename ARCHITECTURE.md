@@ -12,7 +12,8 @@ src/main.js           game loop, active pause, slow-mo, wires modules
 src/numbers.js        every tunable number, one-line reason each
 src/rng.js            seeded random, the only random source
 src/text.js           all player-facing English strings
-src/sim/ship.js       six pieces, damage, "is beaten"
+src/ships/tachi.js    a ship as data: rooms bow to stern, hp each
+src/sim/ship.js       rooms, facing, exposure, line of fire, damage, "is beaten"
 src/sim/orders.js     the six orders: refusal() and apply()
 src/sim/weapons.js    pdc, torpedo, railgun
 src/sim/battle.js     makeBattle(seed): state, step(dt), phases, result
@@ -37,10 +38,15 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
 - `ships[0]` is `'me'` (Rocinante, facing +1, starts at negative x),
   `ships[1]` is `'them'` (Pella, facing -1). Each ship: `x, y, vx, vy`
   in km (the fight line is the x axis, y is lateral), `facing`,
-  `pieces` map of `rail pdcL pdcR bridge tubes drive` to `{hp, alive}`,
-  `orders {range: 'close'|'hold'|'open', pdc: 'guard'|'rake', run}`,
+  `roomOrder` (bow to stern) and `pieces` map of room id to
+  `{hp, maxHp, alive}`; `face` / `faceTarget` (`bow | side | tail`) and
+  `turnLeft` seconds of swing; `orders {range, pdc, run}`,
   `torps, torpReload, railCharge, railAim (-1 idle or seconds aiming),
-  burns`.
+  burns, thrust`.
+- The one geometry rule: a shot meets the rooms from the exposed end
+  (`lineOfFire`). Bow-on: rail first. Tail-on: drive first. Broadside or
+  turning: a random room, spill into its neighbour. PDC chews the first
+  room; torpedo and rail kill the first and wound the next.
 - `projectiles`: `{kind: 'torp', owner, target, x, y, vx, vy}` and
   `{kind: 'slug', owner, target, x, y, tx, ty, hit}`.
 - `tracers`: `{x1, y1, x2, y2, ttl, owner}` short-lived PDC lines.
@@ -49,7 +55,8 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   `pdcHit {x,y,ship,piece}`, `torpLaunch {x,y,by,count}`,
   `torpKilled {x,y,by}`, `torpHit {x,y,ship,piece}`, `railFire {x,y,by}`,
   `railHit {x,y,ship,piece}`, `railMiss {x,y,ship}`, `burn {x,y,by,dir}`,
-  `pieceDead {x,y,ship,piece,cause}`, `end {result}`.
+  `pieceDead {x,y,ship,piece,cause}`, `turn {x,y,by,to}`, `torpMiss {x,y,ship}`,
+  `end {result}`. `torpHit` and `railHit` carry `piece` and `spill`.
 - `battle.emit(ev)` is the only way the sim publishes an event; it also feeds
   `battle.stats`. `battle.log` holds every accepted order with its exact `t`;
   seed plus log is a replay. The AI rolls its own seeded dice so a replay
@@ -57,7 +64,8 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   ship goes first each step: a fixed order gave the first ship a 60/40 edge.
 - `battle.order(shipId, order)` returns null if accepted or a refusal key:
   `noDrive running noPdc noTubes noTorps reloading tooFar noRail charging
-  aiming noBurns aimingNoBurn over`.
+  aiming noBurns aimingNoBurn alreadyRange alreadyPdc alreadyFacing
+  tailNoTubes noSensors railNeedsBow over`.
 
 ## Render module contract
 

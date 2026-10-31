@@ -2,7 +2,7 @@
 // pause menu with legend, result. Reads battle state; sends orders through callbacks.
 import { N } from '../numbers.js';
 import { T } from '../text.js';
-import { alive } from '../sim/ship.js';
+import { alive, exposure, canFireTubes, canAimRail } from '../sim/ship.js';
 
 const $ = (sel) => document.querySelector(sel);
 const fmtClock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -77,6 +77,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       else if (paused) { line = T.paused; cls = 'paused'; }
       else {
         const parts = [];
+        parts.push(me.turnLeft > 0 ? `${T.order.turning} ${T.order[me.faceTarget].toLowerCase()}` : T.order[me.face]);
         if (me.orders.run) parts.push(T.order.run); else parts.push(T.order[me.orders.range]);
         parts.push(T.order[me.orders.pdc]);
         if (me.railAim >= 0) parts.push(T.order.aiming);
@@ -88,20 +89,20 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       const B = el.buttons;
       const range = battle.range();
       for (const o of Object.keys(B)) {
-        const active = (o === me.orders.range && !me.orders.run) || o === me.orders.pdc || (o === 'run' && me.orders.run);
+        const active = (o === me.orders.range && !me.orders.run) || o === me.orders.pdc || (o === 'run' && me.orders.run) || o === me.faceTarget;
         B[o].classList.toggle('active', active);
       }
       setProgress(B.torps, me.torpReload > 0 ? 1 - me.torpReload / N.TORP_RELOAD : 1, `${me.torps}`);
       setProgress(B.rail, me.railAim >= 0 ? me.railAim / N.RAIL_AIM_TIME : 1 - me.railCharge / N.RAIL_RECHARGE, me.railAim >= 0 ? 'AIM' : '');
       setProgress(B.burn, 1, `${me.burns}`);
-      B.torps.classList.toggle('dead', !alive(me, 'tubes') || me.torps === 0);
-      B.rail.classList.toggle('dead', !alive(me, 'rail'));
+      B.torps.classList.toggle('dead', !alive(me, 'tubes') || me.torps === 0 || exposure(me) === 'tail');
+      B.rail.classList.toggle('dead', !alive(me, 'rail') || !alive(me, 'sensors') || me.face !== 'bow' || me.turnLeft > 0);
       B.rail.classList.toggle('aiming', me.railAim >= 0);
       B.burn.classList.toggle('dead', !alive(me, 'drive') || me.burns === 0);
-      for (const o of ['close', 'hold', 'open', 'run']) B[o].classList.toggle('dead', !alive(me, 'drive'));
-      for (const o of ['guard', 'rake']) B[o].classList.toggle('dead', !alive(me, 'pdcL') && !alive(me, 'pdcR'));
-      B.torps.classList.toggle('ready', me.torpReload === 0 && me.torps > 0 && range <= N.TORP_RANGE && alive(me, 'tubes'));
-      B.rail.classList.toggle('ready', me.railCharge === 0 && me.railAim < 0 && range <= N.RAIL_RANGE && alive(me, 'rail'));
+      for (const o of ['close', 'hold', 'open', 'run', 'bow', 'side', 'tail']) B[o].classList.toggle('dead', !alive(me, 'drive'));
+      for (const o of ['guard', 'rake']) B[o].classList.toggle('dead', !alive(me, 'pdc'));
+      B.torps.classList.toggle('ready', me.torpReload === 0 && range <= N.TORP_RANGE && canFireTubes(me));
+      B.rail.classList.toggle('ready', me.railCharge === 0 && me.railAim < 0 && range <= N.RAIL_RANGE && canAimRail(me));
 
       // Result overlay
       if (battle.result) {
@@ -126,7 +127,7 @@ function renderStats(st) {
   const row = (label, f) => `<tr><th>${label}</th><td class="me">${f(st.me)}</td><td class="them">${f(st.them)}</td></tr>`;
   document.getElementById('stats').innerHTML =
     `<tr><th></th><td class="me">${T.ships.me}</td><td class="them">${T.ships.them}</td></tr>` +
-    row(T.stats.torps, (s) => `${s.torpsFired} / ${s.torpsShotDown} / ${s.torpsLanded}`) +
+    row(T.stats.torps, (s) => `${s.torpsFired} / ${s.torpsShotDown} / ${s.torpsMissed} / ${s.torpsLanded}`) +
     row(T.stats.rail, (s) => `${s.railFired} / ${s.railLanded} / ${s.railDodged}`) +
     row(T.stats.burns, (s) => s.burns) +
     row(T.stats.pieces, (s) => s.piecesLost);

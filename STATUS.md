@@ -1,5 +1,5 @@
 # STATUS
 
-- Playable: prototype 0, readability pass, replay export/import with stats, enemy presets (`?enemy=sniper|turtle|berserker`), headless arena.
-- Owner said last: wants replay export and stats, scripted strategies, and holding still feels boring.
-- Being changed: owner to choose A (drifting starfield) and/or B (Hold becomes circling) for the next PR.
+- Playable: rooms layer 1: seven rooms bow to stern, FACE orders (bow / side / tail), shots hit the exposed end first; sensors and crew rooms; plus replay, stats, presets, arena.
+- Owner said last: go on layer 1 with sensors as a room; shields and jammer parked.
+- Being changed: waiting for the owner to play five battles and write three lines.

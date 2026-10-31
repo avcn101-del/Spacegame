@@ -3,7 +3,7 @@
 Approved by the owner in chat, 2026-10-30. This is the whole scope of
 prototype 0. Anything not here goes to `NOTES.md`.
 
-## Ships
+## Ships (prototype 0; since layer 1 a ship is a chain of rooms, see ARCHITECTURE.md)
 
 Two Tachi-class corvettes, Martian build, identical rules and loadout.
 Yours is Roci-inspired. The enemy is Pella-inspired. Mirror match: fairness
