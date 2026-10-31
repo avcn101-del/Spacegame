@@ -20,3 +20,4 @@ Ideas go here. They are not built until the owner asks.
   and power routing, radiators and heat, mass and thrust, the shield bubble.
 - Burn as a torpedo dodge (today it only beats the railgun).
 - PDC ammo: Guard spends rounds, a decision between Guard now and Rake later.
+- Lock time for tap-a-room: the sensors need a few seconds to lock a room, like the rail aim; moving or losing sensors drops it.
