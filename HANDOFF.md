@@ -113,7 +113,7 @@ work longer than about an hour, give the estimate and wait for go.
   Panels are 100 px wide; cells about 9 x 7 px. No diagonal rays (NOTES). The owner accepted
   that every arena number before this is void.
 - Guardrails: three lines before any system (decision it creates, what stops
-  it, what it costs); numbers file under 80 (now 71); sim under 2000 lines
+  it, what it costs); numbers file under 80 (now 72); sim under 2000 lines
   (now about 780); at most 12 battle buttons (now 7; hangar picks are not
   battle buttons); one layer per PR with battles and three lines from the
   owner in between; no physics tests, only arena and replay;
@@ -155,22 +155,31 @@ kept only as history. After the form (30 seeds, win/lose/draw):
   on a plated covered bridge; draw by time 12.5 s later. The owner: "the enemy has only the
   bridge and nothing else and it is still a stalemate; really, from the break, if half the
   ship is cut, mostly the whole ship explodes."
-  Candidate (the owner decides, three lines): a ship is beaten when its living cells fall
-  under half of the form (one number, HULL_BEATEN_FRACTION 0.5, one line in `isBeaten`).
-  Decision it creates: splitting the hull is a kill, so the spine and the bulkheads become
-  the thing to aim at. What stops it: the bridge sits mid-hull with frame on every side,
-  and a tap on frame is refused, so the split comes from spill and Rake, not a tap. What it
-  costs: one number, and "beaten" stops being "no bridge or no weapon". Alternatives weaker
-  for this case: a PDC mount not counting as a weapon; a drive-dead ship with no weapon to
-  bear is beaten. Note the spine as one 5 hp frame room is why one Rake split the ship;
-  whether that is right is the owner's call (bulkheads K are one room per column).
-- Bug seen in battle 68 (not fixed): `pieceDied` tears one end, and the nested `pieceDied`
-  of each torn room runs `cutOff` again and tears the other end too; then the outer loop
-  tears that end again, so the stern `tear` event and the `pieceDead` of its rooms are
-  emitted twice (piecesLost 15 for 10 rooms, the timeline lists sensors, crew, drive, pdc1,
-  pdc4 twice). Fix: tear off every torn room of both ends first, then emit; or skip rooms
-  no longer alive. Cosmetic in the sim (a torn room cannot tear again), wrong in stats and
-  in whatever the renderer does twice.
+  Decided (PR 30, the owner): a ship is beaten when half or more of its form's cells are cut
+  away from the bridge (`HULL_BEATEN_FRACTION` 0.5 on `cell.cut`, `hullGone` in `isBeaten`,
+  result reason `hull`: "IS FINISHED. Half her hull is adrift."). Dead rooms (holes) do not
+  count, only cut cells. Chosen over three candidates measured counterfactually on 480 AI
+  battles (Tachi presets crossed, 30 seeds; a hulk = a side with no rail and no torpedoes
+  more than 10 s before the end, 217 such battles, 51 time draws):
+  cut >= half: ends 81 battles early, 32 before any hulk, flips 0 winners, ends 46 hulks,
+  9 time draws. Living-and-connected < half: 317 early, 184 before any hulk, flips 9.
+  Reactor (the owner's idea: R1 and R2 as rooms, shot or torn off = lose; modelled as the
+  frame R rooms at 10 hp): 335 early, 207 before any hulk, flips 26, ends 203 hulks: it
+  becomes a third way to win that mostly dies to spill, so it was parked. Reactor torn only:
+  231 early, 87 before, flips 6. Replay 21108 (the owner's, after battle 68): the spine and
+  the rail died to one salvo at 68.8 s (71 of 158 cells cut, 45 percent); now finished at
+  87.9 s by `hull` (95 cut) instead of the bridge at 93.2. Battle 68 has no saved replay.
+  The duplicate tear (below) is fixed in the same PR: every torn room of both ends is torn
+  off first, then the events per end.
+  Arena after (30 seeds, before in brackets where it moved): turtle mirror 14/9/7 (11/7/12,
+  time draws 12 to 7); turtle vs gunship 11/11/8 (10/9/11); brawler vs turtle 19/2/9
+  (17/1/12); berserker vs brawler 0/29/1 avg 37 s (0/28/2, 47 s); the rest within a win.
+  The hulks left are mostly "out of ammunition with the hull whole"; a rule for that is a
+  different question (item 2 and 5 below), not the reactor.
+- Bug seen in battle 68 (fixed in PR 30): `pieceDied` tore one end, and the nested `pieceDied`
+  of each torn room ran `cutOff` again and tore the other end too; then the outer loop
+  tore that end again, so the stern `tear` event and the `pieceDead` of its rooms were
+  emitted twice (piecesLost 15 for 10 rooms; replay 21108 piecesLost 14 for 11).
 - The AI presets run at `runAt: 2` pieces left and the break phase at 3 job rooms left;
   with 12 job rooms (Belter 9) both come much later than before. Left as is.
 - After the PDC mounts (PR 24; the pdc was six one-cell mounts on the hull edge, open to shots
@@ -216,13 +225,12 @@ kept only as history. After the form (30 seeds, win/lose/draw):
 
 ## Next, in this order, each only if the owner says a battle was boring without it
 
-1. The hulk (battle 68 above): the owner said a ship with half its hull cut should be
-   finished. Give the three lines, the estimate (about 30 minutes: one number, one line in
-   `isBeaten`, the duplicate-tear fix in the same PR or its own, arena before and after), and
-   wait for go. Then the owner plays PR 28 (Guard at 0.375) and says: can the grid be read,
-   does cover make a decision, does one torpedo in a salvo landing feel right.
+1. Done (PR 30): half the cells cut = beaten, the duplicate tear fixed. Next the owner plays
+   PR 28 (Guard at 0.375) and PR 30 and says: can the grid be read, does cover make a
+   decision, does one torpedo in a salvo landing feel right, does a split hull end right.
 2. Only if the owner says so: a drive-dead ship with no weapon to bear is beaten (or tail-on
-   tubes at half rate), if the half-hull rule does not already cover it.
+   tubes at half rate), the half-hull rule (PR 30) covers only about one hulk in five: most hulks are
+   out of ammunition with the hull whole.
 3. The next rooms into the empty hardpoints, only when the owner names them (he said
    "discuss later"). Then the hangar picks per hardpoint, one at a time.
 4. The owner plays with fits and says which pick never gets chosen; a pick nobody takes is
