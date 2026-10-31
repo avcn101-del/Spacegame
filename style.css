@@ -90,6 +90,10 @@ nav#orders.replay button { opacity: 0.35; pointer-events: none; }
 #hg-line span { color: var(--dim); }
 
 /* close-up: a stage over the map and both panels; the bars, order line and buttons stay */
-#closeup { display: none; position: absolute; left: 0; right: 0; top: var(--top); bottom: calc(var(--bottom) + 26px); width: 100%; height: auto; touch-action: none; }
+/* explicit height: a canvas with height auto takes its pixel buffer's height, which grows with devicePixelRatio on a phone */
+#closeup { display: none; position: absolute; left: 0; right: 0; top: var(--top); width: 100%; height: calc(100dvh - var(--top) - var(--bottom) - 26px); touch-action: none; }
+/* the close-up gives the hulls more room: shorter order buttons, no hint line under the label */
+body.closeup { --bottom: 50px; }
+body.closeup nav button .hint { display: none; }
 body.closeup #closeup { display: block; }
 body.closeup #tactical, body.closeup .panel { display: none; }
