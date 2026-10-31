@@ -9,20 +9,29 @@ in Vietnamese mixed with English; answer short, verified facts only, say
 
 - Game is live at https://spacegame.avcn101.workers.dev/ (Cloudflare Workers
   Builds, deploys from `main`; `wrangler.jsonc` serves the repo root as
-  static assets). Repo: github.com/avcn101-del/Spacegame.
-- Process so far: one branch and one PR per change; the owner has asked
-  me to merge PRs myself after the browser test passes. Every PR body
-  starts with "Play this and tell me where it is boring."
+  static assets). Repo: github.com/avcn101-del/Spacegame. The cloud session's
+  proxy cannot reach the live site; check deploys on the GitHub branches page
+  (`main` check green) and ask the owner to reload.
+- Process: one branch and one PR per change; the owner asked me to merge PRs
+  myself after the browser test passes. Every PR body starts with "Play this
+  and tell me where it is boring." Use a fresh branch name per PR
+  (`claude/<topic>`): the auto-mode classifier blocks force pushes even when
+  the owner allows them, so a squash-merged branch cannot be reused. The stop
+  hook then complains about "unpushed commits" on the stale branch; ignore it.
 - Headless checks before every PR: `node tools/selfplay.mjs` (determinism),
-  `node tools/arena.mjs all seeds=30` (preset vs preset, watch the draw
-  counts), and a Playwright run at 844 x 390 with
+  `node tools/arena.mjs all seeds=30` (preset vs preset, watch draws and
+  battle length), and Playwright at 844 x 390 with
   `/opt/node-tools/node_modules/playwright/index.js` (CommonJS default
-  import) against `python3 -m http.server 8123`; `window.game` exposes
-  `battle`, `tactical`, `exportReplay()` for tests.
-- Rendering (`src/render/canvas.js`, `silhouette.js`) was written by a
-  render subagent given the state contract in ARCHITECTURE.md; it works
-  well to delegate render changes the same way while editing sim and HUD
-  yourself. Sim and AI never import render.
+  import, `hasTouch`, `isMobile`) against `python3 -m http.server 8123`;
+  `window.game` exposes `battle`, `tactical`, `panels.me/them` (with
+  `roomAt(x, y)`), `exportReplay()`.
+- Replays: the owner pastes exported JSON into chat; save it to the scratchpad
+  and run `node tools/replay.mjs file.json` (or a small node script that
+  replays with the order log filtered) to answer "why" with events. Replay
+  version 5: move orders are `{heading, speed}`. Old replays diverge.
+- Rendering (`src/render/canvas.js`, `silhouette.js`) follows the state
+  contract in ARCHITECTURE.md; small render changes are fine to do directly.
+  Sim and AI never import render.
 
 ## What the owner decided (do not re-ask)
 
@@ -34,39 +43,60 @@ in Vietnamese mixed with English; answer short, verified facts only, say
   crew, tubes, drive); a shot hits the exposed end first; sensors and crew
   are rooms with one effect each. Rooms have only HP and one job. No
   power, crew counts, heat, oxygen. Shields and jammer are parked in NOTES.
-- Drag replaced the range and face buttons; one HOLD button remains.
-- Tap-a-room: broadside means no detour (every room exposed); the bracket
-  shows on both silhouettes, each in the targeting side's color.
-- Guardrails agreed against the DTN Bridge failure: three lines before any
-  system (decision it creates, what stops it, what it costs); numbers file
-  under 80 numbers; sim under 2000 lines; at most 12 buttons; one layer per
-  PR with five battles and three lines from the owner in between; no
-  physics tests, only arena and replay.
+- Drag as heading (PR 9): the drag direction is an absolute heading on the
+  map, the hull swings to it (90 degrees per FACE_TURN_TIME), the length is
+  the speed. Face (bow / side / tail) is derived from heading versus bearing
+  with BOW_CONE 45. HOLD coasts. The asked speed is relative to the enemy
+  (my call, flagged: an absolute cap made any Burned ship uncatchable).
+- Tap-a-room (PR 8): `target {room}` order; torpedoes sent at a room that is
+  not the exposed end slow to half speed, swing out 1 km and turn in; PDCs
+  chew the chosen room only broadside; rail unchanged; AI targets by preset
+  (sniper drive, brawler pdc, turtle tubes); brackets on both silhouettes;
+  tapping a room shows its hp and job (both ships).
+- Torpedoes: proximity fuse TORP_FUSE 0.3 km (PR 8) and a speed cap relative
+  to the target (PR 10); both fixed torpedoes that circled forever.
+- Salvos of four, stock of twelve (PR 11): the owner said this made the game
+  dramatic, torpedoes are the weapon with the most impact, a bit overpowered.
+- Plating and bulkheads (PR 13, this handoff): bridge, pdc, tubes are plated
+  (ARMOR_HP_MULT 2); bulkheads aft of sensors, pdc, tubes stop spill. Chosen
+  by the owner over nerfing torpedoes. Measured knobs if still overpowered:
+  TORP_RELOAD 40 lengthens battles (54 s avg vs 35), salvo 3 does not.
+- A line when a room dies (PR 12): "THEIR SENSORS GONE: rail blind, ...".
+- Guardrails against the DTN failure: three lines before any system
+  (decision it creates, what stops it, what it costs); numbers file under 80
+  numbers (now 50); sim under 2000 lines (now about 620); at most 12
+  buttons; one layer per PR with five battles and three lines from the owner
+  in between; no physics tests, only arena and replay. The owner's DTN "Roci
+  form draft 12" artifact (claude.ai/artifact/NvCPh7wurmHa8ZkZ2NvePP) has ten
+  systems and no fight; what to borrow from it is listed in NOTES.md.
 
-- Tap-a-room targeting is built (one PR): `target {room}` order, torpedoes
-  flank a buried room slowly and wide, PDCs chew the chosen room broadside,
-  rail unchanged, AI targets by preset, bracket on the silhouette, tap your
-  own room for its info. Torpedoes got a proximity fuse (`TORP_FUSE`): before
-  it, a torpedo that missed by more than 0.08 km inside 3 km circled forever
-  (replays 6045 and 70368: 9 of 12 and 6 of 12 torpedoes never resolved).
+## Facts the owner asked about (answered, keep consistent)
 
-- Drag as heading is built (one PR): drag direction is an absolute heading on
-  the map, the hull swings to it, drag length is the speed. Face (bow / side /
-  tail) is derived from heading versus bearing with `BOW_CONE`. HOLD coasts.
-  The asked speed is relative to the enemy (the autopilot matches their
-  drift): with an absolute cap of 0.3 km/s a 0.8 km/s Burn made any ship
-  uncatchable and a third of arena battles ended apart. The owner confirmed
-  absolute heading and 'the ship keeps that speed'; the relative part is my
-  call, flagged to the owner.
+- Burn does not dodge torpedoes (measured on replay 80172: the hit moved by
+  0.3 s). It only beats the railgun. A torpedo-dodging Burn is in NOTES.
+- Guard kills about 45 percent of a direct salvo at 3 km; flank torpedoes
+  (a buried room, half speed) die 85 percent. PDC "direction" already exists
+  coarsely: two turrets broadside, one end-on.
+- Rail aim is lost when the enemy leaves the 45 degree bow cone, not only
+  when you turn. The sure shot is while they aim (they cannot Burn).
+- Arena battles are 16 to 50 s now, below the 2 to 4 minute target; human
+  battles ran 37 to 150 s. berserker vs berserker is a 16 s mutual kill.
+- The owner's replays this session: 6045, 70368 (torpedoes circled), 51965,
+  15851 (Burned ship uncatchable), 80172 (win by two lucky bridge hits).
 
-## Next task
+## Next task, agreed in principle (ask go, give the estimate first)
 
-None agreed. The owner says the game is boring: torpedoes get chewed by PDCs,
-the rail gets dodged, PDC rake decides it. Wait for five battles and three
-lines on the new drag before proposing anything. A demo replay (seed 2,
-brawler, target pdc first, bow-on, guard, rail when ready) wins in 50 s
-losing nothing; that strategy wins 63 of 100 against brawler in the arena.
+Ships break with consequences, one PR, about 1.5 hours: a dead room is a
+hole; any room with no path to the bridge through living rooms detaches and
+drifts away as debris (its drive stops pushing, its tubes and torpedoes are
+lost). Bulkheads are already in place as the tear lines. Move the bridge to
+the middle of the chain (rail, sensors, pdc, bridge, crew, tubes, drive) so
+a cut loses at most three rooms; the silhouette art must swap the two rooms.
+Add a `kind` per slot in the design for later variants, no UI. Risk flagged
+to the owner: the room next to the bridge becomes the obvious tap, and
+battles get shorter still. Open: should a drive-dead ship drifting past 16
+km be a win for the other side rather than a draw.
 
-After that, ideas the owner raised but did not approve: drifting starfield
-or circling already came with drag; layer 2 (a second ship design as data,
-a Belter gunship); layer 3 (2D room grid); shipyard; multiple ships.
+After that, in this order, each only if the owner says a battle was boring
+without it: a second ship as data (Belter gunship), slot variants from a
+small catalog, PDC ammo. Not the 2D grid.

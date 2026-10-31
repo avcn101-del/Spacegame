@@ -26,6 +26,7 @@ export const T = {
     rail: 'Bow only. Three seconds of steady aim, then one shot kills a room and wounds the next. You cannot Burn while aiming.',
     burn: 'A sideways kick. Any Burn while their railgun is aiming makes it miss. Three per battle.',
     run: 'Dump everything into the drive and leave. Ends the battle as an escape.',
+    armor: 'Plated rooms (thick bright edge: bridge, PDC deck, tubes) take two torpedoes. Bulkheads (thick seams) stop damage spilling into the next room, and are where the hull would tear.',
     tap: 'TAP a room on their ship to go for it: torpedoes swing wide to reach a room that is not exposed (longer inside their PDCs), PDCs chew it only when they are broadside. Tap it again to clear. Tap a room on your ship to see what it does.',
   },
   pause: 'PAUSE', resume: 'RESUME', restart: 'RESTART', newBattle: 'NEW BATTLE',

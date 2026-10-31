@@ -13,8 +13,8 @@ export function faceFor(off) {
 }
 
 export function makeShip(id, name, x, facing, design) {
-  const pieces = {};
-  for (const r of design.rooms) pieces[r.id] = { hp: r.hp, maxHp: r.hp, alive: true };
+  const pieces = {}, armor = {}, bulkheadAft = {};
+  for (const r of design.rooms) { pieces[r.id] = { hp: r.hp, maxHp: r.hp, alive: true }; if (r.armor) armor[r.id] = true; if (r.bulkhead) bulkheadAft[r.id] = true; }
   return {
     id, name, design: design.id,
     roomOrder: design.rooms.map((r) => r.id), // bow first
@@ -22,6 +22,8 @@ export function makeShip(id, name, x, facing, design) {
     vx: 0, vy: 0,       // km/s
     facing,             // +1 the enemy starts to the right, -1 to the left
     pieces,             // room id -> {hp, maxHp, alive}
+    armor,              // room id -> true for plated rooms (hp already doubled); for the renderer
+    bulkheadAft,        // room id -> true when a bulkhead sits aft of it: spill stops there; the tear lines
     heading: facing === -1 ? Math.PI : 0, // radians, where the bow points on the map (0 = +x)
     headingTarget: facing === -1 ? Math.PI : 0, // the ordered heading; the hull swings toward it
     turnLeft: 0,        // seconds of swing left; the railgun cannot aim while the hull moves
@@ -75,12 +77,17 @@ export function exposedEnd(ship) {
   if (living.length === 0 || e === 'side') return null;
   return e === 'bow' ? living[0] : living[living.length - 1];
 }
-// Where damage spills from a room: the nearest living neighbour along the hull, sternward first.
+// Where damage spills from a room: the nearest living neighbour along the hull, sternward first,
+// never across a bulkhead (dead rooms in between are holes the blast passes through).
 export function spillNeighbour(ship, room) {
   const order = ship.roomOrder, i = order.indexOf(room);
-  for (let k = 1; k < order.length; k++) {
-    if (order[i + k] && ship.pieces[order[i + k]].alive) return order[i + k];
-    if (order[i - k] && ship.pieces[order[i - k]].alive) return order[i - k];
+  for (let j = i + 1; j < order.length; j++) {
+    if (ship.bulkheadAft[order[j - 1]]) break;
+    if (ship.pieces[order[j]].alive) return order[j];
+  }
+  for (let j = i - 1; j >= 0; j--) {
+    if (ship.bulkheadAft[order[j]]) break;
+    if (ship.pieces[order[j]].alive) return order[j];
   }
   return null;
 }

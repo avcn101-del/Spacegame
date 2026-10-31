@@ -400,8 +400,10 @@ function drawRoom(ctx, name, ship, box, facing, fx, t) {
       }
       ctx.restore();
     }
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = COLORS.edge;
+    // plated rooms wear a thick bright edge
+    const plated = !!(ship.armor && ship.armor[name]);
+    ctx.lineWidth = plated ? Math.max(2, s * 0.045) : 1;
+    ctx.strokeStyle = plated ? COLORS.edgeBright : COLORS.edge;
     tracePoly(ctx, body, box, facing);
     ctx.stroke();
     // fittings: always lit steel
@@ -600,14 +602,21 @@ function drawHorizontal(ctx, ship, box, fx, facing) {
 
   for (const name of DRAW_ORDER) drawRoom(ctx, name, ship, box, facing, fx, t);
 
-  // bulkheads: a dark line at each room boundary, across the whole hull
-  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-  ctx.lineWidth = Math.max(1, box.h * 0.012);
+  // seams: a dark line at each room boundary, across the whole hull. A bulkhead (spill does
+  // not cross, the hull's tear line) is a thick seam with a bright core.
   for (const name of DRAW_ORDER) {
-    const u = ROOM_DEFS[name].span[1];
-    if (u >= 1) continue;
+    const u = ROOM_DEFS[name].span[0]; // the boundary aft of this room
+    if (u <= 0.04) continue;
+    const bulk = !!(ship.bulkheadAft && ship.bulkheadAft[name]);
     const a = shipPoint(u, -halfH(u), box, facing), b = shipPoint(u, halfH(u), box, facing);
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    ctx.lineWidth = Math.max(1, box.h * (bulk ? 0.05 : 0.012));
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    if (bulk) {
+      ctx.strokeStyle = 'rgba(168,188,205,0.7)';
+      ctx.lineWidth = Math.max(1, box.h * 0.014);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
   }
 
   if (fx.exposure !== false) drawExposure(ctx, ship, box, facing, fx, t);
