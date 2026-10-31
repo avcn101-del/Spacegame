@@ -13,8 +13,8 @@ export const T = {
   hints: {
     close: 'to PDC range', hold: 'keep range', open: 'torpedo range',
     bow: 'nose at them', side: 'broadside', tail: 'stern at them',
-    guard: 'shoot torpedoes', rake: 'rake the hull',
-    torps: 'fire a pair', rail: 'aim 3 s, one shot', burn: 'dodge railgun', run: 'leave the fight',
+    guard: 'vs torpedoes', rake: 'rake hull',
+    torps: 'fire a pair', rail: 'aim 3 s', burn: 'dodge rail', run: 'leave fight',
   },
   legend: {
     close: 'Burn toward them until the PDCs can reach. Most damage happens here.',

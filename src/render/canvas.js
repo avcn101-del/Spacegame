@@ -6,7 +6,7 @@
 // that are the same sequence every run.
 
 import { N } from '../numbers.js';
-import { PIECES } from '../sim/ship.js';
+import { exposure } from '../sim/ship.js';
 import {
   drawSilhouette, piecePoint, drawShipMark, shipPoint, LANDMARKS, SHIP_ASPECT, COLORS,
 } from './silhouette.js';
@@ -41,6 +41,23 @@ const C = {
   spark: [255, 200, 130], steel: [90, 100, 112], drive: [190, 225, 255],
   me: [191, 227, 255], them: [255, 160, 80], warn: [255, 60, 60],
 };
+
+// Nose angle offset from the bearing to the enemy, per face. 'side' is
+// +PI/2: the hull lies across the line of fire. A turn sweeps linearly
+// through these, so bow -> tail passes through side, as the sim treats it.
+const FACE_OFFSET = { bow: 0, side: Math.PI / 2, tail: Math.PI };
+
+// Where the ship's nose points on the map, in radians, given the bearing to
+// the enemy: the current face, or, while turning, a smooth swing from the
+// old face to the target over FACE_TURN_TIME.
+function noseAngle(ship, bearing) {
+  const from = FACE_OFFSET[ship.face] !== undefined ? FACE_OFFSET[ship.face] : 0;
+  const to = FACE_OFFSET[ship.faceTarget] !== undefined ? FACE_OFFSET[ship.faceTarget] : from;
+  let k = 1;
+  if (ship.turnLeft > 0 && N.FACE_TURN_TIME > 0) k = clamp01(1 - ship.turnLeft / N.FACE_TURN_TIME);
+  const ease = k * k * (3 - 2 * k);
+  return bearing + lerp(from, to, ease);
+}
 
 // --- canvas sizing -----------------------------------------------------------
 
@@ -538,7 +555,7 @@ export function makeTactical(canvas, opts = {}) {
     for (const s of battle.ships) {
       const e = battle.enemyOf ? battle.enemyOf(s) : battle.ships.find((o) => o !== s);
       const p = toScreen(s.x, s.y);
-      const ang = Math.atan2(e.y - s.y, e.x - s.x);
+      const ang = noseAngle(s, Math.atan2(e.y - s.y, e.x - s.x));
       const col = tint(s.id);
 
       // velocity vector: where the ship will be in 2.5 s. Nothing when still.
@@ -561,22 +578,24 @@ export function makeTactical(canvas, opts = {}) {
         ctx.restore();
       }
 
-      // thrust plume: points opposite to the acceleration in world space (x only,
-      // the drive pushes along the fight line). None when coasting or stationary.
+      // thrust plume: out of the stern of the mark, opposite the nose, as long
+      // as |thrust|. A ship facing tail-on and burning away points its plume
+      // at the enemy, which is what it would look like. None when coasting.
       const th = s.pieces.drive.alive ? (s.thrust || 0) : 0;
       if (Math.abs(th) > 0.05) {
-        const dir = th > 0 ? -1 : 1;
+        const sx = Math.cos(ang + Math.PI), sy = Math.sin(ang + Math.PI);
         const flick = 0.78 + 0.22 * hash01(Math.floor(time * 30) + (s.id === 'me' ? 0 : 7));
         const pl = (5 + 14 * Math.abs(th)) * flick;
-        const x0 = p.x + dir * V.MARK_LEN * 0.3;
+        const x0 = p.x + sx * V.MARK_LEN * 0.5, y0 = p.y + sy * V.MARK_LEN * 0.5;
+        const x1 = x0 + sx * pl, y1 = y0 + sy * pl;
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        const g = ctx.createLinearGradient(x0, p.y, x0 + dir * pl, p.y);
+        const g = ctx.createLinearGradient(x0, y0, x1, y1);
         g.addColorStop(0, `rgba(190,225,255,${0.85 * flick})`);
         g.addColorStop(1, 'rgba(90,140,255,0)');
         ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.moveTo(x0, p.y - 3); ctx.lineTo(x0 + dir * pl, p.y); ctx.lineTo(x0, p.y + 3);
+        ctx.moveTo(x0 - sy * 3, y0 + sx * 3); ctx.lineTo(x1, y1); ctx.lineTo(x0 + sy * 3, y0 - sx * 3);
         ctx.closePath(); ctx.fill();
         ctx.restore();
       }
@@ -604,6 +623,12 @@ export function makeTactical(canvas, opts = {}) {
     return Math.atan2(y - s.y, x - s.x);
   }
   const otherId = (id) => (id === 'me' ? 'them' : 'me');
+  // where a ship's stern points on the map right now (radians); +x when unknown
+  function sternDir(id) {
+    const s = shipOf(id), e = shipOf(otherId(id));
+    if (!s || !e) return Math.PI;
+    return noseAngle(s, Math.atan2(e.y - s.y, e.x - s.x)) + Math.PI;
+  }
 
   function onEvent(ev) {
     const a = { ax: ev.x, ay: ev.y };
@@ -646,6 +671,30 @@ export function makeTactical(canvas, opts = {}) {
         fx.streak(a, { dx: Math.cos(dir), dy: Math.sin(dir), len: 140, speed: 400, life: 0.3, width: 2 });
         break;
       }
+      case 'torpMiss': {
+        // the torpedo overshoots: a warm streak sliding past just off the hull, fading, no flash
+        const dir = fromShooter(otherId(ev.ship), ev.x, ev.y);
+        const side = fx.rnd() < 0.5 ? -1 : 1;
+        const off = 7 * side;
+        fx.streak(a, {
+          x: -Math.sin(dir) * off, y: Math.cos(dir) * off,
+          dx: Math.cos(dir), dy: Math.sin(dir), len: 26, speed: 220, life: 0.55, width: 2.5, col: tint(otherId(ev.ship)),
+        });
+        fx.sparks(a, 3, { x: -Math.sin(dir) * off, y: Math.cos(dir) * off, dir: dir + Math.PI, spread: 0.4, speedMin: 20, speedMax: 60, lifeMin: 0.2, lifeMax: 0.4, size: 1, col: C.fire });
+        break;
+      }
+      case 'turn': {
+        // thruster puffs around the mark: four short pale-blue jets off the hull corners
+        const ang = sternDir(ev.by) + Math.PI; // nose
+        const cx = Math.cos(ang), cy = Math.sin(ang);
+        for (const [along, side] of [[0.35, -1], [0.35, 1], [-0.3, -1], [-0.3, 1]]) {
+          const ox = cx * along * V.MARK_LEN - cy * side * 3, oy = cy * along * V.MARK_LEN + cx * side * 3;
+          const out = Math.atan2(cx * side, -cy * side); // perpendicular, away from the hull
+          fx.sparks(a, 3, { x: ox, y: oy, dir: out, spread: 0.5, speedMin: 25, speedMax: 70, lifeMin: 0.12, lifeMax: 0.3, size: 1.2, col: C.drive });
+        }
+        fx.flash(a, { r: 10, life: 0.2, col: C.drive, col2: C.drive, core: 0 });
+        break;
+      }
       case 'burn': {
         // lateral kick: exhaust goes opposite to the burn direction (world y)
         const col = tint(ev.by);
@@ -655,12 +704,13 @@ export function makeTactical(canvas, opts = {}) {
         break;
       }
       case 'torpLaunch': {
-        // two small flashes at the stern, one each side
-        const s = shipOf(ev.by);
-        const f = s ? s.facing : 1;
+        // two small flashes at the tube deck, one each side of the hull
+        const st = sternDir(ev.by);
+        const sx = Math.cos(st), sy = Math.sin(st);
         for (const side of [-1, 1]) {
-          fx.flash(a, { x: -f * 6, y: side * 4, r: 7, life: 0.25, col: C.white, col2: C.fire });
-          fx.sparks(a, 4, { x: -f * 6, y: side * 4, dir: f > 0 ? 0 : Math.PI, spread: 0.6, speedMin: 40, speedMax: 100, lifeMin: 0.15, lifeMax: 0.3 });
+          const ox = sx * 4 - sy * side * 4, oy = sy * 4 + sx * side * 4;
+          fx.flash(a, { x: ox, y: oy, r: 7, life: 0.25, col: C.white, col2: C.fire });
+          fx.sparks(a, 4, { x: ox, y: oy, dir: st + Math.PI, spread: 0.6, speedMin: 40, speedMax: 100, lifeMin: 0.15, lifeMax: 0.3 });
         }
         break;
       }
@@ -687,28 +737,30 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
   let box = null, facing = shipId === 'them' ? -1 : 1, layoutFacing = 0;
   const toScreen = (ax, ay) => ({ x: ax, y: ay });
   const fx = makeFx(toScreen);
-  const flash = {};      // piece -> 0..1, decays each frame
-  const embers = [];     // lingering glow on dead pieces: {piece, ttl, life}
-  const pending = [];    // secondary explosions: {piece, delay}
-  for (const p of PIECES) flash[p] = 0;
+  const flash = {};      // room -> 0..1, decays each frame; keys appear as rooms are hit
+  const embers = [];     // lingering glow on dead rooms: {piece, ttl, life}
+  const pending = [];    // delayed effects: {kind: 'death' | 'spill', piece, delay}
+  let ship = null;       // the ship from the last draw, read-only (exposure for effect directions)
+  const bump = (piece, v) => { flash[piece] = Math.max(flash[piece] || 0, v); };
   const shortSide = () => Math.min(box.w, box.h); // the hull thickness in px, the effects' scale unit
 
-  // The ship box, leaving room past the stern for the thrust plume
-  // (`room` as a fraction of ship length) so the plume is not clipped.
+  // The ship box, leaving room past the stern for the thrust plume and the
+  // tail chevron (`aft`) and past the bow for the muzzle and the bow chevron
+  // (`fore`), both as fractions of ship length, so nothing is clipped.
   function layout() {
-    const pad = 6, room = 0.22;
+    const pad = 6, aft = 0.24, fore = 0.20, extra = 1 + aft + fore;
     if (vertical) {
       const avail = h - 2 * pad;
-      const len = Math.max(1, Math.min(avail / (1 + room), (w - 2 * pad) * SHIP_ASPECT));
+      const len = Math.max(1, Math.min(avail / extra, (w - 2 * pad) * SHIP_ASPECT));
       const thick = len / SHIP_ASPECT;
-      const slack = (avail - len * (1 + room)) / 2;
-      box = { x: (w - thick) / 2, y: pad + slack, w: thick, h: len }; // bow up, plume room below
+      const slack = (avail - len * extra) / 2;
+      box = { x: (w - thick) / 2, y: pad + slack + len * fore, w: thick, h: len }; // bow up, plume room below
     } else {
       const avail = w - 2 * pad;
-      const len = Math.max(1, Math.min(avail / (1 + room), (h - 2 * pad) * SHIP_ASPECT));
+      const len = Math.max(1, Math.min(avail / extra, (h - 2 * pad) * SHIP_ASPECT));
       const thick = len / SHIP_ASPECT;
-      const slack = (avail - len * (1 + room)) / 2;
-      box = { x: pad + slack + (facing === 1 ? len * room : 0), y: (h - thick) / 2, w: len, h: thick };
+      const slack = (avail - len * extra) / 2;
+      box = { x: pad + slack + len * (facing === 1 ? aft : fore), y: (h - thick) / 2, w: len, h: thick };
     }
     layoutFacing = facing;
   }
@@ -728,22 +780,37 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     const c = shipPoint(0.5, 0, box, facing, orientation), m = mark(name);
     return Math.atan2(m.ay - c.y, m.ax - c.x);
   };
+  // the side of the hull the broadside chevrons sit on (ship-local +v), as a canvas direction
+  const sideDir = () => {
+    ensureBox();
+    const c = shipPoint(0.5, 0, box, facing, orientation), o = shipPoint(0.5, 1, box, facing, orientation);
+    return Math.atan2(o.y - c.y, o.x - c.x);
+  };
+  // Travel direction of enemy fire across this panel: down the hull from the
+  // bow when bow-on, up from the stern when tail-on, across it when broadside.
+  const incomingDir = () => {
+    const e = ship && ship.face ? exposure(ship) : 'bow';
+    return e === 'tail' ? fwd() : e === 'side' ? sideDir() + Math.PI : aft();
+  };
 
   function draw(battle, dtReal) {
     const dt = clamp(dtReal || 0, 0, V.MAX_DT);
     time += dt;
     const size = fit(canvas, ctx);
     if (!size) return; // hidden or mid-rotation: skip; layout is redone when a size comes back
-    const ship = battle.shipById ? battle.shipById(shipId) : battle.ships.find((s) => s.id === shipId);
+    ship = battle.shipById ? battle.shipById(shipId) : battle.ships.find((s) => s.id === shipId);
     const enemy = battle.enemyOf ? battle.enemyOf(ship) : battle.ships.find((s) => s !== ship);
     facing = ship.facing === -1 ? -1 : 1;
     if (size.w !== w || size.h !== h || !box || layoutFacing !== facing) { w = size.w; h = size.h; layout(); }
 
     // timers
-    for (const p of PIECES) if (flash[p] > 0) flash[p] = Math.max(0, flash[p] - dt * 3.5);
+    for (const p in flash) if (flash[p] > 0) flash[p] = Math.max(0, flash[p] - dt * 3.5);
     for (let i = pending.length - 1; i >= 0; i--) {
       pending[i].delay -= dt;
-      if (pending[i].delay <= 0) { const p = pending.splice(i, 1)[0]; secondary(p.piece); }
+      if (pending[i].delay <= 0) {
+        const p = pending.splice(i, 1)[0];
+        if (p.kind === 'spill') spill(p.piece); else secondary(p.piece);
+      }
     }
     for (let i = embers.length - 1; i >= 0; i--) { embers[i].ttl -= dt; if (embers[i].ttl <= 0) embers.splice(i, 1); }
     fx.step(dt);
@@ -767,7 +834,7 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     ctx.translate(so.x, so.y);
     drawSilhouette(ctx, ship, box, {
       flash, t: time, warn, bg: COLORS.bg, orientation,
-      active: { pdcL: pdcActive, pdcR: pdcActive },
+      active: { pdc: pdcActive },
     });
     // lingering embers on freshly dead pieces, on top of the silhouette's own dim ember
     if (embers.length) {
@@ -804,11 +871,21 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
     if (wa > 0) { ctx.fillStyle = `rgba(255,240,225,${wa})`; ctx.fillRect(0, 0, w, h); }
   }
 
+  // the room behind the one hit took half the blow: a smaller flash a beat later
+  function spill(piece) {
+    const a = at(piece);
+    const k = shortSide() / 90;
+    bump(piece, 0.5);
+    fx.flash(a, { r: 11 * k, grow: 14 * k, life: 0.3, col: C.hot, col2: C.fire });
+    fx.sparks(a, 6, { speedMin: 50 * k, speedMax: 140 * k, lifeMin: 0.15, lifeMax: 0.35, size: 1.2, col: C.fire });
+    fx.smoke(a, 2, {});
+  }
+
   // second blast 0.15 s after a piece dies, then the ember lingers
   function secondary(piece) {
     const a = at(piece);
     const k = shortSide() / 90; // scale effects with panel size
-    flash[piece] = Math.max(flash[piece], 0.7);
+    bump(piece, 0.7);
     fx.flash(a, { r: 18 * k, grow: 30 * k, life: 0.4, col: C.hot, col2: C.fire });
     fx.ring(a, { r0: 2, vr: 140 * k, life: 0.5, width: 2, col: C.fire });
     fx.debris(a, 14, { speedMin: 40 * k, speedMax: 170 * k });
@@ -830,7 +907,7 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
       case 'pdcHit': {
         if (!mine) break;
         const a = at(ev.piece);
-        flash[ev.piece] = Math.max(flash[ev.piece], 0.35);
+        bump(ev.piece, 0.35);
         fx.sparks(a, 4, { speedMin: 60 * k, speedMax: 150 * k, lifeMin: 0.15, lifeMax: 0.35, size: 1.2 });
         fx.flash(a, { r: 5 * k, life: 0.08, col: C.hot, col2: C.spark });
         break;
@@ -838,46 +915,71 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
       case 'torpHit': {
         if (!mine) break;
         const a = at(ev.piece);
-        flash[ev.piece] = 1;
-        bigImpact(fx, a, 1.0 * k, { away: fwd() });
+        bump(ev.piece, 1);
+        bigImpact(fx, a, 1.0 * k, { away: incomingDir() });
+        if (ev.spill) pending.push({ kind: 'spill', piece: ev.spill, delay: 0.1 });
         break;
       }
       case 'railHit': {
         if (!mine) break;
         const a = at(ev.piece);
-        flash[ev.piece] = 1;
-        bigImpact(fx, a, 1.3 * k, { away: fwd() });
-        // the slug's path straight through the ship, coming from the bow side
+        bump(ev.piece, 1);
+        const ang = incomingDir();
+        bigImpact(fx, a, 1.3 * k, { away: ang });
+        // the slug's path straight through the ship, from the exposed end
         const tilt = (fx.rnd() - 0.5) * 0.3;
-        const ang = aft() + tilt;
-        fx.streak(a, { dx: Math.cos(ang), dy: Math.sin(ang), len: Math.max(box.w, box.h) * 1.8, life: 0.35, width: 3 * k });
+        fx.streak(a, { dx: Math.cos(ang + tilt), dy: Math.sin(ang + tilt), len: Math.max(box.w, box.h) * 1.8, life: 0.35, width: 3 * k });
         fx.ring(a, { r0: 2, vr: 360 * k, life: 0.3, width: 1.5, col: C.white });
         fx.shakeIt(9 * k, 0.45);
+        if (ev.spill) pending.push({ kind: 'spill', piece: ev.spill, delay: 0.1 });
         break;
       }
       case 'pieceDead': {
         if (!mine) break;
-        flash[ev.piece] = Math.max(flash[ev.piece], 0.8);
+        bump(ev.piece, 0.8);
         const a = at(ev.piece);
         fx.debris(a, 8, { speedMin: 30 * k, speedMax: 110 * k });
         fx.smoke(a, 4, {});
-        pending.push({ piece: ev.piece, delay: 0.15 });
+        pending.push({ kind: 'death', piece: ev.piece, delay: 0.15 });
         break;
       }
-      case 'railMiss': {
+      case 'railMiss':
+      case 'torpMiss': {
         if (!mine) break;
-        // the slug streaks past, just off one side of the hull, no flash
+        // the shot streaks past, just off the hull, no flash: alongside when
+        // end-on, past the bow or the stern when broadside
+        const torp = ev.type === 'torpMiss';
         const side = fx.rnd() < 0.5 ? -1 : 1;
-        const p = shipPoint(0.5, side * 1.05, box, facing, orientation);
+        const ang = incomingDir() + side * 0.05;
+        const across = ship && ship.face && exposure(ship) === 'side';
+        const p = across
+          ? shipPoint(side > 0 ? 1.12 : -0.12, 0, box, facing, orientation)
+          : shipPoint(0.5, side * 1.05, box, facing, orientation);
         const a = { ax: clamp(p.x, 4, w - 4), ay: clamp(p.y, 4, h - 4) };
-        const ang = aft() + side * 0.05;
-        fx.streak(a, { dx: Math.cos(ang), dy: Math.sin(ang), len: Math.max(w, h) * 1.4, speed: 900, life: 0.3, width: 2 });
+        if (torp) {
+          const col = shipId === 'me' ? C.them : C.me;
+          fx.streak(a, { dx: Math.cos(ang), dy: Math.sin(ang), len: 30 * k, speed: 260 * k, life: 0.6, width: 2.5 * k, col });
+          fx.sparks(a, 4, { dir: ang + Math.PI, spread: 0.4, speedMin: 20 * k, speedMax: 60 * k, lifeMin: 0.2, lifeMax: 0.4, size: 1, col: C.fire });
+        } else {
+          fx.streak(a, { dx: Math.cos(ang), dy: Math.sin(ang), len: Math.max(w, h) * 1.4, speed: 900, life: 0.3, width: 2 });
+        }
+        break;
+      }
+      case 'turn': {
+        if (!byMe) break;
+        // thruster puffs at the four attitude ports: short, pale blue
+        for (const name of ['thrusterBowTop', 'thrusterBowBottom', 'thrusterSternTop', 'thrusterSternBottom']) {
+          const a = mark(name);
+          fx.flash(a, { r: 6 * k, life: 0.18, col: C.drive, col2: C.drive, core: 0 });
+          fx.sparks(a, 5, { dir: outward(name), spread: 0.5, speedMin: 50 * k, speedMax: 130 * k, lifeMin: 0.12, lifeMax: 0.3, size: 1.2, col: C.drive });
+        }
+        fx.shakeIt(1 * k, 0.2);
         break;
       }
       case 'railFire': {
         if (!byMe) break;
         const a = mark('muzzle');
-        flash.rail = Math.max(flash.rail, 0.6);
+        bump('rail', 0.6);
         fx.flash(a, { r: 20 * k, grow: 30 * k, life: 0.25, col: C.white, col2: C.drive });
         fx.sparks(a, 12, { dir: fwd(), spread: 0.5, speedMin: 200 * k, speedMax: 450 * k, lifeMin: 0.1, lifeMax: 0.25, col: C.drive });
         fx.streak(a, { x: Math.cos(fwd()) * 30 * k, dx: Math.cos(fwd()), dy: Math.sin(fwd()), len: 60 * k, life: 0.2, width: 2 });
@@ -888,7 +990,7 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
         if (!byMe) break;
         // main drive flare out the back, plus a thruster puff on the hull side
         const n = mark('nozzle');
-        flash.drive = Math.max(flash.drive, 0.6);
+        bump('drive', 0.6);
         fx.flash(n, { r: 26 * k, grow: 20 * k, life: 0.5, col: C.white, col2: C.drive, core: 1 });
         fx.sparks(n, 26, { dir: aft(), spread: 0.6, speedMin: 150 * k, speedMax: 420 * k, lifeMin: 0.3, lifeMax: 0.7, size: 2, col: C.drive });
         fx.sparks(n, 10, { dir: aft(), spread: 0.3, speedMin: 80 * k, speedMax: 200 * k, lifeMin: 0.2, lifeMax: 0.5, size: 1.2, col: C.white });
@@ -901,7 +1003,7 @@ export function makeSilhouettePanel(canvas, shipId, opts = {}) {
       }
       case 'torpLaunch': {
         if (!byMe) break;
-        flash.tubes = Math.max(flash.tubes, 0.5);
+        bump('tubes', 0.5);
         for (const name of ['tubeTop', 'tubeBottom']) {
           const a = mark(name);
           fx.flash(a, { r: 10 * k, grow: 14 * k, life: 0.28, col: C.white, col2: C.fire });
