@@ -12,7 +12,7 @@ src/main.js           game loop, active pause, slow-mo, wires modules
 src/numbers.js        every tunable number, one-line reason each
 src/rng.js            seeded random, the only random source
 src/text.js           all player-facing English strings
-src/ships/tachi.js    a ship as data: rooms bow to stern, hp each
+src/ships/tachi.js    a ship as data: rooms bow to stern; armor (plated, double hp), bulkhead (aft wall spill does not cross)
 src/sim/ship.js       rooms, facing, exposure, line of fire, damage, "is beaten"
 src/sim/orders.js     the orders: refusal() and apply(); 'move' carries {heading, speed}
 src/input/drag.js     drag on the map -> move order; input only
@@ -41,7 +41,8 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   `ships[1]` is `'them'` (Pella, facing -1). Each ship: `x, y, vx, vy`
   in km (the fight line starts as the x axis, y is lateral), `facing`,
   `roomOrder` (bow to stern) and `pieces` map of room id to
-  `{hp, maxHp, alive}`; `heading` / `headingTarget` radians on the map (0 is
+  `{hp, maxHp, alive}`, `armor` and `bulkheadAft` maps of room id to true
+  (plated rooms; walls that stop spill, the hull's tear lines); `heading` / `headingTarget` radians on the map (0 is
   +x), `turnLeft` seconds of swing left, `face` (`bow | side | tail`: what the
   enemy sees, derived every step from heading versus bearing, `BOW_CONE`);
   `move {speed, coast}`; `orders {pdc, run}`,
