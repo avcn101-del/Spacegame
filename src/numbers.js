@@ -10,7 +10,7 @@ export const N = {
 
   // --- space ---
   START_RANGE: 12,       // far enough that approach takes about 30 to 45 s
-  ESCAPE_RANGE: 16,      // past this, a running ship is gone
+  ESCAPE_RANGE: 20,      // past this, a running ship is gone; wider than the rail, so a sniper has a band to work in
   DRAG_FULL_PX: 120,     // a drag this long (CSS px) asks for MAX_SPEED
   DRAG_DEAD_PX: 12,      // shorter than this is a tap, not a drag
   ACCEL: 0.06,           // main drive, km/s^2; sets how fast range changes
@@ -51,7 +51,7 @@ export const N = {
   TORP_FLANK_SPEED: 0.5, // fraction of TORP_SPEED while swinging wide: slow enough to make the turn in; the cost of a buried room is time under their PDCs
 
   // --- railgun ---
-  RAIL_RANGE: 10,        // long; the sniper weapon
+  RAIL_RANGE: 15,        // long; the sniper weapon: 5 km past the torpedoes, so a rail ship can shoot where it cannot be shot back
   RAIL_RECHARGE: 40,     // about three shots per battle
   RAIL_START_CHARGE: 20, // capacitors are empty at battle start; first shot comes in the knife fight, not the approach
   RAIL_AIM_TIME: 3,      // the window the target has to Burn

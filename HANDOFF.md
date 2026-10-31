@@ -118,7 +118,7 @@ Measured (arena 30 seeds): brawler vs brawler 40 s avg (44 before), rooms lost
 per battle 6.2 (5.4), brawler vs berserker 23 s. Risks said out loud: crew
 (10 hp, unplated, next to the bridge) is the obvious tap, one torpedo or slug
 there loses tubes, torpedoes and drive; more "broke off" draws, because a
-drive-dead ship drifts past 16 km (open: should that be a win for the other
+drive-dead ship drifts past ESCAPE_RANGE (open: should that be a win for the other
 side; in NOTES). Bulkheads no longer claim to be tear lines in the text.
 
 ## Done this chat: the Belter gunship as data (PR 18)
@@ -136,6 +136,24 @@ played it yet. Owner's line after the tear rule: since the AI turns its stern,
 the owner has to keep turning too, and that is gameplay the mechanics make, not
 randomness (replay 89957: the stern turn cost the AI drive, tubes and crew to
 one salvo). A hangar was asked about and parked: slot variants come next.
+
+## Done this chat: rail 15 km, escape 20 km, the gunship keeps its broadside (PR 19)
+
+The owner played the gunship: not too hard (two wins, 27 s and 45 s). In
+29836 the gunship turned its stern after a salvo and one salvo of four killed
+drive, tubes, crew and bridge (all 10 hp, no plating): `sternAfterSalvo` is
+off for the gunship preset (brawler AI vs gunship 17/13, was 11/19; against a
+human it no longer dies to one salvo). The owner asked whether the rail
+outranges torpedoes (it did not: both 10) and said a sniper that reaches no
+further than a normal gun is no sniper. Measured first: RAIL_RANGE 20 alone
+changes no AI result (fights happen inside 12 km); a sniper AI that stands at
+12 km loses more and draws more (nothing to shoot every 40 s but one room),
+so the AI was left at 9 km. The owner chose RAIL_RANGE 15 and ESCAPE_RANGE 20:
+a 5 km band where a rail ship can shoot and not be shot back. Arena after:
+no pair changed by more than noise; "apart" draws come later, not fewer. Said
+out loud: against the half-drive gunship a human can hold 11 to 15 km and win
+by rail alone in about four minutes; the owner judges whether that is a
+sniper or boring.
 
 After that, in this order, each only if the owner says a battle was boring
 without it: slot variants from a small catalog (a hangar screen before the

@@ -1,5 +1,5 @@
 # STATUS
 
 - Playable: https://spacegame.avcn101.workers.dev/ (Cloudflare Workers, deploys from `main`). Drag to fly (direction is the heading, length the speed), HOLD coasts, six buttons, seven rooms with plating and bulkheads and the bridge in the middle, line-of-fire hits, sections torn off when cut from the bridge, tap a room on their ship to go for it and see its info, salvos of four torpedoes, an enemy that turns its stern after a salvo, a line when a room dies or a section tears off, a second ship (Belter gunship: `?enemy=gunship`, or fly it with `?ship=belter`), replay export as copyable JSON, AUTO mode, enemy presets, arena.
-- Owner said last: played the tear rule, fine for now; since the AI turns its stern the owner has to keep turning too, and that is gameplay the mechanics make, not randomness (replay 89957); no flares; asked about a hangar (answered: slot variants come after the second ship).
-- Being changed: nothing. Next: the owner plays the Belter gunship (`?enemy=gunship`) and says three lines; then slot variants from a small catalog, only if a battle was boring without them.
+- Owner said last: the gunship is not too hard (two wins, replays 40817 and 29836); the railgun must outrange torpedoes or it is no sniper (built: rail 15 km, escape 20 km); the stern-turn dance is gameplay the mechanics make.
+- Being changed: nothing. Next: the owner plays with the longer rail and the gunship that keeps its broadside; then slot variants from a small catalog, only if a battle was boring without them.

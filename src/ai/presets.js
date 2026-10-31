@@ -26,9 +26,10 @@ export const PRESETS = {
     railGamble: 0.0, burnChance: 0.6, runAt: 3, openWhenNoPdc: true, target: 'tubes', sternAfterSalvo: true,
   },
   // The Belter gunship: closes broadside for its three turrets, fires everything, never has a rail to gamble.
+  // It never shows its stern: with no plating, one salvo end-on kills drive, tubes, crew and bridge (replay 29836).
   gunship: {
     ship: 'belter', range: 'close', face: 'side', pdc: 'auto', torps: 'always',
-    railGamble: 0, burnChance: 0.3, runAt: 2, openWhenNoPdc: true, target: 'pdc', sternAfterSalvo: true,
+    railGamble: 0, burnChance: 0.3, runAt: 2, openWhenNoPdc: true, target: 'pdc', sternAfterSalvo: false,
   },
   // Fights until the end, never runs, never dodges.
   berserker: {
