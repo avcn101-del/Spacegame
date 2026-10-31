@@ -16,9 +16,13 @@ export const CATALOG = {
     corvette: { accel: 1, burns: N.BURNS },    // the stock drive
     hot: { accel: 2, burns: 2 },               // twice the push, so the range is yours; one Burn fewer to dodge with
   },
+  rounds: { // the PDC rounds (no room of their own: makeShip reads fit.rounds directly)
+    he: { rakeDps: N.PDC_RAKE_DPS, pierce: false },     // the stock rounds: chew whatever the stream meets first, frame included
+    ap: { rakeDps: N.PDC_RAKE_DPS / 2, pierce: true },  // punch through frame to the job room behind it, but a thin hole does half the harm
+  },
 };
 export const SLOTS = Object.keys(CATALOG);
-export const DEFAULT_FIT = { launcher: 'quad', gun: 'longRail', drive: 'corvette' }; // no pdc slot: every mount is a PDC, always
+export const DEFAULT_FIT = { launcher: 'quad', gun: 'longRail', drive: 'corvette', rounds: 'he' }; // no pdc slot: every mount is a PDC, always
 
 // A fit from a string like "gun:quickRail,drive:hot" (unknown or missing slots stay stock, so an old
 // "pdc:tripleDeck" is dropped) and back.

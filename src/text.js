@@ -107,7 +107,7 @@ export const T = {
   // The hangar: one of two for each slot that has a choice. Names and one line each.
   hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, pick the enemy, then launch.', enemy: 'ENEMY', launch: 'LAUNCH', close: 'CLOSE', hint: 'Tap a room to see what it does; a marked part to swap it.', pdc: 'PDC',
     arcs: (rail, tubes, pdc) => ({ rail: `Rail ${num(rail)} km bow`, tubes: `Tubes ${num(tubes)} km not tail`, pdc: `PDC ${num(pdc)} km own side + ends` }) },
-  slots: { launcher: 'Tubes', gun: 'Railgun', drive: 'Drive' },
+  slots: { launcher: 'Tubes', gun: 'Railgun', drive: 'Drive', rounds: 'PDC rounds' },
   catalog: {
     quad: { name: 'Quad tubes', line: 'Four at once swamp a Guard.' },
     twin: { name: 'Twin tubes', line: 'A Guard kills a bigger share; a wasted salvo costs two.' },
@@ -115,6 +115,8 @@ export const T = {
     quickRail: { name: 'Quick rail', line: 'Two shots in the time of one, but only inside their torpedo range.' },
     corvette: { name: 'Corvette drive', line: 'The stock drive.' },
     hot: { name: 'Hot drive', line: 'Twice the push, so the range is yours; one Burn fewer to dodge with.' },
+    he: { name: 'HE rounds', line: 'The stock. Rake chews what it meets first, frame too: strips mounts, breaks the spine.' },
+    ap: { name: 'AP rounds', line: 'Rake punches through frame to the room behind, at half the harm. Cannot break frame.' },
   },
   // The enemy pick in the hangar: one per AI preset (ai/presets.js), a name and how it fights.
   enemies: {
@@ -131,6 +133,7 @@ export const T = {
     launcher: (v) => `salvo ${num(v.salvo)}, every ${num(v.reload)} s, stock ${num(v.torps)}`,
     gun: (v) => `range ${num(v.range)} km, recharge ${num(v.recharge)} s`,
     drive: (v) => `push x${num(v.accel)}, ${num(v.burns)} Burns`,
+    rounds: (v) => `Rake ${v.rakeDps} hp per mount per s, ${v.pierce ? 'through frame' : 'stops at frame'}`,
   },
 };
 
