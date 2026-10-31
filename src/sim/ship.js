@@ -21,7 +21,7 @@ export function makeShip(id, name, x, facing, design) {
     x, y: 0,            // km; the fight line is the x axis
     vx: 0, vy: 0,       // km/s
     facing,             // +1 the enemy starts to the right, -1 to the left
-    pieces,             // room id -> {hp, maxHp, alive}
+    pieces,             // room id -> {hp, maxHp, alive, torn?}; torn: it broke off and drifts, for the renderer
     armor,              // room id -> true for plated rooms (hp already doubled); for the renderer
     bulkheadAft,        // room id -> true when a bulkhead sits aft of it: spill stops there; the tear lines
     heading: facing === -1 ? Math.PI : 0, // radians, where the bow points on the map (0 = +x)
@@ -106,6 +106,30 @@ export function lineOfFire(ship, rng) {
   if (e === 'tail') return living.slice().reverse();
   const items = living.map((r) => ({ name: r, weight: r === 'bridge' ? N.BRIDGE_WEIGHT : 1 }));
   return lineOfFireAt(ship, rng.weighted(items).name);
+}
+
+// The living rooms with no path to the bridge through living rooms: a dead room is a hole, and
+// everything beyond it along the hull is no longer part of the ship. Called after a room dies.
+export function tornRooms(ship) {
+  const order = ship.roomOrder, i = order.indexOf('bridge');
+  if (i < 0 || !alive(ship, 'bridge')) return [];
+  const torn = [];
+  for (const dir of [1, -1]) {
+    let cut = false;
+    for (let j = i + dir; j >= 0 && j < order.length; j += dir) {
+      if (!alive(ship, order[j])) cut = true;
+      else if (cut) torn.push(order[j]);
+    }
+  }
+  return torn;
+}
+// A room tears off: it is gone like a dead one (hp 0, not alive), and marked torn so the
+// renderer draws it adrift. The tubes take the torpedo stock with them.
+export function tearOff(ship, room) {
+  const pc = ship.pieces[room];
+  pc.hp = 0; pc.alive = false; pc.torn = true;
+  if (room === 'rail' || room === 'sensors') ship.railAim = -1;
+  if (room === 'tubes') ship.torps = 0;
 }
 
 // Apply damage to a room. Returns {room, died}.

@@ -115,7 +115,8 @@ function frame(now) {
   for (const ev of battle.events) {
     if (ev.type === 'railHit' || ev.type === 'pieceDead') slowmo = N.SLOWMO_TIME;
     if (ev.type === 'railHit' || ev.type === 'torpHit' || ev.type === 'pieceDead') hud.hit(ev.ship);
-    if (ev.type === 'pieceDead') hud.toast(`${T.lost[ev.ship]} ${T.pieces[ev.piece].toUpperCase()} ${T.gone}: ${T.roomDead[ev.piece]}.`, 3);
+    if (ev.type === 'pieceDead' && ev.cause !== 'tear') hud.toast(`${T.lost[ev.ship]} ${T.pieces[ev.piece].toUpperCase()} ${T.gone}: ${T.roomDead[ev.piece]}.`, 3);
+    if (ev.type === 'tear') hud.toast(`${T.lost[ev.ship]} ${T.tear[ev.end]}: ${ev.pieces.map((r) => T.pieces[r].toLowerCase()).join(', ')} ${T.adrift}.`, 4);
     for (const r of renderers) r.onEvent(ev);
   }
   battle.events.length = 0;

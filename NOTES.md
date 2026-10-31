@@ -11,11 +11,11 @@ Ideas go here. They are not built until the owner asks.
 - Crew and a Star Trek bridge: orders acknowledged with a delay.
 - Sound.
 - From the DTN "Roci form draft 12" (the owner's artifact), to borrow later, in
-  this order: sections with tear lines and a core, a section with no path to the
-  core detaches (built as bulkheads first); the core in the middle section (move
-  the bridge to slot 4); hardpoints fixed in kind and size, the player picks a
-  variant (slot `kind` in the design, a catalog of 2 or 3 per kind); torpedo
-  launchers at the bow. Not to borrow until a battle is boring without it: plate
+  this order (built so far: bulkheads, the tear rule with the bridge in the
+  middle, a `kind` per slot): hardpoints fixed in kind and size, the player
+  picks a variant (a catalog of 2 or 3 per kind); torpedo launchers at the bow.
+- A ship whose drive is gone and drifts past ESCAPE_RANGE: today a draw
+  ("broke off"); could be a win for the side that still flies. Not to borrow until a battle is boring without it: plate
   thickness, ERA, blast doors, blow-out panels, magazines with vents, reactors
   and power routing, radiators and heat, mass and thrust, the shield bubble.
 - Burn as a torpedo dodge (today it only beats the railgun).

@@ -1,5 +1,6 @@
 // Side-profile silhouette of a Tachi-class corvette (Rocinante-inspired):
-// seven rooms laid along the hull from bow to stern, each lit or dark, plus
+// seven rooms laid along the hull from bow to stern, each lit or dark (a torn
+// room drawn adrift past the end it broke from), plus
 // the small top-down mark for the tactical map and the exposure chevrons.
 // Pure canvas drawing. No DOM, no state kept here: everything comes from
 // (ship, box, fx). No Math.random: every "random" crack or chunk is hashed
@@ -83,23 +84,23 @@ const ROOM_DEFS = {
       [[0.75, -0.46], [0.855, -0.46], [0.84, -0.54], [0.765, -0.54]],   // dish
     ],
   },
-  // Bridge: windows face the bow.
-  bridge: {
-    span: [0.60, 0.74],
-    center: [0.67, 0.0],
-    shapes: [segment(0.60, 0.74, SEAM)],
-  },
   // PDC deck: two turrets, one on the spine, one on the keel, barrels forward.
   pdc: {
+    span: [0.60, 0.74],
+    center: [0.67, 0.0],
+    shapes: [
+      segment(0.60, 0.74, SEAM),
+      [[0.62, -0.36], [0.74, -0.36], [0.725, -0.52], [0.70, -0.60], [0.64, -0.60], [0.615, -0.52]], // top dome
+      [[0.68, -0.585], [0.80, -0.585], [0.80, -0.535], [0.68, -0.535]],                            // top barrel
+      [[0.62, 0.36], [0.74, 0.36], [0.725, 0.52], [0.70, 0.60], [0.64, 0.60], [0.615, 0.52]],       // bottom dome
+      [[0.68, 0.585], [0.80, 0.585], [0.80, 0.535], [0.68, 0.535]],                                // bottom barrel
+    ],
+  },
+  // Bridge: in the middle of the hull, windows face the bow. The room the others must reach.
+  bridge: {
     span: [0.44, 0.60],
     center: [0.52, 0.0],
-    shapes: [
-      segment(0.44, 0.60, SEAM),
-      [[0.46, -0.36], [0.58, -0.36], [0.565, -0.52], [0.54, -0.60], [0.48, -0.60], [0.455, -0.52]], // top dome
-      [[0.52, -0.585], [0.68, -0.585], [0.68, -0.535], [0.52, -0.535]],                            // top barrel
-      [[0.46, 0.36], [0.58, 0.36], [0.565, 0.52], [0.54, 0.60], [0.48, 0.60], [0.455, 0.52]],       // bottom dome
-      [[0.52, 0.585], [0.68, 0.585], [0.68, 0.535], [0.52, 0.535]],                                // bottom barrel
-    ],
+    shapes: [segment(0.44, 0.60, SEAM)],
   },
   // Crew: quarters and damage control, portholes along the side.
   crew: {
@@ -124,7 +125,12 @@ const ROOM_DEFS = {
 };
 
 // Draw order, stern first so the rail barrel ends up on top.
-const DRAW_ORDER = ['drive', 'tubes', 'crew', 'pdc', 'bridge', 'sensors', 'rail'];
+const DRAW_ORDER = ['drive', 'tubes', 'crew', 'bridge', 'pdc', 'sensors', 'rail'];
+// A torn room is drawn this far (in u) past the end it broke from, slightly turned: adrift.
+const TEAR_GAP = 0.10;
+const TEAR_TILT = 0.12;
+const bridgeU = () => ROOM_DEFS.bridge.center[0];
+const isTorn = (ship, name) => !!(ship.pieces && ship.pieces[name] && ship.pieces[name].torn);
 // Bow to stern, the default when a ship carries no roomOrder.
 const BOW_TO_STERN = DRAW_ORDER.slice().reverse();
 
@@ -259,7 +265,7 @@ function drawDetails(ctx, name, ship, box, facing, lit, t) {
   if (name === 'bridge') {
     // three window slits near the forward face
     for (let i = -1; i <= 1; i++) {
-      const a = P(0.725, i * 0.09), b = P(0.685, i * 0.09);
+      const a = P(0.585, i * 0.09), b = P(0.545, i * 0.09);
       ctx.strokeStyle = lit ? 'rgba(220,240,255,0.9)' : 'rgba(60,70,80,0.6)';
       ctx.lineWidth = Math.max(1, s * 0.018);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
@@ -320,7 +326,7 @@ function drawDetails(ctx, name, ship, box, facing, lit, t) {
   } else if (name === 'pdc') {
     // hinge line on each dome
     for (const vv of [-1, 1]) {
-      const a = P(0.47, vv * 0.44), b = P(0.57, vv * 0.44);
+      const a = P(0.63, vv * 0.44), b = P(0.73, vv * 0.44);
       ctx.strokeStyle = lit ? 'rgba(170,190,210,0.5)' : 'rgba(45,52,60,0.6)';
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
@@ -588,8 +594,14 @@ function drawHorizontal(ctx, ship, box, fx, facing) {
   ctx.lineJoin = 'round';
 
   // hull base: a vertical steel gradient, darker when the ship is beaten.
-  // It shows through the seams between rooms as the bulkheads.
-  tracePoly(ctx, HULL, box, facing);
+  // It shows through the seams between rooms as the bulkheads. Torn rooms are not part of it.
+  let hull = HULL;
+  if (DRAW_ORDER.some((n) => isTorn(ship, n))) {
+    let lo = 1, hi = 0;
+    for (const n of DRAW_ORDER) if (!isTorn(ship, n)) { lo = Math.min(lo, ROOM_DEFS[n].span[0]); hi = Math.max(hi, ROOM_DEFS[n].span[1]); }
+    hull = segment(Math.max(0.04, lo), Math.min(1.0, hi));
+  }
+  tracePoly(ctx, hull, box, facing);
   const grad = ctx.createLinearGradient(0, box.y, 0, box.y + box.h);
   grad.addColorStop(0, bridgeAlive ? '#1c2129' : '#14181e');
   grad.addColorStop(0.45, bridgeAlive ? COLORS.steelDark : '#1d232b');
@@ -600,13 +612,24 @@ function drawHorizontal(ctx, ship, box, fx, facing) {
   ctx.strokeStyle = bridgeAlive ? 'rgba(168,188,205,0.7)' : 'rgba(80,90,100,0.6)';
   ctx.stroke();
 
-  for (const name of DRAW_ORDER) drawRoom(ctx, name, ship, box, facing, fx, t);
+  for (const name of DRAW_ORDER) {
+    if (!isTorn(ship, name)) { drawRoom(ctx, name, ship, box, facing, fx, t); continue; }
+    // torn: drawn past the end it broke from, turned a little, as a piece of wreck
+    const def = ROOM_DEFS[name];
+    const aft = def.center[0] < bridgeU();
+    const c = shipPoint(def.center[0], def.center[1], box, facing);
+    ctx.save();
+    ctx.translate((aft ? -1 : 1) * facing * TEAR_GAP * box.w, 0);
+    ctx.translate(c.x, c.y); ctx.rotate((aft ? -1 : 1) * facing * TEAR_TILT); ctx.translate(-c.x, -c.y);
+    drawRoom(ctx, name, ship, box, facing, fx, t);
+    ctx.restore();
+  }
 
   // seams: a dark line at each room boundary, across the whole hull. A bulkhead (spill does
-  // not cross, the hull's tear line) is a thick seam with a bright core.
+  // not cross) is a thick seam with a bright core. No seam for a torn room.
   for (const name of DRAW_ORDER) {
     const u = ROOM_DEFS[name].span[0]; // the boundary aft of this room
-    if (u <= 0.04) continue;
+    if (u <= 0.04 || isTorn(ship, name)) continue;
     const bulk = !!(ship.bulkheadAft && ship.bulkheadAft[name]);
     const a = shipPoint(u, -halfH(u), box, facing), b = shipPoint(u, halfH(u), box, facing);
     ctx.strokeStyle = 'rgba(0,0,0,0.55)';
@@ -629,7 +652,7 @@ function drawHorizontal(ctx, ship, box, fx, facing) {
     ctx.shadowColor = COLORS.warn;
     ctx.strokeStyle = `rgba(255,60,60,${clamp01(fx.warn)})`;
     ctx.lineWidth = 1.5 + fx.warn;
-    tracePoly(ctx, HULL, box, facing);
+    tracePoly(ctx, hull, box, facing);
     ctx.stroke();
     ctx.restore();
   }
