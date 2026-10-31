@@ -1,12 +1,12 @@
 // The orders. refusal() says whether a ship may take an order now; apply() does it.
 // Both the player and the enemy go through here: symmetric rules.
 import { N } from '../numbers.js';
-import { alive, canAimRail, canFireTubes, angleDiff } from './ship.js';
+import { alive, pdcAlive, canAimRail, canFireTubes, angleDiff } from './ship.js';
 
 export const ORDERS = ['move', 'hold', 'guard', 'rake', 'torps', 'rail', 'burn', 'run', 'target'];
 // 'move' takes an argument {heading: radians on the map, speed: km/s >= 0}: the hull swings to
 // the heading and the ship flies along it at that speed, and keeps it.
-// 'target' takes {room: an enemy room id, or null to clear}: torpedoes go for that room, PDCs chew it when broadside.
+// 'target' takes {room: an enemy job room id (pdc3 too), or null to clear}: torpedoes go for that room, PDCs chew it when they see it.
 
 // Returns null if allowed, else a short reason key (see text.js).
 export function refusal(ship, order, ctx, arg) {
@@ -23,7 +23,7 @@ export function refusal(ship, order, ctx, arg) {
       if (ship.move.coast) return 'alreadyHolding';
       return null;
     case 'guard': case 'rake':
-      if (!alive(ship, 'pdc')) return 'noPdc';
+      if (!pdcAlive(ship)) return 'noPdc'; // every mount gone
       if (ship.orders.pdc === order) return 'alreadyPdc';
       return null;
     case 'torps':

@@ -29,7 +29,7 @@ function strike(battle, target, kind, amount, fromX, fromY, room = null) {
 }
 
 export function stepPdc(battle, ship, enemy, dt) {
-  const turrets = pdcCount(ship);
+  const turrets = pdcCount(ship, enemy); // the mounts on the side that sees them
   if (turrets === 0) return;
   const aim = aimFactor(ship);
   const incoming = battle.projectiles.filter((p) => p.kind === 'torp' && p.target === ship.id && !p.dead);

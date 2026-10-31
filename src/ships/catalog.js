@@ -8,10 +8,6 @@ export const CATALOG = {
     quad: { salvo: N.TORP_SALVO, reload: N.TORP_RELOAD, torps: N.TORP_COUNT },               // the stock tubes: four at once swamp a Guard
     twin: { salvo: N.TORP_SALVO / 2, reload: N.TORP_RELOAD / 2, torps: N.TORP_COUNT },       // two every ten seconds: a Guard kills a bigger share, but a wasted salvo costs two, not four
   },
-  pdc: {
-    twinDeck: { turrets: 2, armor: true },     // the stock deck: two turrets behind plate
-    tripleDeck: { turrets: 3, armor: false },  // a third turret where the plate was: Guard and Rake half again stronger, the bow tears off to one torpedo
-  },
   gun: {
     longRail: { range: N.RAIL_RANGE, recharge: N.RAIL_RECHARGE },           // the stock rail: shoots from outside torpedo range
     quickRail: { range: N.TORP_RANGE, recharge: N.RAIL_RECHARGE / 2 },      // two shots in the time of one, but only inside their torpedo range
@@ -22,9 +18,10 @@ export const CATALOG = {
   },
 };
 export const SLOTS = Object.keys(CATALOG);
-export const DEFAULT_FIT = { launcher: 'quad', pdc: 'twinDeck', gun: 'longRail', drive: 'corvette' };
+export const DEFAULT_FIT = { launcher: 'quad', gun: 'longRail', drive: 'corvette' }; // no pdc slot: every mount is a PDC, always
 
-// A fit from a string like "pdc:tripleDeck,gun:quickRail" (unknown or missing slots stay stock) and back.
+// A fit from a string like "gun:quickRail,drive:hot" (unknown or missing slots stay stock, so an old
+// "pdc:tripleDeck" is dropped) and back.
 export function parseFit(text) {
   const fit = { ...DEFAULT_FIT };
   for (const part of String(text || '').split(',')) {

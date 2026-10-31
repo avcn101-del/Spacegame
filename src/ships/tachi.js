@@ -12,7 +12,6 @@ export const TACHI = {
   rooms: [
     { id: 'rail', kind: 'gun' },                            // keel railgun; at the bow so charging in costs you the gun first
     { id: 'sensors', kind: 'sensors' },                     // targeting; dead: weapons hit half as often, no rail aim
-    { id: 'pdc', kind: 'pdc', armor: true, turrets: 2 },    // PDC mounts, two turrets broadside, one end-on; plated (its magazine)
     { id: 'bridge', kind: 'core', armor: true },            // dead: the ship is beaten; plated; the cell every other cell must reach
     { id: 'crew', kind: 'crew' },                           // damage control; dead: reload and recharge at half speed
     { id: 'tubes', kind: 'launcher', armor: true },         // torpedoes; plated (its bays); cannot fire tail-on
@@ -23,21 +22,21 @@ export const TACHI = {
   // other letter is frame, one frame room per 4-connected group of the same letter (bulkheads K,
   // spine S, hull frame F, and the empty hardpoints: reactors R, heat sink H, shield generator X,
   // cockpit C, workshop W, empty slots e c, the vent v, the gun-mount sponsons T and their magazines
-  // m). A: the antenna, the sensors' one cell. P: the six PDC hull mounts, one cell each; the fit's
-  // turret count lights the first of `mounts`, the rest are frame (ship.js buildForm).
+  // m). A: the antenna, the sensors' one cell. P: the six PDC hull mounts placed by the owner, one
+  // cell each, each its own room pdc1..pdc6 in `mounts` order (ship.js makeShip); the R left is frame.
   form: {
     rows: [
       '........TT..................',
       '.FFFKKPFTT..FPFFF...........',
-      'FFeeKKQQQmAKWWBBHHRRKLL.....',
-      'EEeeKKQQQFFKWWBBHHRRKFFFPF..',
+      'FFeeKKQQQmAKWWBBHHRPKLL.....',
+      'EEeeKKQQQFFKWWBBHHRRKFFFFF..',
       'EESSSSSSSSSSSSSSSSGGGGGGGGGG',
-      'EEeeKKDDDFFKccCCXXRRKFFFPF..',
-      'FFeeKKDDDmvKccCCXXRRKLL.....',
+      'EEeeKKDDDFFKccCCXXRRKFFFFF..',
+      'FFeeKKDDDmvKccCCXXRPKLL.....',
       '.FFFKKPFTT..FPFFF...........',
       '........TT..................',
     ],
-    rooms: { G: 'rail', A: 'sensors', P: 'pdc', B: 'bridge', Q: 'crew', D: 'crew', L: 'tubes', E: 'drive' },
-    mounts: [[13, 1], [13, 7], [6, 1], [6, 7], [24, 3], [24, 5]], // fitting order: amidships pair, aft pair, bow pair
+    rooms: { G: 'rail', A: 'sensors', B: 'bridge', Q: 'crew', D: 'crew', L: 'tubes', E: 'drive' },
+    mounts: [[6, 1], [13, 1], [19, 2], [6, 7], [13, 7], [19, 6]], // pdc1..pdc6: above the keel stern to bow, then below
   },
 };

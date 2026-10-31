@@ -157,7 +157,7 @@ function moveShip(b, ship, enemy, dt) {
 
 function updatePhase(b) {
   const r = b.range();
-  const crippled = b.ships.some((s) => alivePieces(s).length <= 3); // 3 of 7 rooms left
+  const crippled = b.ships.some((s) => alivePieces(s).length <= 3); // 3 job rooms left (of 12 on the Tachi, 9 on the Belter)
   if (crippled) b.phase = 'break';
   else if (r <= N.PDC_RANGE) b.phase = 'knife';
   else if (b.phase !== 'knife') b.phase = 'approach';

@@ -14,28 +14,27 @@ export function faceFor(off) {
 }
 
 // fit: slot kind -> variant key from the catalog, for the slots of this design that have one;
-// a variant overrides the room's turrets and armor, or the ship's tubes, rail and drive numbers.
+// a variant overrides the room's armor, or the ship's tubes, rail and drive numbers.
 // The form as cells (ARCHITECTURE.md "The form"): design.form.rows, one letter per cell, '.' void.
 // A letter in design.form.rooms is that job room's cell. Any other letter is frame: each 4-connected
 // group of one letter is its own frame room `frame:<letter><n>` (hp FRAME_HP, no job), added to
-// `pieces`. Row-major, so the numbering is deterministic. Mounts (ARCHITECTURE.md "PDC mounts"): the
-// first `fitted` of design.form.mounts are pdc cells; every other P cell is its own frame room
-// `frame:P<n>`, one cell each. Returns {form, cells, frames}.
-export function buildForm(design, pieces, fitted = 0) {
+// `pieces`. Row-major, so the numbering is deterministic. Mounts (ARCHITECTURE.md "PDC mounts"): each
+// cell of design.form.mounts is its own job room pdc<n>, n from 1 in `mounts` order (makeShip adds
+// the pieces). Returns {form, cells, frames}.
+export function buildForm(design, pieces) {
   const rows = design.form.rows, h = rows.length, w = rows[0].length;
   const cells = rows.map((r) => [...r].map(() => null));
-  const frames = [], count = {}, mounts = design.form.mounts || [];
-  mounts.slice(0, fitted).forEach(([x, y]) => { cells[y][x] = { room: 'pdc', cut: false }; });
+  const frames = [], count = {};
+  (design.form.mounts || []).forEach(([x, y], i) => { cells[y][x] = { room: `pdc${i + 1}`, cut: false }; });
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const ch = rows[y][x];
     if (ch === '.' || cells[y][x]) continue;
     const job = design.form.rooms[ch];
-    if (job && !(ch === 'P' && mounts.length)) { cells[y][x] = { room: job, cut: false }; continue; }
+    if (job) { cells[y][x] = { room: job, cut: false }; continue; }
     count[ch] = (count[ch] || 0) + 1;
     const id = `frame:${ch}${count[ch]}`;
     frames.push(id);
     pieces[id] = { hp: N.FRAME_HP, maxHp: N.FRAME_HP, alive: true };
-    if (ch === 'P') { cells[y][x] = { room: id, cut: false }; continue; } // an empty mount: one cell
     const stack = [[x, y]];
     while (stack.length) {
       const [a, b] = stack.pop();
@@ -59,24 +58,27 @@ export function makeShip(id, name, x, facing, design, fit = {}) {
     const hp = N.ROOM_HP * (plated ? N.ARMOR_HP_MULT : 1);
     pieces[r.id] = { hp, maxHp: hp, alive: true };
     if (plated) armor[r.id] = true;
-    const t = x && x.turrets !== undefined ? x.turrets : r.turrets;
-    if (t) turrets[r.id] = t;
     if (x && r.kind === 'launcher') { salvo = x.salvo; reloadTime = x.reload; torps = x.torps; }
     if (x && r.kind === 'gun') { railRange = x.range; railRecharge = x.recharge; }
     if (x && r.kind === 'drive') { accel = x.accel; burns = x.burns; }
   }
-  const mounts = design.form.mounts;
-  const fitted = mounts ? Math.min(turrets.pdc || 2, mounts.length) : 0; // as turretCount: no number is two
-  const { form, cells, frames } = buildForm(design, pieces, fitted);
-  if (mounts) { form.mounts = mounts.map(([a, b]) => [a, b]); form.fitted = fitted; }
+  // The PDC mounts: one unplated room each, one turret, no pick. In roomOrder they sit where the one
+  // PDC deck sat, after the sensors, in `mounts` order.
+  const mounts = (design.form.mounts || []).map(([a, b]) => [a, b]);
+  const pdcs = mounts.map((_, i) => `pdc${i + 1}`);
+  for (const id of pdcs) { pieces[id] = { hp: N.ROOM_HP, maxHp: N.ROOM_HP, alive: true }; turrets[id] = 1; }
+  const roomOrder = design.rooms.map((r) => r.id);
+  roomOrder.splice(roomOrder.indexOf('sensors') + 1, 0, ...pdcs);
+  const { form, cells, frames } = buildForm(design, pieces);
+  form.mounts = mounts;
   return {
     id, name, design: design.id, fit: { ...fit },
-    form, cells, frames,  // the grid: {w, h, mounts?, fitted?}; cells[y][x] null or {room, cut}; the frame room ids
+    form, cells, frames,  // the grid: {w, h, mounts}; cells[y][x] null or {room, cut}; the frame room ids
     accel,              // fraction of ACCEL this hull's drive gives
     salvo, reloadTime,  // torpedoes per salvo, seconds between salvos
     railRange, railRecharge, // km, seconds
-    turrets,            // room id -> PDC turrets on that deck; all fire broadside, half (rounded up) end-on
-    roomOrder: design.rooms.map((r) => r.id), // bow first
+    turrets,            // room id -> PDC turrets: pdc1..pdcN, one each
+    roomOrder,          // the job rooms, bow first, the mounts pdc1..pdcN after the sensors
     x, y: 0,            // km; the fight line is the x axis
     vx: 0, vy: 0,       // km/s
     facing,             // +1 the enemy starts to the right, -1 to the left
@@ -108,9 +110,21 @@ export const alive = (ship, room) => !!ship.pieces[room] && ship.pieces[room].al
 export const alivePieces = (ship) => ship.roomOrder.filter((r) => ship.pieces[r].alive);
 // Which end the enemy sees right now (the sim keeps ship.face current every step).
 export const exposure = (ship) => ship.face;
-// PDC deck: every turret broadside, half of them (rounded up) end-on.
-export const turretCount = (ship) => ship.turrets.pdc || 2;
-export const pdcCount = (ship) => (alive(ship, 'pdc') ? (exposure(ship) === 'side' ? turretCount(ship) : Math.ceil(turretCount(ship) / 2)) : 0);
+// PDC mounts (ARCHITECTURE.md "PDC mounts"): room ids pdc1..pdcN in form.mounts order.
+export const isPdc = (room) => /^pdc\d+$/.test(room);
+export const pdcRooms = (ship) => (ship.form.mounts || []).map((_, i) => `pdc${i + 1}`);
+export const pdcAlive = (ship) => pdcRooms(ship).some((r) => alive(ship, r));
+// A mount above the keel row is on the top edge, else the bottom.
+export function mountSide(ship, room) {
+  const m = ship.form.mounts[Number(room.slice(3)) - 1];
+  return m[1] < Math.floor(ship.form.h / 2) ? 'top' : 'bottom';
+}
+// The living mounts that see the enemy: from the bow or the stern all of them, from a side that
+// side's. With no enemy given, every living mount.
+export function pdcCount(ship, enemy) {
+  const dir = enemy ? shotFrom(ship, enemy.x, enemy.y) : null;
+  return pdcRooms(ship).filter((r) => alive(ship, r) && (!dir || dir === 'bow' || dir === 'stern' || mountSide(ship, r) === dir)).length;
+}
 export const canFireTubes = (ship) => alive(ship, 'tubes') && ship.torps > 0 && exposure(ship) !== 'tail';
 export const canAimRail = (ship) => alive(ship, 'rail') && alive(ship, 'sensors') && ship.face === 'bow' && ship.turnLeft <= 0;
 // Swing the hull toward headingTarget by dt. Returns true when the swing ends this step.
@@ -124,7 +138,7 @@ export function turnShip(ship, dt) {
   ship.heading += Math.sign(left) * step;
   return false;
 }
-export const hasWeapons = (ship) => alive(ship, 'rail') || alive(ship, 'pdc') || (alive(ship, 'tubes') && ship.torps > 0);
+export const hasWeapons = (ship) => alive(ship, 'rail') || pdcAlive(ship) || (alive(ship, 'tubes') && ship.torps > 0);
 export const isBeaten = (ship) => !alive(ship, 'bridge') || !hasWeapons(ship);
 // Hit chance multiplier from sensors; reload and recharge speed from crew.
 export const aimFactor = (ship) => (alive(ship, 'sensors') ? 1 : N.SENSORS_DEAD_HIT);
@@ -180,10 +194,9 @@ export function lineOfFire(ship, rng, dir) {
   if (live.length === 0) return [];
   return roomsAlong(ship, rng.pick(live));
 }
-// The rooms a shot aimed at `room` meets: of the rays through a living cell of it, the one with the
-// fewest living cells of other rooms in front (ties by the rng). The cover comes first, then the
-// room, then what is behind. Empty when no ray reaches it.
-export function lineOfFireAt(ship, room, dir, rng) {
+// Of the rays from `dir` through a living cell of `room`, those with the fewest living cells of other
+// rooms in front, and that count (Infinity when no ray reaches it).
+function leastCover(ship, room, dir) {
   let best = [], min = Infinity;
   for (const r of rays(ship, dir)) {
     let cover = 0, hit = false;
@@ -196,7 +209,26 @@ export function lineOfFireAt(ship, room, dir, rng) {
     if (cover < min) { min = cover; best = []; }
     best.push(r);
   }
+  return { rays: best, cover: min };
+}
+// The rooms a shot aimed at `room` meets: the least-covered ray to it (ties by the rng). The cover
+// comes first, then the room, then what is behind. Empty when no ray reaches it.
+export function lineOfFireAt(ship, room, dir, rng) {
+  const best = leastCover(ship, room, dir).rays;
   return best.length ? roomsAlong(ship, rng.pick(best)) : [];
+}
+// The living mount of `ship` with the least cover from (fromX, fromY), ties by the rng; null when
+// none is left. The AI's "go for the pdc".
+export function bestMount(ship, fromX, fromY, rng) {
+  const dir = shotFrom(ship, fromX, fromY);
+  let best = [], min = Infinity;
+  for (const r of pdcRooms(ship)) {
+    if (!alive(ship, r)) continue;
+    const c = leastCover(ship, r, dir).cover;
+    if (c < min) { min = c; best = []; }
+    if (c === min) best.push(r);
+  }
+  return best.length ? rng.pick(best) : null;
 }
 // True when some ray from `dir` meets `room` before any other living cell.
 export function exposed(ship, room, dir) {
