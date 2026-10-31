@@ -12,7 +12,7 @@ export const T = {
   hints: {
     hold: 'cut thrust',
     guard: 'vs torpedoes', rake: 'rake hull',
-    torps: 'fire a pair', rail: 'aim 3 s', burn: 'dodge rail', run: 'leave fight',
+    torps: 'fire four', rail: 'aim 3 s', burn: 'dodge rail', run: 'leave fight',
   },
   legend: {
     drag: 'DRAG on the map from your ship: the nose swings to the arrow and the ship flies that way at the speed you asked, and keeps it. Longer drag, faster. The autopilot never rams.',
@@ -22,7 +22,7 @@ export const T = {
     hold: 'Cut the thrust and keep the speed you have. Drag a short arrow to stop.',
     guard: 'PDCs shoot incoming torpedoes first. Safer, slower.',
     rake: 'PDCs chew their hull piece by piece. Torpedoes get through.',
-    torps: 'Two torpedoes. Each kills the exposed room and wounds the next. Their PDCs on Guard can shoot them down.',
+    torps: 'Four torpedoes, three salvos. Each kills the room it reaches and wounds the next. Their PDCs on Guard shoot some down; four at once swamp them.',
     rail: 'Bow only. Three seconds of steady aim, then one shot kills a room and wounds the next. You cannot Burn while aiming.',
     burn: 'A sideways kick. Any Burn while their railgun is aiming makes it miss. Three per battle.',
     run: 'Dump everything into the drive and leave. Ends the battle as an escape.',
