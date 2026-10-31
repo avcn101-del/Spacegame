@@ -57,7 +57,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   const api = {
     showExport(text) { $('#export-text').value = text; $('#exportbox').classList.add('show'); },
     setAuto(on) { auto = on; $('#pm-auto').textContent = on ? T.autoOff : T.auto; document.getElementById('orders').classList.toggle('replay', on || replay); },
-    toast(text) { toast = { text, ttl: 2.0 }; },
+    toast(text, ttl = 2.0) { toast = { text, ttl }; },
     // Pop the silhouette panel of a ship that just took a big hit.
     hit(shipId) { hitTimers[shipId] = 0.8; },
     setReplay(on) { replay = on; document.getElementById('orders').classList.toggle('replay', on || auto); },

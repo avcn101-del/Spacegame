@@ -73,6 +73,12 @@ export const T = {
   },
   warn: { railAimingAtUs: 'ENEMY RAILGUN AIMING. BURN?' , torpsIncoming: 'TORPEDOES INCOMING' },
   pieces: { rail: 'Railgun', sensors: 'Sensors', bridge: 'Bridge', pdc: 'PDC deck', crew: 'Crew', tubes: 'Tubes', drive: 'Drive' },
+  // One line when a room dies: whose, which, and what it costs them from now on.
+  roomDead: {
+    rail: 'no railgun', sensors: 'rail blind, torpedoes and PDCs hit half as often', bridge: 'beaten',
+    pdc: 'no Guard, no Rake', crew: 'reload and recharge at half speed', tubes: 'no torpedoes', drive: 'adrift, no turning, no Burn',
+  },
+  lost: { me: 'OUR', them: 'THEIR' }, gone: 'GONE',
   roomInfo: {
     rail: 'One shot kills a room. Bow only. Dead: no railgun.',
     sensors: 'Firing solutions. Dead: no rail aim, weapons hit half as often.',
