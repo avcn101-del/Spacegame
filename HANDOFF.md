@@ -84,21 +84,25 @@ in Vietnamese mixed with English; answer short, verified facts only, say
 - The owner's replays this session: 6045, 70368 (torpedoes circled), 51965,
   15851 (Burned ship uncatchable), 80172 (win by two lucky bridge hits).
 
-## Next task, proposed (the owner has not said go; ask, estimate 20 minutes)
+## Done this chat: the AI turns its stern after a salvo (PR 15)
 
-The owner says a salvo is too strong: whoever fires first wins, the second
-salvo surely lands. Measured (arena, 40 seeds): room targeting is not the
-cause (an AI that does not target wins 30/1 against brawler, one that targets
-pdc 23/13; making a chosen room always take the slow approach changes
-nothing). The snowball is the exposed-end rule: a bow-on salvo of four kills
-rail, then sensors, then wounds bridge; without sensors the victim's PDCs and
-torpedoes hit half as often. The fix that measured well: a new number
-TORP_DAMAGE 5 (a torpedo does half a room, the rail still 10): battles 36 to
-50 s, rooms lost per battle 6.5 to 3.8, first room dies at 27 s instead of
-24. Side effect to say out loud: sniper vs brawler becomes 30 draws of 40
-(torpedoes from range too weak, both drift). If the owner still wants a
-trade-off for locking a room, the natural one is a lock time (tap, then the
-sensors need a few seconds, like the rail aim); it is in NOTES.
+The owner said a salvo is too strong: whoever fires first wins. Measured (arena,
+40 seeds): room targeting is not the cause; the snowball is the exposed-end rule,
+a bow-on salvo of four kills rail, then sensors, then wounds bridge. Two fixes
+were on the table. TORP_DAMAGE 5 (a torpedo does half a room) measured well on
+averages but, replayed on the owner's battle 46641, still lost rail and sensors to
+the same three hits (two rooms of 10 hp side by side, spill adds up); it only
+saved the bridge. The owner's own tactic, fire and then turn the stern to them,
+was built into the AI instead (`sternAfterSalvo` in presets, all but berserker):
+after a salvo or with torpedoes coming, outside PDC range, the AI shows its
+stern and holds range, and swings back when the tubes are nearly loaded. It
+does not when the enemy's bracket is on its drive: a stern-on ship that loses
+its drive is a hulk facing away that never fires again (sniper vs sniper went
+to 30 timeouts before that clause). Measured brawler vs brawler: torpedo hits
+bow-on 120 to 8, rooms lost per battle 6.2 to 5.4, battles 38 to 44 s, brawler
+now beats berserker 28/2. TORP_DAMAGE 5 stays in the pocket if the owner still
+says the first salvo wins. The owner's replays: 46641, 7852 (tap bridge, salvo,
+stern: win in 24 s with no room lost).
 
 ## After that, agreed in principle (ask go, give the estimate first)
 
