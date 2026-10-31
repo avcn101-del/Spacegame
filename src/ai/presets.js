@@ -11,8 +11,8 @@ export const PRESETS = {
     railGamble: 0.3,        // chance per tick to fire at a target that can still dodge
     burnChance: 0.3,        // chance per tick to burn while a railgun aims at it
     runAt: 2,               // run when this few pieces are left and losing
-    openWhenNoPdc: true,    // back off when both PDCs are gone
-    target: 'pdc',          // the enemy room it goes for: torpedoes flank to it, PDCs chew it broadside; null for the exposed end
+    openWhenNoPdc: true,    // back off when every PDC mount is gone
+    target: 'pdc',          // the enemy room it goes for: torpedoes flank to it, PDCs chew it when they see it; 'pdc' is the least-covered living mount; null for the exposed end
     sternAfterSalvo: true,  // after firing, swing the stern to them while the tubes reload: their answer meets drive and tubes, not rail and sensors
   },
   // Stays out at torpedo range, lets the railgun do the work.
@@ -25,7 +25,7 @@ export const PRESETS = {
     range: 'close', face: 'side', pdc: 'guard', torps: 'guardDown',
     railGamble: 0.0, burnChance: 0.6, runAt: 3, openWhenNoPdc: true, target: 'tubes', sternAfterSalvo: true,
   },
-  // The Belter gunship: closes broadside for its three turrets, fires everything, never has a rail to gamble.
+  // The Belter gunship: closes broadside for its mounts, fires everything, never has a rail to gamble.
   // It never shows its stern: with no plating, one salvo end-on kills drive, tubes, crew and bridge (replay 29836).
   gunship: {
     ship: 'belter', range: 'close', face: 'side', pdc: 'auto', torps: 'always',

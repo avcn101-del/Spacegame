@@ -1,5 +1,5 @@
 // Headless arena: preset vs preset over many seeds. The balance tool.
-// Run: node tools/arena.mjs [me=brawler] [them=sniper] [seeds=100] [mefit=pdc:tripleDeck] [themfit=...]
+// Run: node tools/arena.mjs [me=brawler] [them=sniper] [seeds=100] [mefit=gun:quickRail] [themfit=...]
 // Or:  node tools/arena.mjs all            (every preset against every preset)
 import { makeBattle } from '../src/sim/battle.js';
 import { makeEnemy } from '../src/ai/enemy.js';

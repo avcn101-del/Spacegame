@@ -1,7 +1,7 @@
 // The enemy: same orders as the player, from a small rule table shaped by a preset.
 // Thinks once per AI_TICK seconds. Uses the battle's seeded rng.
 import { N } from '../numbers.js';
-import { alivePieces, alive, canAimRail, angleDiff } from '../sim/ship.js';
+import { alivePieces, alive, pdcAlive, isPdc, bestMount, canAimRail, angleDiff } from '../sim/ship.js';
 import { PRESETS, DEFAULT_PRESET } from './presets.js';
 import { makeRng } from '../rng.js';
 
@@ -40,8 +40,14 @@ function think(b, P, me, you, give, rng) {
   // Burn: their railgun is aiming at us.
   if (you.railAim >= 0 && me.burns > 0 && rng.chance(P.burnChance)) give('burn');
 
-  // Target room, by preset. Dropped by the sim when that room dies; then the exposed end.
-  if (P.target && alive(you, P.target) && me.target !== P.target) give('target', { room: P.target });
+  // Target room, by preset. Dropped by the sim when that room dies; then the exposed end. 'pdc': the
+  // living mount with the least cover from here, kept until it dies, then the next.
+  if (P.target === 'pdc') {
+    if (!(me.target && isPdc(me.target) && alive(you, me.target))) {
+      const m = bestMount(you, me.x, me.y, rng);
+      if (m) give('target', { room: m });
+    }
+  } else if (P.target && alive(you, P.target) && me.target !== P.target) give('target', { room: P.target });
 
   // PDC mode.
   if (P.pdc === 'auto') {
@@ -50,7 +56,7 @@ function think(b, P, me, you, give, rng) {
   } else give(P.pdc);
 
   // Torpedoes.
-  if (P.torps === 'always' || (P.torps === 'guardDown' && !alive(you, 'pdc'))) give('torps');
+  if (P.torps === 'always' || (P.torps === 'guardDown' && !pdcAlive(you))) give('torps');
 
   // Railgun: sure shot when they cannot dodge (no burns, or aiming themselves); otherwise a gamble.
   if (canAimRail(me) && (you.burns === 0 || you.railAim >= 0 || rng.chance(P.railGamble))) give('rail');
@@ -60,7 +66,7 @@ function think(b, P, me, you, give, rng) {
   // a new heading throws the aim away.
   if (!me.orders.run && me.railAim < 0) {
     let wantOpen = P.range === 'open';
-    if (P.openWhenNoPdc && !alive(me, 'pdc') && (alive(me, 'rail') || me.torps > 0)) wantOpen = true;
+    if (P.openWhenNoPdc && !pdcAlive(me) && (alive(me, 'rail') || me.torps > 0)) wantOpen = true;
     else if (P.openWhenNoPdc && mine < yours - 2) wantOpen = true;
     if (!alive(you, 'drive')) wantOpen = false; // a drifting cripple gets finished, not avoided
     const err = b.range() - (wantOpen ? N.RANGE_OPEN : N.RANGE_CLOSE);

@@ -1,7 +1,7 @@
 // Game loop. Owns time: real dt, active pause, slow-mo beats, fixed sim steps.
 // Wires sim, enemy, renderers and HUD. No game rules live here.
 import { N } from './numbers.js';
-import { T } from './text.js';
+import { T, roomKey } from './text.js';
 import { makeBattle } from './sim/battle.js';
 import { makeEnemy } from './ai/enemy.js';
 import { makeTactical, makeSilhouettePanel } from './render/canvas.js';
@@ -10,7 +10,7 @@ import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
 import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
 import { DESIGNS, DEFAULT_DESIGN } from './ships/index.js';
 import { parseFit, fitString, DEFAULT_FIT } from './ships/catalog.js';
-import { turretCount, makeShip } from './sim/ship.js';
+import { makeShip } from './sim/ship.js';
 import { attachDrag } from './input/drag.js';
 import { attachTap } from './input/tap.js';
 
@@ -134,9 +134,9 @@ function frame(now) {
     const frameDead = ev.type === 'pieceDead' && isFrame(ev.piece); // a frame room dying is a flash, not a beat or a line
     if (ev.type === 'railHit' || (ev.type === 'pieceDead' && !frameDead)) slowmo = N.SLOWMO_TIME;
     if (ev.type === 'railHit' || ev.type === 'torpHit' || (ev.type === 'pieceDead' && !frameDead)) hud.hit(ev.ship);
-    if (ev.type === 'pieceDead' && ev.cause !== 'tear' && !frameDead) hud.toast(`${T.lost[ev.ship]} ${T.pieces[ev.piece].toUpperCase()} ${T.gone}: ${T.roomDead[ev.piece]}.`, 3);
+    if (ev.type === 'pieceDead' && ev.cause !== 'tear' && !frameDead) hud.toast(`${T.lost[ev.ship]} ${T.pieces[roomKey(ev.piece)].toUpperCase()} ${T.gone}: ${T.roomDead[roomKey(ev.piece)]}.`, 3);
     if (ev.type === 'tear') {
-      const names = [...new Set(ev.pieces.map((r) => (T.pieces[r] || T.pieces.frame).toLowerCase()))]; // frame rooms fold into one word
+      const names = [...new Set(ev.pieces.map((r) => T.pieces[roomKey(r)].toLowerCase()))]; // frame rooms and PDC mounts fold into one word each
       hud.toast(ev.pieces.every(isFrame)
         ? `${T.lost[ev.ship]} ${T.frameAdrift}.`
         : `${T.lost[ev.ship]} ${T.tear[ev.end]}: ${names.join(', ')} ${T.adrift}.`, 4);
@@ -155,25 +155,25 @@ attachDrag(document.getElementById('tactical'), tactical, () => battle, (arg) =>
   if (why) hud.toast(T.refusal[why]);
 });
 
-// What a room does, in one line; the PDC line carries that ship's turret count.
-const roomInfo = (ship, room) => (typeof T.roomInfo[room] === 'function' ? T.roomInfo[room](turretCount(ship)) : T.roomInfo[room]);
+// What a room does, in one line; every PDC mount shares the one line.
+const roomInfo = (room) => T.roomInfo[roomKey(room)];
 // Tap a room on their ship: go for it (tap again to clear). Tap a room on ours: what it does.
 attachTap(document.getElementById('sil-them'), (x, y) => {
   if (replayer || autoPilot) return;
   const room = panelThem.roomAt(x, y);
   if (!room) return;
   const me = battle.ships[0], pc = battle.ships[1].pieces[room];
-  const info = `${T.pieces[room]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(battle.ships[1], room)}`;
+  const info = `${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`;
   const arg = { room: me.target === room ? null : room };
   const why = battle.order('me', 'target', arg);
   if (why) hud.toast(`${T.refusal[why]} ${info}`);
-  else hud.toast(arg.room ? `${T.order.target} ${T.pieces[room].toLowerCase()}. ${info}` : `${T.order.targetCleared} ${info}`);
+  else hud.toast(arg.room ? `${T.order.target} ${T.pieces[roomKey(room)].toLowerCase()}. ${info}` : `${T.order.targetCleared} ${info}`);
 });
 attachTap(document.getElementById('sil-me'), (x, y) => {
   const room = panelMe.roomAt(x, y);
   if (!room) return;
   const pc = battle.ships[0].pieces[room];
-  hud.toast(`${T.pieces[room]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(battle.ships[0], room)}`);
+  hud.toast(`${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`);
 });
 
 start();

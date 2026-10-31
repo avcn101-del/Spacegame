@@ -1,4 +1,8 @@
 // Every player-facing string, in one place.
+import { isPdc } from './sim/ship.js';
+
+const num = (v) => String(Math.round(v * 10) / 10); // plain: no decimals unless needed
+
 export const T = {
   title: 'ROCINANTE',
   ships: { me: 'Rocinante', them: 'Pella' },
@@ -16,8 +20,8 @@ export const T = {
   },
   legend: {
     drag: 'DRAG on the map from your ship: the nose swings to the arrow and the ship flies that way at the speed you asked, and keeps it. Longer drag, faster. The autopilot never rams.',
-    bow: 'Nose within 45 degrees of them. Railgun can aim. They hit your rail first, then sensors, then the PDC deck.',
-    side: 'Hull across the line to them. Both PDC turrets fire. Every room is exposed, hits land anywhere.',
+    bow: 'Nose within 45 degrees of them. Railgun can aim. They hit your rail first, then sensors, then the PDC mounts.',
+    side: 'Hull across the line to them. The PDCs on the side facing them fire. Every room is exposed, hits land anywhere.',
     tail: 'Stern toward them. No tubes, no rail. They hit your drive first.',
     hold: 'Cut the thrust and keep the speed you have. Drag a short arrow to stop.',
     guard: 'PDCs shoot incoming torpedoes first. Safer, slower.',
@@ -26,8 +30,8 @@ export const T = {
     rail: 'Bow only. Three seconds of steady aim, then one shot kills a room and wounds the next. You cannot Burn while aiming.',
     burn: 'The drive at full for an instant, the way the nose points: bow-on it closes, stern-on it opens, broadside it sidesteps. Any Burn while their railgun is aiming makes it miss. Three per battle.',
     run: 'Dump everything into the drive and leave. Ends the battle as an escape.',
-    armor: 'Plated rooms (thick bright edge: bridge, PDC deck, tubes) take two torpedoes. Bulkheads (thick seams) stop damage spilling into the next room.',
-    tear: 'A dead room is a hole. Rooms cut off from the bridge by it tear off and drift away. The bridge sits in the middle: PDC deck dead loses the bow (railgun, sensors); crew dead loses the stern (tubes, their torpedoes, drive).',
+    armor: 'Plated rooms (thick bright edge: bridge, tubes) take two torpedoes. Bulkheads (thick seams) stop damage spilling into the next room.',
+    tear: 'A dead room is a hole. Rooms cut off from the bridge by it tear off and drift away. A dead PDC mount is one gun fewer, nothing tears. The bridge sits in the middle: crew dead loses the stern (tubes, their torpedoes, drive).',
     tap: 'TAP a room on their ship to go for it: torpedoes swing wide to reach a room that is not exposed (longer inside their PDCs), PDCs chew it only when they are broadside. Tap it again to clear. Tap a room on your ship to see what it does.',
   },
   pause: 'PAUSE', resume: 'RESUME', restart: 'RESTART', newBattle: 'NEW BATTLE',
@@ -57,7 +61,7 @@ export const T = {
   refusal: {
     noDrive: 'Drive is gone. We drift.',
     running: 'We are already running.',
-    noPdc: 'Both PDCs are gone.',
+    noPdc: 'All the PDCs are gone.',
     noTubes: 'Tubes are gone.',
     noTorps: 'No torpedoes left.',
     reloading: 'Tubes reloading.',
@@ -74,11 +78,11 @@ export const T = {
     badTarget: 'No such room.', roomDead: 'That room is already gone.', sameTarget: 'Already going for it.', noTarget: 'No room targeted.',
   },
   warn: { railAimingAtUs: 'ENEMY RAILGUN AIMING. BURN?' , torpsIncoming: 'TORPEDOES INCOMING' },
-  pieces: { rail: 'Railgun', sensors: 'Sensors', bridge: 'Bridge', pdc: 'PDC deck', crew: 'Crew', tubes: 'Tubes', drive: 'Drive', frame: 'Frame' },
+  pieces: { rail: 'Railgun', sensors: 'Sensors', bridge: 'Bridge', pdc: 'PDC mount', crew: 'Crew', tubes: 'Tubes', drive: 'Drive', frame: 'Frame' },
   // One line when a room dies: whose, which, and what it costs them from now on.
   roomDead: {
     rail: 'no railgun', sensors: 'rail blind, torpedoes and PDCs hit half as often', bridge: 'beaten',
-    pdc: 'no Guard, no Rake', crew: 'reload and recharge at half speed', tubes: 'no torpedoes', drive: 'adrift, no turning, no Burn',
+    pdc: 'one gun fewer', crew: 'reload and recharge at half speed', tubes: 'no torpedoes', drive: 'adrift, no turning, no Burn',
   },
   // One line when a section tears off: whose, which end, what went with it.
   tear: { bow: 'BOW TORE OFF', stern: 'STERN TORE OFF' }, adrift: 'adrift', frameAdrift: 'frame adrift',
@@ -87,7 +91,7 @@ export const T = {
     rail: 'One shot kills a room. Bow only. Dead: no railgun.',
     sensors: 'Firing solutions. Dead: no rail aim, weapons hit half as often.',
     bridge: 'Takes two hits. Every room must reach it, or it tears off. Dead: the ship is beaten.',
-    pdc: (turrets) => `${turrets} turrets broadside, ${Math.ceil(turrets / 2)} end-on. Dead: no Guard, no Rake, and the bow tears off.`, // a function: the count is the ship's
+    pdc: 'One PDC. Fires at what is on its side, or ahead and astern. Dead: one gun fewer.',
     crew: 'Damage control. Dead: reload and recharge at half speed, and the stern tears off.',
     tubes: 'Torpedoes, four a salvo. Dead: no torpedoes, and the drive tears off.',
     drive: 'Dead: no moving, no turning, no Burn.',
@@ -100,16 +104,24 @@ export const T = {
   },
   again: 'NEW BATTLE', same: 'SAME SEED', seed: 'seed',
   // The hangar: one of two for each slot that has a choice. Names and one line each.
-  hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, then launch.', launch: 'LAUNCH', close: 'CLOSE', hint: 'Tap a marked part to swap it. Dashed is an empty PDC mount.' },
-  slots: { launcher: 'Tubes', pdc: 'PDC deck', gun: 'Railgun', drive: 'Drive' },
+  hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, then launch.', launch: 'LAUNCH', close: 'CLOSE', hint: 'Tap a marked part to swap it.' },
+  slots: { launcher: 'Tubes', gun: 'Railgun', drive: 'Drive' },
   catalog: {
-    quad: { name: 'Quad tubes', line: 'Four a salvo, every 20 s. Swamps a Guard.' },
-    twin: { name: 'Twin tubes', line: 'Two a salvo, every 10 s. A Guard kills a bigger share; a wasted salvo costs two.' },
-    twinDeck: { name: 'Twin deck', line: 'Two turrets behind plate.' },
-    tripleDeck: { name: 'Triple deck', line: 'Three turrets, no plate: the bow tears off to one torpedo.' },
-    longRail: { name: 'Long rail', line: '15 km, one shot every 40 s. Outranges their torpedoes.' },
-    quickRail: { name: 'Quick rail', line: '10 km, one shot every 20 s. Inside their torpedo range.' },
-    corvette: { name: 'Corvette drive', line: 'Three Burns.' },
-    hot: { name: 'Hot drive', line: 'Twice the push, two Burns.' },
+    quad: { name: 'Quad tubes', line: 'Four at once swamp a Guard.' },
+    twin: { name: 'Twin tubes', line: 'A Guard kills a bigger share; a wasted salvo costs two.' },
+    longRail: { name: 'Long rail', line: 'Shoots from outside their torpedo range.' },
+    quickRail: { name: 'Quick rail', line: 'Two shots in the time of one, but only inside their torpedo range.' },
+    corvette: { name: 'Corvette drive', line: 'The stock drive.' },
+    hot: { name: 'Hot drive', line: 'Twice the push, so the range is yours; one Burn fewer to dodge with.' },
+  },
+  // A variant's numbers, from its catalog entry, for the hangar's list.
+  variantStats: {
+    launcher: (v) => `salvo ${num(v.salvo)}, every ${num(v.reload)} s, stock ${num(v.torps)}`,
+    gun: (v) => `range ${num(v.range)} km, recharge ${num(v.recharge)} s`,
+    drive: (v) => `push x${num(v.accel)}, ${num(v.burns)} Burns`,
   },
 };
+
+// The text key of a room: every PDC mount (pdc3) reads as 'pdc'; anything else as itself, and an
+// unnamed frame room as 'frame'. Use for T.pieces, T.roomDead and T.roomInfo.
+export const roomKey = (id) => (isPdc(id) ? 'pdc' : T.pieces[id] ? id : 'frame');
