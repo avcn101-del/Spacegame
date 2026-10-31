@@ -190,4 +190,4 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    removed or doubled again, not tuned finely. Then PDC ammo (NOTES).
 5. Open: a drive-dead ship drifting past 20 km is a draw today; should it be
    a win for the side that still flies. Louder now (see the stalemate).
-Not the 2D grid, not 2 v 2 (both in NOTES).
+Not 2 v 2, not diagonal rays, not the other rooms yet (all in NOTES).
