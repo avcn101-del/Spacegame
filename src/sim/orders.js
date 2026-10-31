@@ -1,10 +1,11 @@
 // The orders. refusal() says whether a ship may take an order now; apply() does it.
 // Both the player and the enemy go through here: symmetric rules.
 import { N } from '../numbers.js';
-import { alive, canAimRail, canFireTubes } from './ship.js';
+import { alive, canAimRail, canFireTubes, angleDiff } from './ship.js';
 
 export const ORDERS = ['move', 'hold', 'guard', 'rake', 'torps', 'rail', 'burn', 'run', 'target'];
-// 'move' takes an argument {face: 'bow'|'side'|'tail', speed: km/s >= 0, dir: 1|-1}.
+// 'move' takes an argument {heading: radians on the map, speed: km/s >= 0}: the hull swings to
+// the heading and the ship flies along it at that speed, and keeps it.
 // 'target' takes {room: an enemy room id, or null to clear}: torpedoes go for that room, PDCs chew it when broadside.
 
 // Returns null if allowed, else a short reason key (see text.js).
@@ -14,12 +15,12 @@ export function refusal(ship, order, ctx, arg) {
     case 'move':
       if (!drive) return 'noDrive';
       if (ship.orders.run) return 'running';
-      if (!arg || !['bow', 'side', 'tail'].includes(arg.face) || !(arg.speed >= 0)) return 'badMove';
+      if (!arg || !Number.isFinite(arg.heading) || !(arg.speed >= 0)) return 'badMove';
       return null;
     case 'hold':
       if (!drive) return 'noDrive';
       if (ship.orders.run) return 'running';
-      if (ship.move.speed === 0) return 'alreadyHolding';
+      if (ship.move.coast) return 'alreadyHolding';
       return null;
     case 'guard': case 'rake':
       if (!alive(ship, 'pdc')) return 'noPdc';
@@ -65,12 +66,11 @@ export function refusal(ship, order, ctx, arg) {
 export function apply(ship, order, battle, arg) {
   switch (order) {
     case 'move':
-      // circling and holding lock the current range; bow and tail change it
-      ship.move = { speed: Math.min(N.MAX_SPEED, arg.speed), dir: arg.dir < 0 ? -1 : 1, holdRange: arg.face === 'side' ? battle.range() : null };
-      setFace(ship, arg.face, battle);
+      ship.move = { speed: Math.min(N.MAX_SPEED, arg.speed), coast: false };
+      setHeading(ship, arg.heading, battle);
       break;
     case 'hold':
-      ship.move = { speed: 0, dir: ship.move.dir, holdRange: battle.range() }; break;
+      ship.move = { speed: ship.move.speed, coast: true }; break; // thrust off, velocity kept
     case 'guard': case 'rake':
       ship.orders.pdc = order; break;
     case 'torps':
@@ -81,18 +81,20 @@ export function apply(ship, order, battle, arg) {
       battle.burn(ship); break;
     case 'run':
       ship.orders.run = true;
-      ship.move = { speed: N.MAX_SPEED, dir: ship.move.dir, holdRange: null };
-      setFace(ship, 'tail', battle);
+      ship.move = { speed: N.MAX_SPEED, coast: false };
+      { const e = battle.enemyOf(ship); setHeading(ship, Math.atan2(ship.y - e.y, ship.x - e.x), battle); } // straight away from them
       break;
     case 'target':
       ship.target = arg && arg.room ? arg.room : null; break;
   }
 }
 
-function setFace(ship, face, battle) {
-  if (ship.faceTarget === face) return;
-  ship.faceTarget = face;
-  ship.turnLeft = N.FACE_TURN_TIME;
+// Swing the hull to a heading: the time is proportional to the angle (90 degrees = FACE_TURN_TIME).
+function setHeading(ship, heading, battle) {
+  const d = angleDiff(heading, ship.heading);
+  ship.headingTarget = ship.heading + d;
+  if (Math.abs(d) < 1e-3) { ship.heading = ship.headingTarget; ship.turnLeft = 0; return; }
+  ship.turnLeft = (Math.abs(d) / (Math.PI / 2)) * N.FACE_TURN_TIME;
   ship.railAim = -1; // swinging the hull throws off the aim
-  battle.emit({ type: 'turn', x: ship.x, y: ship.y, by: ship.id, to: face });
+  battle.emit({ type: 'turn', x: ship.x, y: ship.y, by: ship.id, to: heading });
 }

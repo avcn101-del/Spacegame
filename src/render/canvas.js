@@ -21,7 +21,6 @@ const V = {
   MARK_LEN: 14,        // px, the top-down mark length
   STAR_PX_PER_KM: 30,  // parallax base: how far the far layer slides per km of camera travel
   GHOST_RAY_PX: 170,   // px, the faint guide rays while dragging a move order
-  GHOST_ARC_PX: 22,    // px, radius of the circling arc drawn around the enemy mark
 };
 
 // --- deterministic numbers ----------------------------------------------------
@@ -47,28 +46,11 @@ const C = {
 // The drag ghost's color per face: bow is the 'me' blue-white, side amber, tail red-ish.
 const GHOST_COL = { bow: C.me, side: C.amber, tail: C.tailRed };
 
-// Nose angle offset from the bearing to the enemy, per face. 'side' is
-// +-PI/2: the hull lies across the line of fire, nose leading the circling
-// direction (move.dir), so the mark shows which way the ship goes round.
-const FACE_OFFSET = { bow: 0, side: Math.PI / 2, tail: Math.PI };
-function faceOffset(face, dir) {
-  if (face === 'side') return (dir < 0 ? -1 : 1) * Math.PI / 2;
-  return FACE_OFFSET[face] !== undefined ? FACE_OFFSET[face] : 0;
-}
-
-// Where the ship's nose points on the map, in radians, given the bearing to
-// the enemy: the current face, or, while turning, a smooth swing the short
-// way round from the old face to the target over FACE_TURN_TIME (bow -> tail
-// passes through side, as the sim treats it).
+// Where the ship's nose points on the map, in radians: the sim's heading (the
+// camera does not rotate, so map and screen angles agree). Falls back to the
+// bearing to the enemy for a ship without one.
 function noseAngle(ship, bearing) {
-  const dir = ship.move ? ship.move.dir : 1;
-  const from = faceOffset(ship.face, dir);
-  const to = faceOffset(ship.faceTarget, dir);
-  let k = 1;
-  if (ship.turnLeft > 0 && N.FACE_TURN_TIME > 0) k = clamp01(1 - ship.turnLeft / N.FACE_TURN_TIME);
-  const ease = k * k * (3 - 2 * k);
-  const d = Math.atan2(Math.sin(to - from), Math.cos(to - from));
-  return bearing + from + d * ease;
+  return Number.isFinite(ship.heading) ? ship.heading : bearing;
 }
 
 // --- canvas sizing -----------------------------------------------------------
@@ -385,9 +367,9 @@ function drawStars(ctx, stars, cam, w, h, time) {
 // - toWorld(sx, sy) -> {x, y}: the inverse.
 // - shipScreen(shipId) -> {x, y} of that ship's mark from the last drawn
 //   battle, or null before the first draw.
-// - setGhost(ghost): null, or {sx, sy, ex, ey, face, speed, dir}, the move
-//   order being dragged (CSS px start and finger, face 'bow'|'side'|'tail',
-//   speed 0..1 of MAX_SPEED, dir +1/-1). Drawn over the map each frame until
+// - setGhost(ghost): null, or {sx, sy, ex, ey, heading, face, speed}, the move
+//   order being dragged (CSS px start and finger, heading in screen radians,
+//   face 'bow'|'side'|'tail' as a color hint, speed 0..1 of MAX_SPEED). Drawn over the map each frame until
 //   cleared; it rides with the camera and draws while paused (dtReal 0).
 export function makeTactical(canvas, opts = {}) {
   const ctx = canvas.getContext('2d');
@@ -458,10 +440,9 @@ export function makeTactical(canvas, opts = {}) {
     if (wa > 0) { ctx.fillStyle = `rgba(255,240,225,${wa})`; ctx.fillRect(0, 0, w, h); }
   }
 
-  // The move order under the finger: guide rays for the three zones, an
-  // arrow from the 'me' mark in the drag direction as long as the asked
-  // speed, a faint ghost of the mark turned to the asked facing at its end,
-  // and for 'side' a small arc round the enemy showing the circling direction.
+  // The move order under the finger: guide rays for the bow, broadside and
+  // stern zones, an arrow from the 'me' mark along the drag as long as the
+  // asked speed, and a faint ghost of the mark turned to that heading at its end.
   function drawGhost(battle) {
     const me = battle.shipById ? battle.shipById('me') : battle.ships[0];
     const them = battle.enemyOf ? battle.enemyOf(me) : battle.ships[1];
@@ -470,7 +451,6 @@ export function makeTactical(canvas, opts = {}) {
     const bearing = Math.atan2(q.y - p.y, q.x - p.x);
     const face = GHOST_COL[ghost.face] ? ghost.face : 'bow';
     const col = GHOST_COL[face];
-    const dir = ghost.dir < 0 ? -1 : 1;
     const speed = clamp01(ghost.speed || 0);
     const pulse = 0.75 + 0.25 * Math.sin(time * 6);
     ctx.save();
@@ -490,10 +470,10 @@ export function makeTactical(canvas, opts = {}) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // the arrow: along the finger's drag, length = asked speed. No drag yet: along the face itself.
+    // the arrow: along the finger's drag, length = asked speed. No drag yet: along the current nose.
     const ddx = (ghost.ex || 0) - (ghost.sx || 0), ddy = (ghost.ey || 0) - (ghost.sy || 0);
-    const nose = bearing + faceOffset(face, dir);
-    const ang = Math.hypot(ddx, ddy) > 0.5 ? Math.atan2(ddy, ddx) : nose;
+    const ang = Math.hypot(ddx, ddy) > 0.5 ? Math.atan2(ddy, ddx) : Number.isFinite(ghost.heading) ? ghost.heading : noseAngle(me, bearing);
+    const nose = ang;
     const len = speed * N.DRAG_FULL_PX;
     const ex = p.x + Math.cos(ang) * len, ey = p.y + Math.sin(ang) * len;
     if (len > 2) {
@@ -521,24 +501,6 @@ export function makeTactical(canvas, opts = {}) {
     ctx.fillStyle = rgba(col, 1);
     drawShipMark(ctx, me, gx, gy, V.MARK_LEN, nose);
     ctx.restore();
-
-    // circling: a short arc round the enemy mark, starting on my side, swept the way the ship will go
-    if (face === 'side') {
-      const r = V.GHOST_ARC_PX;
-      const a0 = bearing + Math.PI - dir * 0.35, a1 = a0 + dir * 1.3;
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.strokeStyle = rgba(col, 0.75 * pulse);
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(q.x, q.y, r, a0, a1, dir < 0); ctx.stroke();
-      const tx = q.x + Math.cos(a1) * r, ty = q.y + Math.sin(a1) * r;
-      const ta = a1 + dir * Math.PI / 2; // tangent at the arc's end, the direction of travel
-      ctx.beginPath();
-      ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(ta - 0.5) * 6, ty - Math.sin(ta - 0.5) * 6);
-      ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(ta + 0.5) * 6, ty - Math.sin(ta + 0.5) * 6);
-      ctx.stroke();
-      ctx.restore();
-    }
 
     // the finger: a faint ring where it is now
     if (Number.isFinite(ghost.ex) && Number.isFinite(ghost.ey)) {

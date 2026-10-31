@@ -134,11 +134,12 @@ attachTap(document.getElementById('sil-them'), (x, y) => {
   if (replayer || autoPilot) return;
   const room = panelThem.roomAt(x, y);
   if (!room) return;
-  const me = battle.ships[0];
+  const me = battle.ships[0], pc = battle.ships[1].pieces[room];
+  const info = `${T.pieces[room]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${T.roomInfo[room]}`;
   const arg = { room: me.target === room ? null : room };
   const why = battle.order('me', 'target', arg);
-  if (why) hud.toast(T.refusal[why]);
-  else hud.toast(arg.room ? `${T.order.target} ${T.pieces[room].toLowerCase()}.` : T.order.targetCleared);
+  if (why) hud.toast(`${T.refusal[why]} ${info}`);
+  else hud.toast(arg.room ? `${T.order.target} ${T.pieces[room].toLowerCase()}. ${info}` : `${T.order.targetCleared} ${info}`);
 });
 attachTap(document.getElementById('sil-me'), (x, y) => {
   const room = panelMe.roomAt(x, y);
