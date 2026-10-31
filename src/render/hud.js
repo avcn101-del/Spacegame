@@ -11,7 +11,8 @@ import { drawHangar, hitAt, roomAtCell } from './hangar.js';
 const $ = (sel) => document.querySelector(sel);
 const fmtClock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 const SLOTS_OF = { rail: 1, tubes: 1, drive: 1 }; // rooms that have a pick
-const ROOM_OF = { gun: 'rail', launcher: 'tubes', drive: 'drive' };
+const ROOM_OF = { gun: 'rail', launcher: 'tubes', drive: 'drive', rounds: 'pdc1' }; // rounds: any mount reads as 'pdc'
+const hasPick = (room) => !!SLOTS_OF[room] || /^pdc\d+$/.test(room); // the PDC mounts pick the rounds
 const tap = (sel, fn) => $(sel).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 
 export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview, presets }) {
@@ -94,7 +95,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
     const px = e.clientX - r.left, py = e.clientY - r.top;
     const room = shown ? roomAtCell(shown.ship, px, py, shown.W, shown.H) : null;
     // a cell of a picked room, or void just beside a hardpoint, is the hardpoint; any other cell just says what it does
-    const hit = !room || SLOTS_OF[room] ? hitAt(hits, px, py) : null;
+    const hit = !room || hasPick(room) ? hitAt(hits, px, py) : null;
     if (!hit && !room) { closeList(); return; }
     sel = hit ? hit.slot : null; note = room || (hit && ROOM_OF[hit.slot]);
     markFit(fit);

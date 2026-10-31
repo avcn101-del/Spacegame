@@ -18,7 +18,7 @@ export function hardpoints(ship) {
   const { w, h } = ship.form, out = [], seen = new Set();
   const room = (x, y) => (ship.cells[y] && ship.cells[y][x] ? ship.cells[y][x].room : null);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const r = room(x, y), slot = SLOT_OF[r];
+    const r = room(x, y), slot = r && /^pdc\d+$/.test(r) ? 'rounds' : SLOT_OF[r]; // every PDC mount picks the rounds
     if (!slot || seen.has(x + ',' + y)) continue;
     const cells = [], stack = [[x, y]];
     while (stack.length) {
@@ -76,7 +76,7 @@ const boundsOf = (ship, cells, box) => {
 };
 
 const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-const ROOM_OF_SLOT = { gun: 'rail', launcher: 'tubes', drive: 'drive' };
+const ROOM_OF_SLOT = { gun: 'rail', launcher: 'tubes', drive: 'drive', rounds: 'pdc' };
 
 // Draws the ship and its marks. Returns the hit list [{slot, x, y, w, h}] in canvas CSS px.
 // `sel` is the slot last tapped (lit brighter).
