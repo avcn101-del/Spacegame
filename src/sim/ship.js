@@ -4,6 +4,14 @@ import { N } from '../numbers.js';
 
 export const FACES = ['bow', 'side', 'tail'];
 
+// Smallest signed difference between two angles, radians, in (-PI, PI].
+export const angleDiff = (to, from) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
+// Which end the enemy sees for a hull pointed `off` radians away from the bearing to it.
+export function faceFor(off) {
+  const a = Math.abs(off), cone = (N.BOW_CONE * Math.PI) / 180;
+  return a <= cone ? 'bow' : a >= Math.PI - cone ? 'tail' : 'side';
+}
+
 export function makeShip(id, name, x, facing, design) {
   const pieces = {};
   for (const r of design.rooms) pieces[r.id] = { hp: r.hp, maxHp: r.hp, alive: true };
@@ -14,12 +22,13 @@ export function makeShip(id, name, x, facing, design) {
     vx: 0, vy: 0,       // km/s
     facing,             // +1 the enemy starts to the right, -1 to the left
     pieces,             // room id -> {hp, maxHp, alive}
-    face: 'bow',        // which end points at the enemy: 'bow' | 'side' | 'tail'
-    faceTarget: 'bow',
-    turnLeft: 0,        // seconds of swing left; while > 0 the ship is exposed like broadside
-    // The move order: asked relative speed along the hull axis, km/s. Bow: closing; tail: opening;
-    // side: circling, dir +1 or -1. speed 0 is Hold.
-    move: { speed: 0, dir: 1, holdRange: null }, // holdRange: km to keep while circling or holding
+    heading: facing === -1 ? Math.PI : 0, // radians, where the bow points on the map (0 = +x)
+    headingTarget: facing === -1 ? Math.PI : 0, // the ordered heading; the hull swings toward it
+    turnLeft: 0,        // seconds of swing left; the railgun cannot aim while the hull moves
+    face: 'bow',        // which end the enemy sees right now, from heading versus bearing: 'bow' | 'side' | 'tail'
+    // The move order: the ship flies along its heading at this absolute speed, km/s, and keeps
+    // it. coast: thrust off, velocity kept (Hold).
+    move: { speed: 0, coast: true },
     orders: { pdc: 'guard', run: false },
     torps: N.TORP_COUNT,
     torpReload: 0,      // seconds until tubes are loaded
@@ -37,12 +46,23 @@ export function makeShip(id, name, x, facing, design) {
 
 export const alive = (ship, room) => !!ship.pieces[room] && ship.pieces[room].alive;
 export const alivePieces = (ship) => ship.roomOrder.filter((r) => ship.pieces[r].alive);
-// Which end the enemy sees right now. Turning counts as broadside.
-export const exposure = (ship) => (ship.turnLeft > 0 ? 'side' : ship.face);
+// Which end the enemy sees right now (the sim keeps ship.face current every step).
+export const exposure = (ship) => ship.face;
 // PDC deck: two turrets broadside, one turret end-on.
 export const pdcCount = (ship) => (alive(ship, 'pdc') ? (exposure(ship) === 'side' ? 2 : 1) : 0);
 export const canFireTubes = (ship) => alive(ship, 'tubes') && ship.torps > 0 && exposure(ship) !== 'tail';
 export const canAimRail = (ship) => alive(ship, 'rail') && alive(ship, 'sensors') && ship.face === 'bow' && ship.turnLeft <= 0;
+// Swing the hull toward headingTarget by dt. Returns true when the swing ends this step.
+export function turnShip(ship, dt) {
+  if (ship.turnLeft <= 0) return false;
+  const left = angleDiff(ship.headingTarget, ship.heading);
+  const rate = (Math.PI / 2) / N.FACE_TURN_TIME;
+  const step = rate * dt;
+  ship.turnLeft = Math.max(0, ship.turnLeft - dt);
+  if (Math.abs(left) <= step || ship.turnLeft === 0) { ship.heading = ship.headingTarget; ship.turnLeft = 0; return true; }
+  ship.heading += Math.sign(left) * step;
+  return false;
+}
 export const hasWeapons = (ship) => alive(ship, 'rail') || alive(ship, 'pdc') || (alive(ship, 'tubes') && ship.torps > 0);
 export const isBeaten = (ship) => !alive(ship, 'bridge') || !hasWeapons(ship);
 // Hit chance multiplier from sensors; reload and recharge speed from crew.

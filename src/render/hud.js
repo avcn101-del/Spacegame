@@ -91,10 +91,10 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       else if (paused) { line = T.paused; cls = 'paused'; }
       else {
         const parts = [];
-        parts.push(me.turnLeft > 0 ? `${T.order.turning} ${T.order[me.faceTarget].toLowerCase()}` : T.order[me.face]);
+        parts.push(me.turnLeft > 0 ? T.order.turning : T.order[me.face]);
         if (me.orders.run) parts.push(T.order.run);
-        else if (me.move.speed === 0) parts.push(T.order.hold);
-        else parts.push(`${T.order[me.faceTarget === 'bow' ? 'closing' : me.faceTarget === 'tail' ? 'opening' : 'circling']} ${me.move.speed.toFixed(2)}`);
+        else if (me.move.coast) parts.push(`${T.order.hold} ${Math.hypot(me.vx, me.vy).toFixed(2)}`);
+        else parts.push(`${T.order[me.move.speed > 0 ? 'flying' : 'stopping']} ${me.move.speed.toFixed(2)}`);
         if (auto) parts.unshift(T.auto);
         parts.push(T.order[me.orders.pdc]);
         if (me.target && alive(them, me.target)) parts.push(`${T.order.target} ${T.pieces[me.target].toLowerCase()}`);
@@ -107,14 +107,14 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       const B = el.buttons;
       const range = battle.range();
       for (const o of Object.keys(B)) {
-        const active = (o === 'hold' && me.move.speed === 0 && !me.orders.run) || o === me.orders.pdc || (o === 'run' && me.orders.run);
+        const active = (o === 'hold' && me.move.coast && !me.orders.run) || o === me.orders.pdc || (o === 'run' && me.orders.run);
         B[o].classList.toggle('active', active);
       }
       setProgress(B.torps, me.torpReload > 0 ? 1 - me.torpReload / N.TORP_RELOAD : 1, `${me.torps}`);
       setProgress(B.rail, me.railAim >= 0 ? me.railAim / N.RAIL_AIM_TIME : 1 - me.railCharge / N.RAIL_RECHARGE, me.railAim >= 0 ? 'AIM' : '');
       setProgress(B.burn, 1, `${me.burns}`);
       B.torps.classList.toggle('dead', !alive(me, 'tubes') || me.torps === 0 || exposure(me) === 'tail');
-      B.rail.classList.toggle('dead', !alive(me, 'rail') || !alive(me, 'sensors') || me.face !== 'bow' || me.turnLeft > 0);
+      B.rail.classList.toggle('dead', !canAimRail(me));
       B.rail.classList.toggle('aiming', me.railAim >= 0);
       B.burn.classList.toggle('dead', !alive(me, 'drive') || me.burns === 0);
       for (const o of ['hold', 'run']) B[o].classList.toggle('dead', !alive(me, 'drive'));

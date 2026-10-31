@@ -1,7 +1,7 @@
 // The enemy: same orders as the player, from a small rule table shaped by a preset.
 // Thinks once per AI_TICK seconds. Uses the battle's seeded rng.
 import { N } from '../numbers.js';
-import { alivePieces, alive, canAimRail } from '../sim/ship.js';
+import { alivePieces, alive, canAimRail, angleDiff } from '../sim/ship.js';
 import { PRESETS, DEFAULT_PRESET } from './presets.js';
 import { makeRng } from '../rng.js';
 
@@ -55,21 +55,26 @@ function think(b, P, me, you, give, rng) {
   // Railgun: sure shot when they cannot dodge (no burns, or aiming themselves); otherwise a gamble.
   if (canAimRail(me) && (you.burns === 0 || you.railAim >= 0 || rng.chance(P.railGamble))) give('rail');
 
-  // Move: get to the wanted range nose-first or tail-first, then settle into the preferred face.
-  if (!me.orders.run) {
+  // Move: get to the wanted range nose-first, turn away to open, then settle into the preferred
+  // face: bow-on ships stop, broadside ships cruise across the bearing. Not while the rail aims:
+  // a new heading throws the aim away.
+  if (!me.orders.run && me.railAim < 0) {
     let wantOpen = P.range === 'open';
     if (P.openWhenNoPdc && !alive(me, 'pdc') && (alive(me, 'rail') || me.torps > 0)) wantOpen = true;
     else if (P.openWhenNoPdc && mine < yours - 2) wantOpen = true;
     if (!alive(you, 'drive')) wantOpen = false; // a drifting cripple gets finished, not avoided
     const err = b.range() - (wantOpen ? N.RANGE_OPEN : N.RANGE_CLOSE);
-    let face, speed;
+    const bearing = Math.atan2(you.y - me.y, you.x - me.x);
+    let heading, speed;
     const r = b.range();
-    if (err > N.RANGE_TOLERANCE) { face = 'bow'; speed = N.MAX_SPEED; }
-    else if (err < -N.RANGE_TOLERANCE && r > N.PDC_RANGE) { face = 'tail'; speed = N.MAX_SPEED; } // never show the tail inside PDC range
+    if (err > N.RANGE_TOLERANCE) { heading = bearing; speed = N.MAX_SPEED; }
+    else if (err < -N.RANGE_TOLERANCE && r > N.PDC_RANGE) { heading = bearing + Math.PI; speed = N.MAX_SPEED; } // never show the tail inside PDC range
     else {
-      face = P.face === 'auto' ? 'side' : P.face;
-      speed = face === 'side' ? N.MAX_SPEED * 0.5 : 0; // broadside ships circle, end-on ships hold
+      const face = P.face === 'auto' ? 'side' : P.face;
+      heading = face === 'side' ? bearing + Math.PI / 2 : bearing;
+      speed = face === 'side' ? N.MAX_SPEED * 0.5 : 0; // broadside ships cruise across, end-on ships stop
     }
-    if (me.faceTarget !== face || Math.abs(me.move.speed - speed) > 0.001) give('move', { face, speed, dir: 1 });
+    const off = Math.abs(angleDiff(heading, me.headingTarget)) * 180 / Math.PI;
+    if (me.move.coast || off > N.AI_HEADING_TOL || Math.abs(me.move.speed - speed) > 0.001) give('move', { heading, speed });
   }
 }

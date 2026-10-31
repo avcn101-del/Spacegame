@@ -14,7 +14,7 @@ src/rng.js            seeded random, the only random source
 src/text.js           all player-facing English strings
 src/ships/tachi.js    a ship as data: rooms bow to stern, hp each
 src/sim/ship.js       rooms, facing, exposure, line of fire, damage, "is beaten"
-src/sim/orders.js     the orders: refusal() and apply(); 'move' carries {face, speed, dir}
+src/sim/orders.js     the orders: refusal() and apply(); 'move' carries {heading, speed}
 src/input/drag.js     drag on the map -> move order; input only
 src/input/tap.js      tap on a silhouette panel -> target order or room info; input only
 src/sim/weapons.js    pdc, torpedo, railgun
@@ -39,10 +39,12 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   `result` null or `{kind: 'win'|'lose'|'escaped'|'draw', reason}`.
 - `ships[0]` is `'me'` (Rocinante, facing +1, starts at negative x),
   `ships[1]` is `'them'` (Pella, facing -1). Each ship: `x, y, vx, vy`
-  in km (the fight line is the x axis, y is lateral), `facing`,
+  in km (the fight line starts as the x axis, y is lateral), `facing`,
   `roomOrder` (bow to stern) and `pieces` map of room id to
-  `{hp, maxHp, alive}`; `face` / `faceTarget` (`bow | side | tail`) and
-  `turnLeft` seconds of swing; `orders {range, pdc, run}`,
+  `{hp, maxHp, alive}`; `heading` / `headingTarget` radians on the map (0 is
+  +x), `turnLeft` seconds of swing left, `face` (`bow | side | tail`: what the
+  enemy sees, derived every step from heading versus bearing, `BOW_CONE`);
+  `move {speed, coast}`; `orders {pdc, run}`,
   `torps, torpReload, railCharge, railAim (-1 idle or seconds aiming),
   burns, thrust`; `target` is the enemy room this ship's weapons go for, or
   null (the exposed end). The sim clears it when that room dies.
@@ -90,9 +92,15 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   draws a bracket around the room the other side is going for, in that
   side's color. They own their own particles, shake and flashes. They never
   mutate battle.
-- Movement: one `move` order `{face, speed, dir}`; the autopilot chases
-  the asked relative velocity (bow closing, tail opening at half drive,
-  side circling with a locked range). `hold` locks the range. `run` is
-  tail at full drive. The drag input maps a finger vector to this order.
+- Movement: one `move` order `{heading, speed}`: the hull swings to the
+  heading (90 degrees per `FACE_TURN_TIME`, the railgun aim is lost) and the
+  autopilot flies along it at `speed` relative to the enemy, matching their
+  drift so a Burn or a runner can be followed; it never closes faster than
+  the thrusters can stop before `RANGE_MIN`. The main drive pushes forward
+  along the hull, braking and sideways thrusters at `OFF_AXIS_ACCEL`. `hold`
+  cuts thrust and keeps the velocity (coast). `run` is full drive straight
+  away from them. The drag input maps a finger vector to this order: the
+  direction is the heading, the length the speed; a drag barely past the dead
+  zone is stop.
 - `main.js` owns time: real dt, pause, slow-mo on `railHit` and
   `pieceDead`, and calls `battle.step(N.DT)` in fixed steps.

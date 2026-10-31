@@ -2,7 +2,7 @@
 // step(dt) is deterministic given the seed and the order log.
 import { N } from '../numbers.js';
 import { makeRng } from '../rng.js';
-import { makeShip, alive, isBeaten, alivePieces, exposure } from './ship.js';
+import { makeShip, alive, isBeaten, alivePieces, turnShip, faceFor, angleDiff } from './ship.js';
 import { TACHI } from '../ships/tachi.js';
 import { refusal, apply } from './orders.js';
 import * as W from './weapons.js';
@@ -36,10 +36,16 @@ export function makeBattle(seed) {
     return (dx * (t.vx - m.vx) + dy * (t.vy - m.vy)) / r;
   };
   b.launchTorps = (ship) => W.launchTorps(b, ship, b.enemyOf(ship));
+  // A Burn kicks the ship across the line of fire (perpendicular to the bearing to the enemy),
+  // the same way as its current drift, to build speed rather than cancel it.
   b.burn = (ship) => {
     ship.burns -= 1;
-    const dir = ship.vy >= 0 ? 1 : -1; // keep burning the same way to build speed
-    ship.vy += dir * N.BURN_SPEED;
+    const e = b.enemyOf(ship);
+    const dx = e.x - ship.x, dy = e.y - ship.y, r = Math.hypot(dx, dy) || 1e-6;
+    const px = -dy / r, py = dx / r; // across the line, dir +1 is the bearing turned +90 degrees
+    const dir = (ship.vx - e.vx) * px + (ship.vy - e.vy) * py >= 0 ? 1 : -1;
+    ship.vx += dir * px * N.BURN_SPEED;
+    ship.vy += dir * py * N.BURN_SPEED;
     ship.lastBurnT = b.t;
     b.emit({ type: 'burn', x: ship.x, y: ship.y, by: ship.id, dir });
   };
@@ -73,7 +79,6 @@ function step(b, dt) {
   b.stepNo += 1;
   for (const s of (b.stepNo % 2 ? b.ships : [b.ships[1], b.ships[0]])) {
     if (s.torpReload > 0) s.torpReload = Math.max(0, s.torpReload - dt * (alive(s, 'crew') ? 1 : N.CREW_DEAD_SPEED));
-    if (s.turnLeft > 0) { s.turnLeft -= dt; if (s.turnLeft <= 0) { s.turnLeft = 0; s.face = s.faceTarget; } }
     W.stepRail(b, s, b.enemyOf(s), dt);
     W.stepPdc(b, s, b.enemyOf(s), dt);
   }
@@ -93,41 +98,40 @@ function moveShip(b, ship, enemy, dt) {
   const dx = enemy.x - ship.x, dy = enemy.y - ship.y;
   const r = Math.hypot(dx, dy) || 1e-6;
   const ux = dx / r, uy = dy / r;        // toward the enemy
-  const tx = -uy, ty = ux;               // across the line
   ship.thrust = 0;
   if (alive(ship, 'drive')) {
-    // What relative velocity the order asks for: closing along u, circling along t.
-    const face = ship.faceTarget;
-    const speed = ship.move.speed * (ship.orders.run ? N.RUN_ACCEL_MULT : 1);
-    let closing = face === 'bow' ? speed : face === 'tail' ? -speed : 0;
-    const circling = face === 'side' ? speed * ship.move.dir : 0;
-    // holding or circling: keep the locked range instead of just zero closing speed
-    if (ship.move.holdRange !== null && (face === 'side' || speed === 0)) {
-      closing = Math.max(-N.MAX_SPEED, Math.min(N.MAX_SPEED, (r - ship.move.holdRange) * N.AUTOPILOT_GAIN));
+    turnShip(ship, dt); // no drive: the hull stays where it points
+    if (!ship.move.coast) {
+      // The order asks for a velocity along the heading, relative to the enemy: the autopilot
+      // matches their drift, so a Burn or a running ship can still be followed. Never ram: the
+      // closing part shrinks to what the thrusters can still kill before RANGE_MIN (v^2 = 2 a d).
+      const hx = Math.cos(ship.heading), hy = Math.sin(ship.heading);
+      let relX = hx * ship.move.speed, relY = hy * ship.move.speed;
+      const closing = relX * ux + relY * uy;
+      const closingMax = Math.sqrt(2 * N.ACCEL * N.OFF_AXIS_ACCEL * Math.max(0, r - N.RANGE_MIN));
+      if (closing > closingMax) { relX -= (closing - closingMax) * ux; relY -= (closing - closingMax) * uy; }
+      const wantX = enemy.vx + relX, wantY = enemy.vy + relY;
+      let ax = (wantX - ship.vx) * N.AUTOPILOT_GAIN, ay = (wantY - ship.vy) * N.AUTOPILOT_GAIN;
+      // The main drive pushes forward along the hull at full strength; braking and sideways
+      // thrusters do the rest at half. While the hull swings the main drive is off axis too.
+      const base = N.ACCEL * (ship.orders.run ? N.RUN_ACCEL_MULT : 1);
+      const along = ax * hx + ay * hy;
+      const acrossX = ax - along * hx, acrossY = ay - along * hy;
+      const acrossMag = Math.hypot(acrossX, acrossY);
+      const fwdMax = ship.turnLeft > 0 ? base * N.OFF_AXIS_ACCEL : base;
+      const alongC = Math.max(-base * N.OFF_AXIS_ACCEL, Math.min(fwdMax, along));
+      const acrossMax = base * N.OFF_AXIS_ACCEL;
+      const k = acrossMag > acrossMax ? acrossMax / acrossMag : 1;
+      ax = alongC * hx + acrossX * k;
+      ay = alongC * hy + acrossY * k;
+      ship.vx += ax * dt; ship.vy += ay * dt;
+      ship.thrust = Math.max(-1, Math.min(1, alongC / base)); // main drive effort along the hull, for the renderer
     }
-    // never ram: closing speed shrinks to zero at RANGE_MIN
-    closing = Math.min(closing, Math.max(0, r - N.RANGE_MIN) * N.AUTOPILOT_GAIN);
-    const relX = ship.vx - enemy.vx, relY = ship.vy - enemy.vy;
-    const wantX = ux * closing + tx * circling, wantY = uy * closing + ty * circling;
-    let ax = (wantX - relX) * N.AUTOPILOT_GAIN, ay = (wantY - relY) * N.AUTOPILOT_GAIN;
-    // The main drive pushes along the hull axis at full strength, thrusters do the rest at half.
-    const base = N.ACCEL * (ship.orders.run ? N.RUN_ACCEL_MULT : face === 'tail' ? N.TAIL_DRIVE_MULT : 1);
-    const e = exposure(ship);
-    const axisX = e === 'side' ? tx : ux, axisY = e === 'side' ? ty : uy; // the hull line (sign does not matter)
-    const along = ax * axisX + ay * axisY;
-    const acrossX = ax - along * axisX, acrossY = ay - along * axisY;
-    const acrossMag = Math.hypot(acrossX, acrossY);
-    const alongMax = ship.turnLeft > 0 ? base * N.OFF_AXIS_ACCEL : base;
-    const alongC = Math.max(-alongMax, Math.min(alongMax, along));
-    const acrossMax = base * N.OFF_AXIS_ACCEL;
-    const k = acrossMag > acrossMax ? acrossMax / acrossMag : 1;
-    ax = alongC * axisX + acrossX * k;
-    ay = alongC * axisY + acrossY * k;
-    ship.vx += ax * dt; ship.vy += ay * dt;
-    ship.thrust = Math.max(-1, Math.min(1, alongC / base)); // main drive effort along the hull, for the renderer
   }
   ship.x += ship.vx * dt;
   ship.y += ship.vy * dt;
+  // which end the enemy sees now
+  ship.face = faceFor(angleDiff(Math.atan2(enemy.y - ship.y, enemy.x - ship.x), ship.heading));
 }
 
 function updatePhase(b) {

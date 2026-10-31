@@ -50,14 +50,22 @@ in Vietnamese mixed with English; answer short, verified facts only, say
   it, a torpedo that missed by more than 0.08 km inside 3 km circled forever
   (replays 6045 and 70368: 9 of 12 and 6 of 12 torpedoes never resolved).
 
-## Next task, already agreed
+- Drag as heading is built (one PR): drag direction is an absolute heading on
+  the map, the hull swings to it, drag length is the speed. Face (bow / side /
+  tail) is derived from heading versus bearing with `BOW_CONE`. HOLD coasts.
+  The asked speed is relative to the enemy (the autopilot matches their
+  drift): with an absolute cap of 0.3 km/s a 0.8 km/s Burn made any ship
+  uncatchable and a third of arena battles ended apart. The owner confirmed
+  absolute heading and 'the ship keeps that speed'; the relative part is my
+  call, flagged to the owner.
 
-Drag as heading, one PR. The owner said drag is confusing. Wanted: drag
-picks a direction on the map, the ship turns to it; a longer drag is a harder
-burn (faster). The owner says the DTN bridge did it that way; ask what
-exactly that was before building (absolute heading or relative to the
-enemy; does speed persist until a new drag). Face (bow / side / tail) then
-follows from heading versus the bearing to the enemy.
+## Next task
+
+None agreed. The owner says the game is boring: torpedoes get chewed by PDCs,
+the rail gets dodged, PDC rake decides it. Wait for five battles and three
+lines on the new drag before proposing anything. A demo replay (seed 2,
+brawler, target pdc first, bow-on, guard, rail when ready) wins in 50 s
+losing nothing; that strategy wins 63 of 100 against brawler in the arena.
 
 After that, ideas the owner raised but did not approve: drifting starfield
 or circling already came with drag; layer 2 (a second ship design as data,
