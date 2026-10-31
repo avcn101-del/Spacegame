@@ -72,6 +72,8 @@ nav#orders.replay button { opacity: 0.35; pointer-events: none; }
 #hangar { padding: 8px; background: rgba(3,5,10,0.97); z-index: 5; }
 #hangar .box { gap: 6px; max-width: 96vw; position: relative; }
 #hg-canvas { display: block; touch-action: none; }
+#hg-arcs { font-size: 10px; line-height: 14px; letter-spacing: 0.04em; white-space: nowrap; }
+#hg-arcs span + span { margin-left: 10px; }
 #hg-line { font-size: 11px; line-height: 1.3; min-height: 28px; width: min(680px, 92vw); color: var(--text); }
 #hg-list { text-align: left; display: none; position: absolute; z-index: 6; width: min(330px, 90vw); background: rgba(8,12,22,0.98); border: 1px solid var(--dim); border-radius: 6px; padding: 3px; }
 #hg-list.show { display: block; }

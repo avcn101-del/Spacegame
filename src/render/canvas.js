@@ -6,7 +6,8 @@
 // that are the same sequence every run.
 
 import { N } from '../numbers.js';
-import { exposure } from '../sim/ship.js';
+import { exposure, alive, pdcRooms, mountSide } from '../sim/ship.js';
+import { drawArcs, railKm } from './arcs.js';
 import { drawShipMark, COLORS } from './silhouette.js';
 import { drawForm, roomPoint, roomBounds, roomAtPoint, roomBracket } from './form.js';
 
@@ -500,6 +501,21 @@ export function makeTactical(canvas, opts = {}) {
     ctx.fillStyle = rgba(col, 1);
     drawShipMark(ctx, me, gx, gy, V.MARK_LEN, nose);
     ctx.restore();
+
+    // my firing arcs at the asked heading, to scale, and what bears on them at this range
+    drawArcs(ctx, me, p.x, p.y, ang, (a) => a.km * cam.scale, 0.07, 0.35);
+    const dx = them.x - me.x, dy = them.y - me.y, range = battle.range();
+    const ly = -dx * Math.sin(ang) + dy * Math.cos(ang), ends = face !== 'side'; // ly < 0: the enemy is on my top side
+    const mounts = pdcRooms(me).filter((r) => alive(me, r) && (ends || mountSide(me, r) === (ly < 0 ? 'top' : 'bottom'))).length;
+    const bears = [];
+    if (face === 'bow' && range <= railKm(me) && alive(me, 'rail') && alive(me, 'sensors')) bears.push('RAIL');
+    if (face !== 'tail' && range <= N.TORP_RANGE && alive(me, 'tubes') && me.torps > 0) bears.push('TUBES');
+    if (mounts > 0) bears.push(range <= N.PDC_RANGE ? `PDC ${mounts}` : `PDC ${mounts} (far)`);
+    const word = [face.toUpperCase(), ...bears].join(' \u00b7 ');
+    ctx.font = '10px "SF Mono", Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(word).width + 10, ty = clamp(gy - 22, 10, h - 10), tx = clamp(gx, tw / 2 + 2, w - tw / 2 - 2);
+    ctx.fillStyle = 'rgba(6,8,15,0.8)'; ctx.fillRect(tx - tw / 2, ty - 8, tw, 16);
+    ctx.fillStyle = rgba(col, 1); ctx.fillText(word, tx, ty + 0.5);
 
     // the finger: a faint ring where it is now
     if (Number.isFinite(ghost.ex) && Number.isFinite(ghost.ey)) {

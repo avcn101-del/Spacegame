@@ -105,7 +105,8 @@ export const T = {
   },
   again: 'NEW BATTLE', same: 'SAME SEED', seed: 'seed',
   // The hangar: one of two for each slot that has a choice. Names and one line each.
-  hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, pick the enemy, then launch.', enemy: 'ENEMY', launch: 'LAUNCH', close: 'CLOSE', hint: 'Tap a room to see what it does; a marked part to swap it.', pdc: 'PDC' },
+  hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, pick the enemy, then launch.', enemy: 'ENEMY', launch: 'LAUNCH', close: 'CLOSE', hint: 'Tap a room to see what it does; a marked part to swap it.', pdc: 'PDC',
+    arcs: (rail, tubes, pdc) => ({ rail: `Rail ${num(rail)} km bow`, tubes: `Tubes ${num(tubes)} km not tail`, pdc: `PDC ${num(pdc)} km own side + ends` }) },
   slots: { launcher: 'Tubes', gun: 'Railgun', drive: 'Drive' },
   catalog: {
     quad: { name: 'Quad tubes', line: 'Four at once swamp a Guard.' },
