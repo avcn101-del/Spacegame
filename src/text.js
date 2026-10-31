@@ -34,6 +34,7 @@ export const T = {
     tear: 'A dead room is a hole. Rooms cut off from the bridge by it tear off and drift away. A dead PDC mount is one gun fewer, nothing tears. The bridge sits in the middle: crew dead loses the stern (tubes, their torpedoes, drive).',
     tap: 'TAP a room on their ship to go for it: torpedoes swing wide to reach a room that is not exposed (longer inside their PDCs), PDCs chew it only when they are broadside. Tap it again to clear. Tap a room on your ship to see what it does.',
   },
+  view: { closeup: 'CLOSE-UP', tac: 'TAC' },
   pause: 'PAUSE', resume: 'RESUME', restart: 'RESTART', newBattle: 'NEW BATTLE',
   pausedTitle: 'PAUSED. GIVE ORDERS, THEN RESUME.',
   paused: 'PAUSED. Give orders, then resume.',
