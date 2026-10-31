@@ -844,7 +844,7 @@ const PANEL = {
   SIDE_PAD: 9,     // px each side kept free for the side chevrons
   FORE: 12,        // px above the bow for the bow chevron and the muzzle
   AFT: 22,         // px below the stern for the tail chevron and the plume
-  CELL_ASPECT: 1.5, // widest a cell may be against its height: 1 is square cells, the form then fills less of the panel
+  CELL_ASPECT: 1.8, // widest a cell may be against its height: 1 is square cells; 130 px panels let it be about 10 x 5.4 px
 };
 export function makeSilhouettePanel(canvas, shipId, opts = {}) {
   const ctx = canvas.getContext('2d');

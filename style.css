@@ -1,7 +1,7 @@
 :root {
   --bg: #05070c; --panel: rgba(11,16,24,0.72); --line: #1d2a3a; --text: #c9d6e6; --dim: #5d7187;
   --me: #7fc4ff; --them: #ff9a4a; --warn: #ff4d4d; --ok: #6fe0a0; --font: "SF Mono", Menlo, Consolas, monospace;
-  --top: 34px; --bottom: 72px; --side: 100px;
+  --top: 34px; --bottom: 72px; --side: 130px;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow: hidden; }
