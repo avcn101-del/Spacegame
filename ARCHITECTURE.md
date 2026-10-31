@@ -13,7 +13,7 @@ src/numbers.js        every tunable number, one-line reason each
 src/rng.js            seeded random, the only random source
 src/text.js           all player-facing English strings
 src/ships/index.js    every design by id: tachi, belter; a battle names its two, a replay records them
-src/ships/tachi.js    a ship as data: rooms bow to stern, bridge in the middle; kind per slot; armor (plated, double hp), bulkhead (aft wall spill does not cross); turrets per PDC deck; torps stock; accel fraction
+src/ships/tachi.js    a ship as data (rooms, and the form: draft 12 as rows of letters): rooms bow to stern, bridge in the middle; kind per slot; armor (plated, double hp), bulkhead (aft wall spill does not cross); turrets per PDC deck; torps stock; accel fraction
 src/ships/belter.js   the Belter gunship: no rail, three turrets, 16 torpedoes, half drive, no plating, six rooms
 src/ships/catalog.js  the hangar's catalog: two variants per slot kind (launcher, pdc, gun, drive); a fit picks one each; parseFit / fitString
 src/sim/ship.js       rooms, facing, exposure, line of fire, damage, the tear rule, "is beaten"
@@ -98,6 +98,47 @@ src/render/hud.js     four numbers, current order, buttons, pause, result, the h
   tailNoTubes noSensors railNeedsBow badTarget roomDead sameTarget noTarget
   over`. `target` takes `{room}` (null clears). Replay version 4 adds it;
   version 6 adds `ships {me, them}` design ids; version 7 makes each `{design, fit}`.
+
+## The form: a ship as a grid of cells (decided 2026-10-31, replaces "not the 2D grid")
+
+A design carries a `form`: rows of letters, one letter per 5 m cell, `.` void, stern at
+x 0 and bow at the right, the keel on the middle row. The Tachi form is draft 12 of the
+owner's "Roci form" (28 x 9). Each letter maps to a room: the seven job rooms keep their
+ids and jobs (`rail` G, `sensors` the antenna cell (10, 2), `pdc` the two turrets with
+their magazines T m, `bridge` B, `crew` quarters and medbay Q D, `tubes` the two bays L,
+`drive` E). Every other letter is frame: a 4-connected group of one frame letter is one
+frame room (`frame:<letter><n>`), kind `frame`, hp `FRAME_HP`, no job, not targetable.
+Empty hardpoints (reactors, heat sink, shield generator, cockpit, workshop, empty slots)
+are frame rooms today; later rooms slot into them. Rooms still have only hp and one job:
+cells are geometry, hp stays on the room. The Belter gets its own, smaller form.
+
+What the sim exposes (render reads, never writes):
+
+- `ship.form {w, h}` and `ship.cells[y][x]`: `null` for void, else `{room, cut}`; a cell
+  is alive when its room is alive and it is not `cut`.
+- `ship.pieces[room]` as before, frame rooms included; `ship.roomOrder` stays the job
+  rooms bow to stern (HUD, AI, hangar, `alivePieces`, `isBeaten` are unchanged).
+  `ship.frames` lists the frame room ids. `armor` keeps the catalog's plating; `bulkheadAft`
+  is gone: the K columns are the bulkheads now, as frame.
+- A shot is a ray along one row (from the bow or the stern) or one column (from a side).
+  `face` still comes from heading versus bearing with `BOW_CONE`; the side (top or bottom
+  rows) from the sign of the bearing. Unaimed: the ray is drawn uniformly from the rows or
+  columns that show a living cell to the shooter. Aimed at a room (tap-a-room): among the
+  rays from that direction through a living cell of that room, the one with the fewest
+  living cells in front (ties by the seeded rng). The rail ignores the aim, as decided.
+  Diagonal rays are not built (NOTES).
+- Resolution: the first living cell's room takes the hit; `SPILL` carries into the next
+  distinct room along the ray unless the hit room is frame: frame soaks and stops it.
+  PDC Rake chews the first room of its ray, re-drawn when that room dies, as today.
+  "Exposed" (torpedo flank, HUD): a room with a zero-cover ray from that direction; a
+  torpedo sent at a covered room flanks to the side as today and resolves from there.
+- The tear rule: after a room dies, flood from the bridge's living cells over living
+  cells, 4-neighbours. Cells not reached are `cut` (holes, drawn adrift); a room with no
+  living cell left tears off (`tearOff`: hp 0, `torn`, the tubes take the stock). Events
+  stay `pieceDead {cause: 'tear'}` per room and `tear {end, pieces}` per end.
+- Panels: `roomAt(x, y)` maps a tap to a cell, then to its job room (frame gives null).
+  The panel width `--side` grows to about 100 px so a cell is about 10 x 7 px vertical.
+- Replay version 8 (the form changes every hit; older replays diverge).
 
 ## Render module contract
 
