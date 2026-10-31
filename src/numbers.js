@@ -36,7 +36,7 @@ export const N = {
   // --- PDC ---
   PDC_RANGE: 3,          // short; "stopped by distance"
   PDC_RAKE_DPS: 0.5,     // hull damage per turret per second at point blank; a piece lasts about 20 s under two turrets at knife range
-  PDC_GUARD_KILL_RATE: 1.0, // torpedo kill chance per turret per second at point blank
+  PDC_GUARD_KILL_RATE: 0.375, // torpedo kill chance per mount per second at point blank; half of (0.5 + 0.25): at 1.0 six mounts end-on killed 98 percent of torpedoes, at 0.25 only 61; here about three in four die and one of a salvo lands
   PDC_TRACER_RATE: 14,   // tracers drawn per second per turret; purely visual
 
   // --- torpedo ---
