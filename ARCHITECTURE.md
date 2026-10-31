@@ -44,8 +44,7 @@ src/render/hud.js     four numbers, current order, buttons, pause, result, the h
   `result` null or `{kind: 'win'|'lose'|'escaped'|'draw', reason}`.
 - `ships[0]` is `'me'` (Rocinante, facing +1, starts at negative x),
   `ships[1]` is `'them'` (Pella, facing -1). Each ship: `design` (id), `fit`,
-  `accel` (fraction of ACCEL), `turrets` (room id to PDC turrets: all fire
-  broadside, half rounded up end-on), `salvo`, `reloadTime`, `railRange`,
+  `accel` (fraction of ACCEL), `turrets` (room id to PDC turrets: one per mount), `salvo`, `reloadTime`, `railRange`,
   `railRecharge`, `burns` (the fitted variant's, else the stock number; the
   sim and HUD read these from the ship, never from the catalog), `x, y, vx, vy`
   in km (the fight line starts as the x axis, y is lateral), `facing`,
@@ -148,19 +147,26 @@ What the sim exposes (render reads, never writes):
 - Panels: `roomAt(x, y)` maps a tap to a cell, then to its job room (frame gives null).
   The panel width `--side` grows to about 100 px so a cell is about 10 x 7 px vertical.
 - Replay version 8 (the form changes every hit; older replays diverge).
-- PDC mounts (2026-10-31): the pdc room is the six hull-edge mounts of draft 12, one cell
-  each, letter P: (6, 1) (13, 1) (24, 3) above, (6, 7) (13, 7) (24, 5) below. The two T
-  sponsons and their magazines m are Gun mount M, a weapon the game lacks: frame. The form
-  lists `mounts` in priority order; the fit's turret count (twinDeck 2, tripleDeck 3) says
-  how many are fitted, from the front of the list; a mount not fitted is its own frame room
-  `frame:P<n>`. So `ship.form.mounts` is `[[x, y], ...]` and `ship.form.fitted` the count;
-  `ship.cells` for a fitted mount says `room: 'pdc'`. The Belter form gets P mounts too
-  (three fitted stock). pdc hp stays one pool; pdcCount still reads `face`.
+- PDC mounts (2026-10-31, revised the same day): six fixed PDC mounts on the hull edge of
+  the Tachi, letter P, one cell each, placed by the owner: (6, 1) (13, 1) (19, 2) above the
+  keel, (6, 7) (13, 7) (19, 6) below. Every mount is a PDC, always; there is no PDC pick (the
+  `pdc` slot is gone from the catalog; `parseFit` ignores it in old URLs). Each mount is its
+  own room `pdc1` .. `pdc6`, numbered in `form.mounts` order, kind `pdc`, hp ROOM_HP,
+  unplated, one turret; it dies, tears and is targeted on its own. The Belter has four:
+  (10, 1) (15, 1) above, (10, 5) (15, 5) below. `ship.form.mounts` is the list; ship.js
+  exports `isPdc(room)`, `pdcRooms(ship)` (the ids) and `pdcAlive(ship)` (any alive), which
+  replace every `alive(ship, 'pdc')` (hasWeapons, the noPdc refusal, the AI, the HUD).
+  Fire by real direction: a mount above the keel fires when the enemy is `top`, `bow` or
+  `stern` (`shotFrom` the enemy's position); below, when `bottom`, `bow` or `stern`. So
+  `pdcCount(ship, enemy)` is the living mounts that see the enemy: broadside about three,
+  end-on all six. The old all-broadside, half-end-on rule is gone. Rake and Guard both use
+  it. Tap-a-room on a mount targets that mount; the AI's "go for the pdc" picks the living
+  mount with the least cover from where it is. The T sponsons stay frame.
 - The hangar draws the form (`hud.js`, render): `main.js` hands it `preview(fit)`, a ship
   built with `makeShip` for the current fit, and the hangar draws it with `drawForm`
   (horizontal, bow right, big cells) on its own canvas, then marks every hardpoint that has
-  a pick: the rail cells (gun), the tubes cells (launcher), the drive cells (drive), and all
-  six mount positions (pdc), fitted or not. A tap on a hardpoint cycles that slot's variant
+  a pick: the rail cells (gun), the tubes cells (launcher), the drive cells (drive). The PDC
+  mounts are drawn as pdc cells and have no pick. A tap on a hardpoint cycles that slot's variant
   and redraws; the pick's name and reason show under the drawing. LAUNCH and the close
   button stay. No battle buttons are added.
 
