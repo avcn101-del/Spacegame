@@ -42,3 +42,10 @@ Ideas go here. They are not built until the owner asks.
   eighth button, one more number, torpedoes weaker still. Worth a look only
   after a battle lost because Guard was forced all the way and Rake never got
   its turn, or when a sniper's torpedoes reach the drive too easily.
+- Orbit at range in place of HOLD (the owner asked, 2026-10-31): a drag that
+  sets a range to keep and the autopilot circles there. Decision it creates:
+  pick a band (rail 10 to 15 km, PDC under 3) instead of steering. What stops
+  it: the face still matters, an orbit shows the side. What it costs: a new
+  order in the sim, a replay version, and the steering decision handed to the
+  autopilot. Parked: first the firing arcs while dragging (PR 33); build only
+  if steering still feels like work after that.

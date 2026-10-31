@@ -170,6 +170,25 @@ What the sim exposes (render reads, never writes):
   and redraws; the pick's name and reason show under the drawing. LAUNCH and the close
   button stay. No battle buttons are added.
 
+## Hangar labels, firing arcs, panel width (PR 32 to 34, render only)
+
+- The sim is not touched. Render reads `ship.cells`, `ship.form.mounts`, `ship.heading`,
+  `ship.railRange` (or `N.RAIL_RANGE`), `N.TORP_RANGE`, `N.PDC_RANGE`, `N.BOW_CONE`, and
+  `mountSide(ship, room)` from `sim/ship.js` (render may import sim helpers read-only).
+- The arcs, in the ship's own frame (bow = heading), BOW_CONE 45 degrees: rail fires only
+  within the bow cone, out to the rail range; tubes fire anywhere but the tail cone, out to
+  TORP_RANGE; a PDC mount fires into its own side (top = local -y, see `shotFrom`) plus the bow
+  and stern cones, out to PDC_RANGE. A dead or torn weapon draws no arc.
+- Hangar (PR 32): every job room has a name label (`T.pieces`); a tap on any room says what it
+  does (`T.roomInfo`) in `#hg-line`; a tap on a hardpoint with a pick also opens its variant list
+  as now; a tap on frame says `T.roomInfo.frame`. Hangar (PR 33): the three arcs drawn round
+  the form as wedges, not to scale with range (a short legend gives the km).
+- Battle (PR 33): while a move is being dragged, `drawGhost` draws my arcs at the asked
+  heading, to scale (km × `cam.scale`), plus a word BOW / SIDE / TAIL and which weapons bear
+  on the enemy at that heading. Not drawn when no drag is active.
+- Panels (PR 34): `--side` 100 px to 130 px; the panels draw the form bigger; tactical inset
+  follows the CSS variable.
+
 ## Render module contract
 
 - `silhouette.js`: one art table per design (profile, rooms as shapes,
