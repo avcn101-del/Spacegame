@@ -123,8 +123,11 @@ export function stepTorp(battle, t, dt) {
   t.vx += (ax / da) * N.TORP_HOMING * dt;
   t.vy += (ay / da) * N.TORP_HOMING * dt;
   const dBefore = Math.hypot(target.x - t.x, target.y - t.y);
-  const sp = Math.hypot(t.vx, t.vy);
-  if (sp > aim.speed) { t.vx *= aim.speed / sp; t.vy *= aim.speed / sp; }
+  // The speed cap is relative to the target, like the ships' own autopilot: a ship that has
+  // Burned itself up to 2 km/s is still caught. Before this, torpedoes chased such a ship forever.
+  const rvx = t.vx - target.vx, rvy = t.vy - target.vy;
+  const sp = Math.hypot(rvx, rvy);
+  if (sp > aim.speed) { t.vx = target.vx + rvx * (aim.speed / sp); t.vy = target.vy + rvy * (aim.speed / sp); }
   t.x += t.vx * dt; t.y += t.vy * dt;
   const d = Math.hypot(target.x - t.x, target.y - t.y);
   // Proximity fuse: go off at closest approach when that is inside TORP_FUSE, or on a direct hit.
