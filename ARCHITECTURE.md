@@ -12,7 +12,9 @@ src/main.js           game loop, active pause, slow-mo, wires modules
 src/numbers.js        every tunable number, one-line reason each
 src/rng.js            seeded random, the only random source
 src/text.js           all player-facing English strings
-src/ships/tachi.js    a ship as data: rooms bow to stern, bridge in the middle; kind per slot; armor (plated, double hp), bulkhead (aft wall spill does not cross)
+src/ships/index.js    every design by id: tachi, belter; a battle names its two, a replay records them
+src/ships/tachi.js    a ship as data: rooms bow to stern, bridge in the middle; kind per slot; armor (plated, double hp), bulkhead (aft wall spill does not cross); turrets per PDC deck; torps stock; accel fraction
+src/ships/belter.js   the Belter gunship: no rail, three turrets, 16 torpedoes, half drive, no plating, six rooms
 src/sim/ship.js       rooms, facing, exposure, line of fire, damage, the tear rule, "is beaten"
 src/sim/orders.js     the orders: refusal() and apply(); 'move' carries {heading, speed}
 src/input/drag.js     drag on the map -> move order; input only
@@ -21,7 +23,7 @@ src/sim/weapons.js    pdc, torpedo, railgun
 src/sim/battle.js     makeBattle(seed): state, step(dt), phases, result
 src/sim/stats.js      per-side counters fed by battle.emit()
 src/sim/replay.js     exportReplay(battle), makeReplayer(replay), parseReplay(text)
-src/ai/presets.js     strategy presets: the knobs of the rule table
+src/ai/presets.js     strategy presets: the knobs of the rule table; `ship` names the design a preset flies (gunship: belter)
 src/ai/enemy.js       makeEnemy(shipId, preset): decide/apply/step, same orders
 tools/selfplay.mjs    20 seeds AI vs AI, determinism check
 tools/arena.mjs       preset vs preset over many seeds: the balance tool
@@ -33,14 +35,17 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
 
 ## State contract (what render reads)
 
-`battle` from `makeBattle(seed)`:
+`battle` from `makeBattle(seed, {me, them})` (design ids; `battle.designs` keeps them):
 
 - `t` seconds of game time; `phase` `'approach' | 'knife' | 'break'`;
   `result` null or `{kind: 'win'|'lose'|'escaped'|'draw', reason}`.
 - `ships[0]` is `'me'` (Rocinante, facing +1, starts at negative x),
-  `ships[1]` is `'them'` (Pella, facing -1). Each ship: `x, y, vx, vy`
+  `ships[1]` is `'them'` (Pella, facing -1). Each ship: `design` (id),
+  `accel` (fraction of ACCEL), `turrets` (room id to PDC turrets: all fire
+  broadside, half rounded up end-on), `x, y, vx, vy`
   in km (the fight line starts as the x axis, y is lateral), `facing`,
-  `roomOrder` (bow to stern: rail, sensors, pdc, bridge, crew, tubes, drive)
+  `roomOrder` (bow to stern; Tachi: rail, sensors, pdc, bridge, crew, tubes,
+  drive; Belter: sensors, pdc, bridge, crew, tubes, drive)
   and `pieces` map of room id to `{hp, maxHp, alive, torn?}` (`torn`: it broke
   off and drifts), `armor` and `bulkheadAft` maps of room id to true
   (plated rooms; walls that stop spill); `heading` / `headingTarget` radians on the map (0 is
@@ -88,13 +93,17 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   `noDrive running noPdc noTubes noTorps reloading tooFar noRail charging
   aiming noBurns aimingNoBurn alreadyPdc alreadyHolding badMove
   tailNoTubes noSensors railNeedsBow badTarget roomDead sameTarget noTarget
-  over`. `target` takes `{room}` (null clears). Replay version 4 adds it.
+  over`. `target` takes `{room}` (null clears). Replay version 4 adds it;
+  version 6 adds `ships {me, them}` design ids.
 
 ## Render module contract
 
-- `silhouette.js`: `drawSilhouette(ctx, ship, box, fx)` where `box` is
+- `silhouette.js`: one art table per design (profile, rooms as shapes,
+  draw order, landmarks, details), picked from `ship.design`.
+  `drawSilhouette(ctx, ship, box, fx)` where `box` is
   `{x, y, w, h}` on the canvas and `fx` is `{flash: {piece: 0..1}}`;
-  `piecePoint(piece, box, facing)` returns the canvas point of a piece.
+  `piecePoint(piece, box, facing, orientation, design)` returns the canvas
+  point of a piece; `landmark(name, design)` a named point.
 - `canvas.js`: `makeTactical(canvas, {inset})` returns `{draw, onEvent,
   toScreen, toWorld, shipScreen, setGhost}`; `makeSilhouettePanel(canvas,
   shipId, {orientation})` returns `{draw, onEvent, roomAt(x, y)}`. The panel

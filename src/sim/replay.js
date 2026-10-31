@@ -1,11 +1,12 @@
 // Replays: a battle is its seed plus the list of accepted orders.
 // exportReplay(battle) gives a small JSON object; makeReplayer feeds the orders back in.
-export const REPLAY_VERSION = 5; // 4: target orders with {room}; 5: move orders with {heading, speed}
+export const REPLAY_VERSION = 6; // 4: target orders with {room}; 5: move orders with {heading, speed}; 6: ships {me, them} design ids
 
 export function exportReplay(battle, extra = {}) {
   return {
     version: REPLAY_VERSION,
     seed: battle.seed,
+    ships: battle.designs,
     t: Math.round(battle.t * 100) / 100,
     result: battle.result,
     log: battle.log.map((e) => (e.arg === undefined ? { t: e.t, ship: e.ship, order: e.order } : { t: e.t, ship: e.ship, order: e.order, arg: e.arg })), // full precision t: a rounded t lands one step late

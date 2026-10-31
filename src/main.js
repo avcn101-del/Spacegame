@@ -8,12 +8,15 @@ import { makeTactical, makeSilhouettePanel } from './render/canvas.js';
 import { makeHud } from './render/hud.js';
 import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
 import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
+import { DESIGNS, DEFAULT_DESIGN } from './ships/index.js';
+import { turretCount } from './sim/ship.js';
 import { attachDrag } from './input/drag.js';
 import { attachTap } from './input/tap.js';
 
 const params = new URLSearchParams(location.search);
 let seed = Number(params.get('seed')) || (Date.now() % 100000); // seed choice is outside the sim
-const enemyPreset = PRESETS[params.get('enemy')] ? params.get('enemy') : DEFAULT_PRESET; // ?enemy=sniper
+const enemyPreset = PRESETS[params.get('enemy')] ? params.get('enemy') : DEFAULT_PRESET; // ?enemy=sniper, ?enemy=gunship
+const myShip = DESIGNS[params.get('ship')] ? params.get('ship') : DEFAULT_DESIGN; // ?ship=belter: fly the gunship yourself
 let replayer = null; // set while watching a recorded battle
 let autoPreset = PRESETS[params.get('auto')] ? params.get('auto') : null; // ?auto=brawler: the AI flies my ship
 let autoPilot = null;
@@ -68,7 +71,7 @@ const hud = makeHud({
 // start() begins a fresh battle; start(replay) watches a recorded one.
 function start(replay = null) {
   if (replay) seed = replay.seed;
-  battle = makeBattle(seed);
+  battle = makeBattle(seed, replay ? replay.ships : { me: myShip, them: PRESETS[enemyPreset].ship });
   battle.enemyPreset = enemyPreset;
   enemy = makeEnemy('them', enemyPreset);
   replayer = replay ? makeReplayer(replay) : null;
@@ -76,7 +79,7 @@ function start(replay = null) {
   hud.setReplay(!!replayer);
   hud.setAuto(!!autoPilot);
   paused = false; slowmo = 0; acc = 0;
-  history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}`);
+  history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}`);
   window.game = { battle, tactical, panels: { me: panelMe, them: panelThem }, exportReplay: () => exportReplay(battle) }; // for debugging and tests
 }
 
@@ -131,13 +134,15 @@ attachDrag(document.getElementById('tactical'), tactical, () => battle, (arg) =>
   if (why) hud.toast(T.refusal[why]);
 });
 
+// What a room does, in one line; the PDC line carries that ship's turret count.
+const roomInfo = (ship, room) => (typeof T.roomInfo[room] === 'function' ? T.roomInfo[room](turretCount(ship)) : T.roomInfo[room]);
 // Tap a room on their ship: go for it (tap again to clear). Tap a room on ours: what it does.
 attachTap(document.getElementById('sil-them'), (x, y) => {
   if (replayer || autoPilot) return;
   const room = panelThem.roomAt(x, y);
   if (!room) return;
   const me = battle.ships[0], pc = battle.ships[1].pieces[room];
-  const info = `${T.pieces[room]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${T.roomInfo[room]}`;
+  const info = `${T.pieces[room]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(battle.ships[1], room)}`;
   const arg = { room: me.target === room ? null : room };
   const why = battle.order('me', 'target', arg);
   if (why) hud.toast(`${T.refusal[why]} ${info}`);
@@ -147,7 +152,7 @@ attachTap(document.getElementById('sil-me'), (x, y) => {
   const room = panelMe.roomAt(x, y);
   if (!room) return;
   const pc = battle.ships[0].pieces[room];
-  hud.toast(`${T.pieces[room]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${T.roomInfo[room]}`);
+  hud.toast(`${T.pieces[room]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(battle.ships[0], room)}`);
 });
 
 start();

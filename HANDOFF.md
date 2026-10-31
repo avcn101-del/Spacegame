@@ -121,6 +121,22 @@ there loses tubes, torpedoes and drive; more "broke off" draws, because a
 drive-dead ship drifts past 16 km (open: should that be a win for the other
 side; in NOTES). Bulkheads no longer claim to be tear lines in the text.
 
+## Done this chat: the Belter gunship as data (PR 18)
+
+`src/ships/belter.js`, picked by the `gunship` preset (`?enemy=gunship`) or
+flown with `?ship=belter`. Six rooms (sensors, pdc, bridge, crew, tubes,
+drive), no rail, a PDC deck with three turrets (two end-on), 16 torpedoes, half
+the drive, no plating at all: a cobbled hull, every room dies to one torpedo.
+What the design can now say: `turrets` per PDC deck, `torps` stock, `accel`
+fraction; the sim reads them, no new number. A replay records the two designs
+(version 6). The silhouette art is one table per design (`ART`), picked from
+`ship.design`. Arena, 30 seeds: gunship beats brawler 19/11 and sniper 20/10;
+plated it was 23/7 and 22/8, which is why it is unplated. The owner has not
+played it yet. Owner's line after the tear rule: since the AI turns its stern,
+the owner has to keep turning too, and that is gameplay the mechanics make, not
+randomness (replay 89957: the stern turn cost the AI drive, tubes and crew to
+one salvo). A hangar was asked about and parked: slot variants come next.
+
 After that, in this order, each only if the owner says a battle was boring
-without it: a second ship as data (Belter gunship), slot variants from a
-small catalog, PDC ammo. Not the 2D grid.
+without it: slot variants from a small catalog (a hangar screen before the
+battle; `kind` per slot is in place), PDC ammo. Not the 2D grid.

@@ -1,5 +1,6 @@
 // Strategy presets: the knobs of the rule table in enemy.js.
 // Both sides can run any preset; the headless arena pits them against each other.
+// ship: the design the preset flies (ships/index.js); tachi when unset.
 export const PRESETS = {
   // The default enemy: closes, rakes, fires everything, gambles on the railgun.
   brawler: {
@@ -23,6 +24,11 @@ export const PRESETS = {
   turtle: {
     range: 'close', face: 'side', pdc: 'guard', torps: 'guardDown',
     railGamble: 0.0, burnChance: 0.6, runAt: 3, openWhenNoPdc: true, target: 'tubes', sternAfterSalvo: true,
+  },
+  // The Belter gunship: closes broadside for its three turrets, fires everything, never has a rail to gamble.
+  gunship: {
+    ship: 'belter', range: 'close', face: 'side', pdc: 'auto', torps: 'always',
+    railGamble: 0, burnChance: 0.3, runAt: 2, openWhenNoPdc: true, target: 'pdc', sternAfterSalvo: true,
   },
   // Fights until the end, never runs, never dodges.
   berserker: {
