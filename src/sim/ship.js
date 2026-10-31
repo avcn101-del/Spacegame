@@ -71,6 +71,7 @@ export function makeShip(id, name, x, facing, design, fit = {}) {
   roomOrder.splice(roomOrder.indexOf('sensors') + 1, 0, ...pdcs);
   const { form, cells, frames } = buildForm(design, pieces);
   form.mounts = mounts;
+  const rounds = CATALOG.rounds[fit.rounds] ? fit.rounds : 'he'; // not a room kind: read straight from the fit
   return {
     id, name, design: design.id, fit: { ...fit },
     form, cells, frames,  // the grid: {w, h, mounts}; cells[y][x] null or {room, cut}; the frame room ids
@@ -78,6 +79,8 @@ export function makeShip(id, name, x, facing, design, fit = {}) {
     salvo, reloadTime,  // torpedoes per salvo, seconds between salvos
     railRange, railRecharge, // km, seconds
     turrets,            // room id -> PDC turrets: pdc1..pdcN, one each
+    rounds,             // PDC rounds: 'he' chews the first living cell's room; 'ap' skips frame to the first job room
+    rakeDps: CATALOG.rounds[rounds].rakeDps, // Rake damage per turret per second at point blank
     roomOrder,          // the job rooms, bow first, the mounts pdc1..pdcN after the sensors
     x, y: 0,            // km; the fight line is the x axis
     vx: 0, vy: 0,       // km/s
@@ -194,18 +197,37 @@ function rays(ship, dir) {
   }
   return (byDir[dir] = out);
 }
+// Grid coordinates [x, y] of a cell object, from a map built once per ship (cells never move).
+const XY = new WeakMap();
+function cellXY(ship, cell) {
+  let m = XY.get(ship.cells);
+  if (!m) {
+    XY.set(ship.cells, (m = new Map()));
+    ship.cells.forEach((row, y) => row.forEach((c, x) => { if (c) m.set(c, [x, y]); }));
+  }
+  return m.get(cell) || null;
+}
+// The first living cell on a ray, as [x, y]: where the shot meets the hull. null when none.
+function frontXY(ship, ray) {
+  const c = ray.find((k) => cellAlive(ship, k));
+  return c ? cellXY(ship, c) : null;
+}
 // The distinct rooms of the living cells along a ray, in the order the shot meets them.
 function roomsAlong(ship, ray) {
   const rooms = [];
   for (const c of ray) if (cellAlive(ship, c) && !rooms.includes(c.room)) rooms.push(c.room);
   return rooms;
 }
-// The rooms an unaimed shot meets: a ray drawn uniformly from those that show a living cell.
-export function lineOfFire(ship, rng, dir) {
+// An unaimed shot: a ray drawn uniformly from those that show a living cell. Returns {rooms, at}:
+// the rooms it meets in order and the first living cell [x, y]; rooms empty and at null when none.
+export function shotLine(ship, rng, dir) {
   const live = rays(ship, dir).filter((r) => r.some((c) => cellAlive(ship, c)));
-  if (live.length === 0) return [];
-  return roomsAlong(ship, rng.pick(live));
+  if (live.length === 0) return { rooms: [], at: null };
+  const ray = rng.pick(live);
+  return { rooms: roomsAlong(ship, ray), at: frontXY(ship, ray) };
 }
+// The rooms an unaimed shot meets (shotLine without the cell).
+export const lineOfFire = (ship, rng, dir) => shotLine(ship, rng, dir).rooms;
 // Of the rays from `dir` through a living cell of `room`, those with the fewest living cells of other
 // rooms in front, and that count (Infinity when no ray reaches it).
 function leastCover(ship, room, dir) {
@@ -223,11 +245,33 @@ function leastCover(ship, room, dir) {
   }
   return { rays: best, cover: min };
 }
-// The rooms a shot aimed at `room` meets: the least-covered ray to it (ties by the rng). The cover
-// comes first, then the room, then what is behind. Empty when no ray reaches it.
-export function lineOfFireAt(ship, room, dir, rng) {
+// A shot aimed at `room`: the least-covered ray to it (ties by the rng). The cover comes first, then
+// the room, then what is behind. Returns {rooms, at} like shotLine; empty when no ray reaches it.
+export function shotLineAt(ship, room, dir, rng) {
   const best = leastCover(ship, room, dir).rays;
-  return best.length ? roomsAlong(ship, rng.pick(best)) : [];
+  if (!best.length) return { rooms: [], at: null };
+  const ray = rng.pick(best);
+  return { rooms: roomsAlong(ship, ray), at: frontXY(ship, ray) };
+}
+export const lineOfFireAt = (ship, room, dir, rng) => shotLineAt(ship, room, dir, rng).rooms;
+// The first living cell on a ray that a Rake chews: any room's with HE, a job room's with AP
+// (pierce: frame cells are passed through).
+const isFrameRoom = (room) => room.startsWith('frame:');
+const rakeFront = (ship, ray, pierce) => ray.find((k) => cellAlive(ship, k) && !(pierce && isFrameRoom(k.room)));
+// The room a Rake meets on a random ray from `dir` that has something it can chew (ties by the
+// rng); null when none. With HE this is lineOfFire(...)[0], rng use included.
+export function rakePick(ship, rng, dir, pierce) {
+  if (!pierce) return lineOfFire(ship, rng, dir)[0] || null;
+  const live = rays(ship, dir).filter((r) => rakeFront(ship, r, true));
+  return live.length ? rakeFront(ship, rng.pick(live), true).room : null;
+}
+// True when some ray from `dir` meets `room` first among what a Rake chews (exposed, for HE).
+export const rakeSees = (ship, room, dir, pierce) => rays(ship, dir).some((r) => { const c = rakeFront(ship, r, pierce); return !!c && c.room === room; });
+// Where a Rake on `room` meets the hull: its cell on the first ray (in ray order) where it is the
+// front, as [x, y]; null when no ray shows it.
+export function rakeXY(ship, room, dir, pierce) {
+  for (const r of rays(ship, dir)) { const c = rakeFront(ship, r, pierce); if (c && c.room === room) return cellXY(ship, c); }
+  return null;
 }
 // The living mount of `ship` with the least cover from (fromX, fromY), ties by the rng; null when
 // none is left. The AI's "go for the pdc".

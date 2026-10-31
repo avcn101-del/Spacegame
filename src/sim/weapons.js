@@ -1,7 +1,7 @@
 // PDC, torpedo, railgun. Each function advances one ship's weapon by dt.
 // Hits land on the rooms a ray meets from where the shot comes from (ship.shotFrom, lineOfFire).
 import { N } from '../numbers.js';
-import { alive, pdcCount, pdcAlive, pdcRooms, mountSees, damage, lineOfFire, lineOfFireAt, exposed, shotFrom, aimFactor, crewSpeed, canAimRail } from './ship.js';
+import { alive, pdcCount, pdcAlive, pdcRooms, mountSees, damage, shotLine, shotLineAt, rakePick, rakeSees, rakeXY, exposed, shotFrom, aimFactor, crewSpeed, canAimRail } from './ship.js';
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // 1 at point blank, 0 at PDC_RANGE and beyond.
@@ -15,13 +15,14 @@ const isFrame = (room) => room.startsWith('frame:');
 // least cover in front of it; the cover still takes the hit first. Emits hit and death events.
 function strike(battle, target, kind, amount, fromX, fromY, room = null) {
   const dir = shotFrom(target, fromX, fromY);
-  let rooms = room && alive(target, room) ? lineOfFireAt(target, room, dir, battle.rng) : [];
-  if (rooms.length === 0) rooms = lineOfFire(target, battle.rng, dir);
+  let line = room && alive(target, room) ? shotLineAt(target, room, dir, battle.rng) : { rooms: [] };
+  if (line.rooms.length === 0) line = shotLine(target, battle.rng, dir);
+  const { rooms, at } = line;
   if (rooms.length === 0) return;
   const carry = isFrame(rooms[0]) ? Math.max(0, amount - target.pieces[rooms[0]].hp) : amount * N.SPILL;
   const spill = rooms[1] && carry > 0 ? rooms[1] : null;
   const hits = [[rooms[0], amount], [spill, carry]].filter(([r]) => r);
-  battle.emit({ type: kind, x: target.x, y: target.y, ship: target.id, piece: rooms[0], spill });
+  battle.emit({ type: kind, x: target.x, y: target.y, ship: target.id, piece: rooms[0], spill, at }); // at: the first living cell [x, y]
   for (const [room, dmg] of hits) {
     const r = damage(target, room, dmg);
     if (r.died) battle.pieceDied(target, room, kind === 'torpHit' ? 'torp' : 'rail');
@@ -61,18 +62,20 @@ export function stepPdc(battle, ship, enemy, dt) {
   spawnTracers(battle, ship, enemy, dt, turrets);
   // The chosen room when the turrets can see it (a ray from here meets it first); else the first
   // room of a random ray from here, chewed until it dies or the hull turns it out of sight.
-  const dir = shotFrom(enemy, ship.x, ship.y);
-  if (ship.target && alive(enemy, ship.target) && exposed(enemy, ship.target, dir)) ship.rakeTarget = ship.target;
-  else if (!ship.rakeTarget || !alive(enemy, ship.rakeTarget) || !exposed(enemy, ship.rakeTarget, dir)) {
-    ship.rakeTarget = lineOfFire(enemy, battle.rng, dir)[0] || null;
+  // AP rounds (ship.rounds) pass through frame: "first" is the first living job room on the ray.
+  const dir = shotFrom(enemy, ship.x, ship.y), pierce = ship.rounds === 'ap';
+  if (ship.target && alive(enemy, ship.target) && rakeSees(enemy, ship.target, dir, pierce)) ship.rakeTarget = ship.target;
+  else if (!ship.rakeTarget || !alive(enemy, ship.rakeTarget) || !rakeSees(enemy, ship.rakeTarget, dir, pierce)) {
+    ship.rakeTarget = rakePick(enemy, battle.rng, dir, pierce);
   }
   if (!ship.rakeTarget) return;
-  const r = damage(enemy, ship.rakeTarget, N.PDC_RAKE_DPS * pdcFactor(d) * aim * turrets * dt);
+  const at = rakeXY(enemy, ship.rakeTarget, dir, pierce); // before the damage: the cell is still alive
+  const r = damage(enemy, ship.rakeTarget, ship.rakeDps * pdcFactor(d) * aim * turrets * dt);
   // steady stream of small hits for the renderer
   ship.hitAcc = (ship.hitAcc || 0) + dt * 6 * pdcFactor(d);
   while (ship.hitAcc >= 1) {
     ship.hitAcc -= 1;
-    battle.emit({ type: 'pdcHit', x: enemy.x, y: enemy.y, ship: enemy.id, piece: ship.rakeTarget });
+    battle.emit({ type: 'pdcHit', x: enemy.x, y: enemy.y, ship: enemy.id, piece: ship.rakeTarget, at });
   }
   if (r.died) battle.pieceDied(enemy, r.room, 'pdc');
 }
