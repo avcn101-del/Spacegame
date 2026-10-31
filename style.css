@@ -23,7 +23,8 @@ header { position: absolute; top: 0; left: 0; right: 0; height: var(--top); disp
 .panel .name { font-size: 9px; letter-spacing: 0.15em; padding: 3px 4px; color: var(--dim); text-align: center; white-space: nowrap; overflow: hidden; }
 .panel.me .name { color: var(--me); } .panel.them .name { color: var(--them); }
 .panel canvas { flex: 1; width: 100%; min-height: 0; display: block; }
-.panel .nums { display: flex; justify-content: space-around; padding: 2px 2px 4px; }
+.panel .nums { display: flex; flex-direction: column; gap: 3px; padding: 2px 6px 5px; }
+.panel .nums .num { flex-direction: row; justify-content: space-between; align-items: baseline; }
 .panel .nums .v { font-size: 15px; }
 #order { position: absolute; left: var(--side); right: var(--side); bottom: var(--bottom); font-size: 12px; letter-spacing: 0.08em; text-align: center; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); text-shadow: 0 0 6px #000; }
 #order.warn { color: var(--warn); animation: blink 0.5s steps(2) infinite; }

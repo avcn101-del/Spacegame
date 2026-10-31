@@ -10,9 +10,9 @@ export const T = {
     torps: 'TORPS', rail: 'RAIL', burn: 'BURN', run: 'RUN',
   },
   hints: {
-    close: 'into PDC range', hold: 'keep this range', open: 'out to torpedo range',
-    guard: 'PDCs shoot torpedoes', rake: 'PDCs shoot their hull',
-    torps: 'fire a pair', rail: 'aim 3 s, one shot', burn: 'dodge their railgun', run: 'leave the fight',
+    close: 'to PDC range', hold: 'keep range', open: 'torpedo range',
+    guard: 'shoot torpedoes', rake: 'rake the hull',
+    torps: 'fire a pair', rail: 'aim 3 s, one shot', burn: 'dodge railgun', run: 'leave the fight',
   },
   legend: {
     close: 'Burn toward them until the PDCs can reach. Most damage happens here.',
