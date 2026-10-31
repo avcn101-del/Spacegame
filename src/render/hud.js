@@ -4,10 +4,12 @@ import { N } from '../numbers.js';
 import { T, roomKey } from '../text.js';
 import { alive, exposure, canFireTubes, canAimRail, pdcAlive } from '../sim/ship.js';
 import { CATALOG } from '../ships/catalog.js';
-import { drawHangar, hitAt } from './hangar.js';
+import { drawHangar, hitAt, roomAtCell } from './hangar.js';
 
 const $ = (sel) => document.querySelector(sel);
 const fmtClock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+const SLOTS_OF = { rail: 1, tubes: 1, drive: 1 }; // rooms that have a pick
+const ROOM_OF = { gun: 'rail', launcher: 'tubes', drive: 'drive' };
 const tap = (sel, fn) => $(sel).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 
 export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview, presets }) {
@@ -33,7 +35,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   tap('#pm-auto', onAuto);
   // The hangar: the ship's form (preview(fit) builds it), a tap on a marked part toggles that slot's
   // variant; LAUNCH hands the fit back and starts a new battle. No pick rows: every slot is on the drawing.
-  let fit = {}, sel = null, hits = [], foe = null; // foe: the enemy preset picked here
+  let fit = {}, sel = null, hits = [], foe = null, note = null, shown = null; // note: the room last tapped; shown: {ship, W, H} last drawn // foe: the enemy preset picked here
   for (const id of ['#pm-hangar', '#rs-hangar']) { tap(id, () => api.showHangar(fit)); $(id).textContent = T.hangar.button; }
   $('#hg-title').textContent = T.hangar.title; $('#hg-launch').textContent = T.hangar.launch; $('#hg-close').textContent = T.hangar.close;
   const cv = $('#hg-canvas');
@@ -70,7 +72,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
       row.innerHTML = `<b>${c.name}</b> <i>${T.variantStats[slot](CATALOG[slot][key])}</i><span>${c.line}</span>`;
       row.addEventListener('pointerdown', (e) => {
         e.preventDefault(); e.stopPropagation();
-        fit = { ...fit, [slot]: key }; sel = slot; closeList(); markFit(fit);
+        fit = { ...fit, [slot]: key }; sel = slot; note = ROOM_OF[slot]; closeList(); markFit(fit);
       });
       list.appendChild(row);
     }
@@ -87,11 +89,14 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
   cv.addEventListener('pointerdown', (e) => {
     e.preventDefault(); e.stopPropagation();
     const r = cv.getBoundingClientRect();
-    const hit = hitAt(hits, e.clientX - r.left, e.clientY - r.top);
-    if (!hit) { closeList(); return; }
-    sel = hit.slot;
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    const room = shown ? roomAtCell(shown.ship, px, py, shown.W, shown.H) : null;
+    // a cell of a picked room, or void just beside a hardpoint, is the hardpoint; any other cell just says what it does
+    const hit = !room || SLOTS_OF[room] ? hitAt(hits, px, py) : null;
+    if (!hit && !room) { closeList(); return; }
+    sel = hit ? hit.slot : null; note = room || (hit && ROOM_OF[hit.slot]);
     markFit(fit);
-    openList(hit);
+    if (hit) openList(hit); else closeList();
   });
   $('#hangar').addEventListener('pointerdown', closeList); // anywhere else (the buttons still act)
   let hangarOpen = false;
@@ -108,9 +113,10 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
     }
     const ctx = cv.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    hits = drawHangar(ctx, ship, f, sel, W, H);
-    const c = sel && T.catalog[f[sel]];
-    $('#hg-line').innerHTML = c ? `<b>${T.slots[sel].toUpperCase()}</b> ${c.name}. <span>${c.line}</span>` : `<span>${T.hangar.hint}</span>`;
+    hits = drawHangar(ctx, ship, f, sel, W, H); shown = { ship, W, H };
+    const c = sel && T.catalog[f[sel]], k = note && roomKey(note);
+    const what = k ? `<b>${T.pieces[k].toUpperCase()}</b> ${T.roomInfo[k]}` : '';
+    $('#hg-line').innerHTML = c ? `${what} <span>${c.name}. ${c.line}</span>` : k ? what : `<span>${T.hangar.hint}</span>`;
   };
   $('#export-title').textContent = T.exportTitle;
   $('#export-copy').textContent = T.copy; $('#export-download').textContent = T.download; $('#export-close').textContent = T.close;
@@ -139,7 +145,7 @@ export function makeHud({ onOrder, onPause, onResume, onRestart, onNew, onExport
 
   const api = {
     showExport(text) { $('#export-text').value = text; $('#exportbox').classList.add('show'); },
-    showHangar(f) { closeList(); fit = { ...f }; sel = null; hangarOpen = true; $('#hangar').classList.add('show'); markFit(fit); markFoe(); },
+    showHangar(f) { closeList(); fit = { ...f }; sel = null; note = null; hangarOpen = true; $('#hangar').classList.add('show'); markFit(fit); markFoe(); },
     setEnemy(key) { foe = key; },
     setFit(f) { fit = { ...f }; },
     setAuto(on) { auto = on; $('#pm-auto').textContent = on ? T.autoOff : T.auto; document.getElementById('orders').classList.toggle('replay', on || replay); },

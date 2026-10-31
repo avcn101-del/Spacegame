@@ -92,9 +92,10 @@ export const T = {
     sensors: 'Firing solutions. Dead: no rail aim, weapons hit half as often.',
     bridge: 'Takes two hits. Every room must reach it, or it tears off. Dead: the ship is beaten.',
     pdc: 'One PDC. Fires at what is on its side, or ahead and astern. Dead: one gun fewer.',
-    crew: 'Damage control. Dead: reload and recharge at half speed, and the stern tears off.',
-    tubes: 'Torpedoes, four a salvo. Dead: no torpedoes, and the drive tears off.',
-    drive: 'Dead: no moving, no turning, no Burn.',
+    crew: 'Damage control. Dead: reload and recharge at half speed.',
+    tubes: 'Torpedoes, four a salvo. Cannot fire tail-on. Dead: no torpedoes.',
+    drive: 'Moves and turns the ship. Dead: no moving, no turning, no Burn.',
+    frame: 'Frame: cover. What its 5 hp does not stop carries on into the room behind. Empty hardpoints wait for later rooms.',
   },
   result: {
     win: { bridge: 'PELLA IS DEAD. Her bridge is gone.', disarmed: 'PELLA IS BEATEN. Nothing left to shoot with.', hull: 'PELLA IS FINISHED. Half her hull is adrift.' },
@@ -104,7 +105,7 @@ export const T = {
   },
   again: 'NEW BATTLE', same: 'SAME SEED', seed: 'seed',
   // The hangar: one of two for each slot that has a choice. Names and one line each.
-  hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, pick the enemy, then launch.', enemy: 'ENEMY', launch: 'LAUNCH', close: 'CLOSE', hint: 'Tap a marked part to swap it.' },
+  hangar: { button: 'HANGAR', title: 'HANGAR. Fit the Rocinante, pick the enemy, then launch.', enemy: 'ENEMY', launch: 'LAUNCH', close: 'CLOSE', hint: 'Tap a room to see what it does; a marked part to swap it.', pdc: 'PDC' },
   slots: { launcher: 'Tubes', gun: 'Railgun', drive: 'Drive' },
   catalog: {
     quad: { name: 'Quad tubes', line: 'Four at once swamp a Guard.' },
