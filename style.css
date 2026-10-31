@@ -58,3 +58,9 @@ nav button.progress::after { content: ""; position: absolute; left: 0; bottom: 0
 .overlay .row { display: flex; gap: 12px; } .overlay .row button { padding: 10px 18px; font-size: 12px; letter-spacing: 0.15em; }
 #rotate { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: var(--bg); color: var(--dim); font-size: 14px; letter-spacing: 0.15em; text-align: center; padding: 24px; z-index: 10; }
 @media (orientation: portrait) { #rotate { display: flex; } }
+#stats { border-collapse: collapse; font-size: 11px; color: var(--text); }
+#stats th { font-weight: normal; color: var(--dim); text-align: left; padding: 1px 10px 1px 0; }
+#stats td { text-align: center; padding: 1px 10px; font-variant-numeric: tabular-nums; }
+#stats td.me { color: var(--me); } #stats td.them { color: var(--them); }
+.overlay .row.small button { padding: 6px 12px; font-size: 10px; color: var(--dim); }
+nav#orders.replay button { opacity: 0.35; pointer-events: none; }

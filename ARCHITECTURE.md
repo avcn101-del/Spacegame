@@ -16,7 +16,13 @@ src/sim/ship.js       six pieces, damage, "is beaten"
 src/sim/orders.js     the six orders: refusal() and apply()
 src/sim/weapons.js    pdc, torpedo, railgun
 src/sim/battle.js     makeBattle(seed): state, step(dt), phases, result
-src/ai/enemy.js       makeEnemy(shipId).step(battle, dt): same orders
+src/sim/stats.js      per-side counters fed by battle.emit()
+src/sim/replay.js     exportReplay(battle), makeReplayer(replay), parseReplay(text)
+src/ai/presets.js     strategy presets: the knobs of the rule table
+src/ai/enemy.js       makeEnemy(shipId, preset): decide/apply/step, same orders
+tools/selfplay.mjs    20 seeds AI vs AI, determinism check
+tools/arena.mjs       preset vs preset over many seeds: the balance tool
+tools/replay.mjs      replay a battle JSON headless, print stats and orders
 src/render/silhouette.js  Roci outline, pieces lit or dark
 src/render/canvas.js  tactical strip, tracers, impacts, debris, shake
 src/render/hud.js     four numbers, current order, buttons, pause, result
@@ -44,6 +50,11 @@ src/render/hud.js     four numbers, current order, buttons, pause, result
   `torpKilled {x,y,by}`, `torpHit {x,y,ship,piece}`, `railFire {x,y,by}`,
   `railHit {x,y,ship,piece}`, `railMiss {x,y,ship}`, `burn {x,y,by,dir}`,
   `pieceDead {x,y,ship,piece,cause}`, `end {result}`.
+- `battle.emit(ev)` is the only way the sim publishes an event; it also feeds
+  `battle.stats`. `battle.log` holds every accepted order with its exact `t`;
+  seed plus log is a replay. The AI rolls its own seeded dice so a replay
+  without the AI reproduces the same battle. The weapons loop alternates which
+  ship goes first each step: a fixed order gave the first ship a 60/40 edge.
 - `battle.order(shipId, order)` returns null if accepted or a refusal key:
   `noDrive running noPdc noTubes noTorps reloading tooFar noRail charging
   aiming noBurns aimingNoBurn over`.

@@ -1,5 +1,5 @@
 # STATUS
 
-- Playable: prototype 0 plus readability pass: full-screen tactical, vertical silhouettes, button hints, pause legend, restart, motion feedback, readable rail dodge.
-- Owner said last: buttons unexplained, cannot tell moving from still, layout not optimal, can the railgun be dodged.
-- Being changed: waiting for the owner to play five battles and write three lines.
+- Playable: prototype 0, readability pass, replay export/import with stats, enemy presets (`?enemy=sniper|turtle|berserker`), headless arena.
+- Owner said last: wants replay export and stats, scripted strategies, and holding still feels boring.
+- Being changed: owner to choose A (drifting starfield) and/or B (Hold becomes circling) for the next PR.

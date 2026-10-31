@@ -9,7 +9,7 @@ import { alivePieces } from '../src/sim/ship.js';
 function run(seed) {
   const b = makeBattle(seed);
   const a1 = makeEnemy('me'), a2 = makeEnemy('them');
-  while (!b.result) { a1.step(b, N.DT); a2.step(b, N.DT); b.step(N.DT); b.events.length = 0; }
+  while (!b.result) { const o1 = a1.decide(b, N.DT), o2 = a2.decide(b, N.DT); a1.apply(b, o1); a2.apply(b, o2); b.step(N.DT); b.events.length = 0; }
   return b;
 }
 const tally = {}; let total = 0;
