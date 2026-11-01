@@ -26,7 +26,7 @@ const V = {
   SLACK: 6,          // px around a hull box that still counts for roomAt
   PUNCH: 6,          // cells a slug keeps going after the first hit
   MAX_DT: 0.1,       // clamp a long frame
-  DRIFT: 3,          // cut cells drift this many times further than on the panels, to read at this size
+  DRIFT: 3,          // cut cells drift this many times further than form.js draws them by default, to read at this size
   BOLTS: 90,         // cap on streaks alive: keeps a phone smooth
   SCARS: 40, SMOULDER: 14, CHAR_MAX: 0.75,
   STAR_PX_PER_KM: 30, // dock starfield: px the far layer would slide per km my ship travels
@@ -77,7 +77,7 @@ export function makeCloseup(canvas) {
   let inspect = null, inspectTtl = 0, lastTarget = null, pulse = 0;
   let blooms = [], tints = [];   // G1: {x, y, kind, col, ttl, life} glows; {sid, x, y, r, a, ttl, life} impact light on the hull
   const starfield = makeStarfield(3);
-  const flash = { me: {}, them: {} };       // room -> 0..1, like the panels
+  const flash = { me: {}, them: {} };       // room -> 0..1
   const bump = (sid, room, v) => { flash[sid][room] = Math.max(flash[sid][room] || 0, v); };
 
   // --- the stage ---------------------------------------------------------------------

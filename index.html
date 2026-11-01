@@ -7,7 +7,6 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<canvas id="tactical"></canvas>
 <div id="game">
   <div id="closeup-wrap"><canvas id="cu-world"></canvas><canvas id="closeup"></canvas></div>
   <header>
@@ -15,22 +14,9 @@
     <div class="num"><span class="l" id="l-range"></span><span class="v"><span id="n-range">0.0</span><span id="n-rate"></span></span></div>
     <div id="title"></div>
     <div id="phase"></div>
-    <button id="view"></button>
     <button id="pause"></button>
     <button id="help"></button>
   </header>
-  <section class="panel me" id="panel-me">
-    <div class="name" id="name-me"></div>
-    <canvas id="sil-me"></canvas>
-    <div class="nums">
-      <div class="num"><span class="l" id="l-torps"></span><span class="v" id="n-torps">0</span></div>
-      <div class="num"><span class="l" id="l-burns"></span><span class="v" id="n-burns">0</span></div>
-    </div>
-  </section>
-  <section class="panel them" id="panel-them">
-    <div class="name" id="name-them"></div>
-    <canvas id="sil-them"></canvas>
-  </section>
   <div id="toasts"></div>
   <div id="status">
     <div id="alerts"><span id="alert-main"></span><span id="alert-sub"></span></div>

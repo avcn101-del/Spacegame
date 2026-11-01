@@ -20,6 +20,8 @@ Ideas go here. They are not built until the owner asks.
   and power routing, radiators and heat, mass and thrust, the shield bubble.
 - Burn as a torpedo dodge (today it only beats the railgun).
 - PDC ammo: Guard spends rounds, a decision between Guard now and Rake later.
+- Dead code in silhouette.js (art tables, shipPoint/piecePoint/landmark/SHIP_ASPECT), cleanup PR later. Also
+  makeTactical's default camera and small-mark branches have no caller since PR H.
 - Lock time for tap-a-room: the sensors need a few seconds to lock a room, like the rail aim; moving or losing sensors drops it.
 - PDC variants per mount (plated, or fast): the PDC pick was removed with the six fixed mounts.
 - Stalemate after the form: two hulks, drives dead, tubes alive but tail-on, 200 s of nothing

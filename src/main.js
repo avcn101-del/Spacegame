@@ -4,7 +4,7 @@ import { N } from './numbers.js';
 import { T, roomKey } from './text.js';
 import { makeBattle } from './sim/battle.js';
 import { makeEnemy } from './ai/enemy.js';
-import { makeTactical, makeSilhouettePanel } from './render/canvas.js';
+import { makeTactical } from './render/canvas.js';
 import { makeCloseup } from './render/closeup.js';
 import { makeHud } from './render/hud.js';
 import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
@@ -29,23 +29,14 @@ let autoPreset = PRESETS[params.get('auto')] ? params.get('auto') : null; // ?au
 let autoPilot = null;
 
 let battle, enemy, paused = false, slowmo = 0, acc = 0;
-const cssPx = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
-const tactical = makeTactical(document.getElementById('tactical'), {
-  // the part of the screen not covered by HUD; the camera fits the ships in here
-  inset: () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status'), left: cssPx('--side') + 8, right: cssPx('--side') + 8 }),
-});
-const panelMe = makeSilhouettePanel(document.getElementById('sil-me'), 'me', { orientation: 'vertical' });
-const panelThem = makeSilhouettePanel(document.getElementById('sil-them'), 'them', { orientation: 'vertical' });
+// One view: the world stage on top (the map: real positions, drag to steer, a camera that keeps every
+// projectile in frame) and the cutaway dock below (both hulls, tap a room).
 const closeup = makeCloseup(document.getElementById('closeup'));
-// The close-up's world stage: the same map as TAC (same drag), a camera that keeps every projectile in frame.
 const cuWorld = makeTactical(document.getElementById('cu-world'), {
   inset: () => ({ top: 0, bottom: 0, left: 0, right: 0 }), camera: 'engage', quiet: true,
-  maxScale: 90, markPx: [36, 48], // knife range reads closer; big top-down hull marks (TAC keeps its own)
+  maxScale: 90, markPx: [36, 48], // knife range reads closer; big top-down hull marks
 });
-// One view at a time (button only): TAC is the map and both panels, CLOSE-UP the stage that covers them.
-// Events and draws go only to the view on show, so a hidden view never replays old effects.
-const VIEWS = { tac: [tactical, panelMe, panelThem], closeup: [cuWorld, closeup] };
-let view = 'tac';
+const VIEW = [cuWorld, closeup]; // every renderer: events and draws go to both
 
 const hud = makeHud({
   onOrder(o, arg) {
@@ -55,7 +46,6 @@ const hud = makeHud({
     else if (o === 'torps') hud.toast(T.order.torpsAway);
     else if (o === 'burn') hud.toast(T.order.burn);
   },
-  onView() { setView(view === 'tac' ? 'closeup' : 'tac'); },
   onPause() { paused = !paused; },
   onHelp() { paused = true; },
   onResume() { paused = false; },
@@ -95,13 +85,6 @@ const hud = makeHud({
   },
 });
 
-function setView(v) {
-  view = v;
-  document.body.classList.toggle('closeup', v === 'closeup');
-  hud.setView(v);
-  if (battle) for (const r of VIEWS[v]) if (r.reset) r.reset(battle); // nothing frozen while hidden replays
-}
-
 // start() begins a fresh battle; start(replay) watches a recorded one.
 function start(replay = null) {
   if (replay) seed = replay.seed;
@@ -117,8 +100,8 @@ function start(replay = null) {
   paused = false; slowmo = 0; acc = 0;
   const fitQ = fitString(battle.designs.me.fit);
   history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}`);
-  closeup.reset(battle);
-  window.game = { battle, tactical, closeup, cuWorld, setView, panels: { me: panelMe, them: panelThem }, exportReplay: () => exportReplay(battle), perf }; // for debugging and tests
+  for (const r of VIEW) r.reset(battle); // nothing from the last battle carries over (camera, fx)
+  window.game = { battle, closeup, cuWorld, exportReplay: () => exportReplay(battle), perf }; // for debugging and tests
 }
 
 // Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
@@ -140,7 +123,7 @@ const pct = (a, q) => { if (!a.length) return 0; const s = [...a].sort((x, y) =>
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const r1 = (v) => Math.round(v * 10) / 10;
 function perf() {
-  return { frames: perfGap.length, view, dpr: window.devicePixelRatio || 1, frameAvg: r1(avg(perfGap)), frameP95: r1(pct(perfGap, 0.95)), fps: r1(1000 / (avg(perfGap) || 1)), workAvg: r1(avg(perfWork)), workP95: r1(pct(perfWork, 0.95)) };
+  return { frames: perfGap.length, dpr: window.devicePixelRatio || 1, frameAvg: r1(avg(perfGap)), frameP95: r1(pct(perfGap, 0.95)), fps: r1(1000 / (avg(perfGap) || 1)), workAvg: r1(avg(perfWork)), workP95: r1(pct(perfWork, 0.95)) };
 }
 perf.reset = () => { perfGap.length = 0; perfWork.length = 0; };
 const perfPush = (a, v) => { a.push(v); if (a.length > PERF_N) a.shift(); };
@@ -168,11 +151,10 @@ function frame(now) {
     battle.step(N.DT);
     acc -= N.DT; steps++;
   }
-  // Drain events to renderers; slow-mo and panel pop on the big beats.
+  // Drain events to renderers; slow-mo on the big beats.
   for (const ev of battle.events) {
     const frameDead = ev.type === 'pieceDead' && isFrame(ev.piece); // a frame room dying is a flash, not a beat or a line
     if (ev.type === 'railHit' || (ev.type === 'pieceDead' && !frameDead)) slowmo = N.SLOWMO_TIME;
-    if (ev.type === 'railHit' || ev.type === 'torpHit' || (ev.type === 'pieceDead' && !frameDead)) hud.hit(ev.ship);
     if (ev.type === 'pieceDead' && ev.cause !== 'tear' && !frameDead) hud.toast(`${T.lost[ev.ship]} ${T.pieces[roomKey(ev.piece)].toUpperCase()} ${T.gone}: ${T.roomDead[roomKey(ev.piece)]}.`, 3.2, 'event');
     if (ev.type === 'tear') {
       const names = [...new Set(ev.pieces.map((r) => T.pieces[roomKey(r)].toLowerCase()))]; // frame rooms and PDC mounts fold into one word each
@@ -180,23 +162,21 @@ function frame(now) {
         ? `${T.lost[ev.ship]} ${T.frameAdrift}.`
         : `${T.lost[ev.ship]} ${T.tear[ev.end]}: ${names.join(', ')} ${T.adrift}.`, 4, 'event');
     }
-    for (const r of VIEWS[view]) r.onEvent(ev);
+    for (const r of VIEW) r.onEvent(ev);
   }
   battle.events.length = 0;
-  for (const r of VIEWS[view]) r.draw(battle, dtGame);
+  for (const r of VIEW) r.draw(battle, dtGame);
   hud.draw(battle, paused, dtReal);
   perfPush(perfWork, performance.now() - t0);
   requestAnimationFrame(frame);
 }
 
-// One move dispatch for both maps: TAC and the close-up's world stage (same drag, same rules).
-function move(arg) {
+// Drag on the world stage: a move order.
+attachDrag(document.getElementById('cu-world'), cuWorld, () => battle, (arg) => {
   if (replayer || autoPilot) return;
   const why = battle.order('me', 'move', arg);
   if (why) hud.toast(T.refusal[why], 2.2, 'no');
-}
-attachDrag(document.getElementById('tactical'), tactical, () => battle, (arg) => { if (view === 'tac') move(arg); });
-attachDrag(document.getElementById('cu-world'), cuWorld, () => battle, (arg) => { if (view === 'closeup') move(arg); });
+});
 
 // What a room does, in one line; every PDC mount shares the one line.
 const roomInfo = (room) => T.roomInfo[roomKey(room)];
@@ -216,8 +196,6 @@ function tapMine(room) {
   hud.inspect(room); closeup.setInspect(room);
   hud.toast(`${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`, 3, 'event');
 }
-attachTap(document.getElementById('sil-them'), (x, y) => tapThem(panelThem.roomAt(x, y)));
-attachTap(document.getElementById('sil-me'), (x, y) => tapMine(panelMe.roomAt(x, y)));
 // The dock: taps only (a drag that starts here never steers).
 attachTap(document.getElementById('closeup'), (x, y) => {
   const hit = closeup.roomAt(x, y);
@@ -225,6 +203,5 @@ attachTap(document.getElementById('closeup'), (x, y) => {
   if (hit.side === 'them') tapThem(hit.room); else tapMine(hit.room);
 });
 
-hud.setView(view);
 start();
 requestAnimationFrame(frame);

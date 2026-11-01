@@ -1,4 +1,4 @@
-// HUD: four numbers, phase, current order line, nine buttons with hints,
+// HUD: two numbers (clock, range), phase, current order line, nine buttons with hints,
 // pause menu with legend, result. Reads battle state; sends orders through callbacks.
 import { N } from '../numbers.js';
 import { T, roomKey } from '../text.js';
@@ -16,13 +16,12 @@ const ROOM_OF = { gun: 'rail', launcher: 'tubes', drive: 'drive', rounds: 'pdc1'
 const hasPick = (room) => !!SLOTS_OF[room] || /^pdc\d+$/.test(room); // the PDC mounts pick the rounds
 const tap = (sel, fn) => $(sel).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 
-export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview, presets }) {
+export function makeHud({ onOrder, onPause, onHelp, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview, presets }) {
   const el = {
-    clock: $('#n-clock'), range: $('#n-range'), rate: $('#n-rate'), torps: $('#n-torps'), burns: $('#n-burns'),
+    clock: $('#n-clock'), range: $('#n-range'), rate: $('#n-rate'),
     phase: $('#phase'), order: $('#order'), pause: $('#pause'), title: $('#title'),
     toasts: $('#toasts'), alerts: $('#alerts'), alertMain: $('#alert-main'), alertSub: $('#alert-sub'), inspector: $('#inspector'),
     pausemenu: $('#pausemenu'), result: $('#result'), resultText: $('#result-text'), resultSeed: $('#result-seed'),
-    panels: { me: $('#panel-me'), them: $('#panel-them') },
     buttons: {},
   };
   for (const o of Object.keys(T.buttons)) {
@@ -39,7 +38,6 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
   $('#help').textContent = T.help;
   tap('#pm-close', () => { helpOpen = false; });
   $('#pm-close').textContent = T.close;
-  tap('#view', onView);
   tap('#pm-resume', () => { helpOpen = false; onResume(); }); tap('#pm-restart', () => { helpOpen = false; onRestart(); }); tap('#pm-new', () => { helpOpen = false; onNew(); });
   tap('#again', onNew); tap('#same', onRestart);
   for (const id of ['#pm-export', '#rs-export']) { tap(id, onExport); $(id).textContent = T.export; }
@@ -149,8 +147,7 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
   $('#pm-title').textContent = T.pausedTitle;
   $('#title').textContent = T.title;
   $('#rotate-text').textContent = T.rotate;
-  $('#name-me').textContent = T.ships.me; $('#name-them').textContent = T.ships.them;
-  for (const k of ['range', 'torps', 'burns', 'clock']) $(`#l-${k}`).textContent = T.numbers[k];
+  for (const k of ['range', 'clock']) $(`#l-${k}`).textContent = T.numbers[k];
   $('#legend').innerHTML = Object.keys(T.legend)
     .map((o) => `<li><b>${T.buttons[o] || o.toUpperCase()}</b> <span>${T.legend[o]}</span></li>`).join('');
 
@@ -163,7 +160,6 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
   const setText = (e, t) => { if (e.textContent !== t) e.textContent = t; };
   const setClass = (e, c) => { if (e.className !== c) e.className = c; };
   const roomName = (room) => (isPdc(room) ? T.inspect.pdc(room.slice(3)) : T.pieces[roomKey(room)].toUpperCase());
-  const hitTimers = { me: 0, them: 0 };
   let replay = false, auto = false;
 
   const api = {
@@ -180,9 +176,6 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
     },
     // Tap on one of my rooms: the inspector shows it for a while; the enemy target stays underneath.
     inspect(room) { inspect = room ? { room, ttl: 5.5 } : null; },
-    // Pop the silhouette panel of a ship that just took a big hit.
-    hit(shipId) { hitTimers[shipId] = 0.8; },
-    setView(v) { $('#view').textContent = v === 'closeup' ? T.view.tac : T.view.closeup; },
     setReplay(on) { replay = on; document.getElementById('orders').classList.toggle('replay', on || auto); },
     draw(battle, paused, dtReal) {
       const me = battle.ships[0], them = battle.ships[1];
@@ -192,8 +185,6 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
       if (rate < -0.02) { el.rate.textContent = `▼ ${(-rate).toFixed(2)}`; el.rate.className = 'closing'; }
       else if (rate > 0.02) { el.rate.textContent = `▲ ${rate.toFixed(2)}`; el.rate.className = 'opening'; }
       else { el.rate.textContent = '= steady'; el.rate.className = ''; }
-      el.torps.textContent = String(me.torps);
-      el.burns.textContent = String(me.burns);
       el.phase.textContent = T.phase[battle.phase];
       el.pause.textContent = paused ? T.resume : T.pause;
       el.pause.classList.toggle('on', paused);
@@ -204,11 +195,6 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
       const modes = [replay && T.replaying, auto && T.auto, paused && !battle.result && (locked ? T.pausedShort : T.pausedBadge)].filter(Boolean);
       setText(el.title, modes.length ? modes.join(' · ') : T.title);
       el.title.classList.toggle('paused', modes.length > 0);
-
-      for (const id of ['me', 'them']) {
-        if (hitTimers[id] > 0) hitTimers[id] -= dtReal;
-        el.panels[id].classList.toggle('hit', hitTimers[id] > 0);
-      }
 
       // Toasts
       for (let i = toasts.length - 1; i >= 0; i--) { toasts[i].ttl -= dtReal; if (toasts[i].ttl <= 0) toasts.splice(i, 1); }
