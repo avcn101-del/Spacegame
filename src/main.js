@@ -37,9 +37,13 @@ const tactical = makeTactical(document.getElementById('tactical'), {
 const panelMe = makeSilhouettePanel(document.getElementById('sil-me'), 'me', { orientation: 'vertical' });
 const panelThem = makeSilhouettePanel(document.getElementById('sil-them'), 'them', { orientation: 'vertical' });
 const closeup = makeCloseup(document.getElementById('closeup'));
+// The close-up's world stage: the same map as TAC (same drag), a camera that keeps every projectile in frame.
+const cuWorld = makeTactical(document.getElementById('cu-world'), {
+  inset: () => ({ top: 0, bottom: 0, left: 0, right: 0 }), camera: 'engage', quiet: true,
+});
 // One view at a time (button only): TAC is the map and both panels, CLOSE-UP the stage that covers them.
 // Events and draws go only to the view on show, so a hidden view never replays old effects.
-const VIEWS = { tac: [tactical, panelMe, panelThem], closeup: [closeup] };
+const VIEWS = { tac: [tactical, panelMe, panelThem], closeup: [cuWorld, closeup] };
 let view = 'tac';
 
 const hud = makeHud({
@@ -113,7 +117,7 @@ function start(replay = null) {
   const fitQ = fitString(battle.designs.me.fit);
   history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}`);
   closeup.reset(battle);
-  window.game = { battle, tactical, closeup, setView, panels: { me: panelMe, them: panelThem }, exportReplay: () => exportReplay(battle) }; // for debugging and tests
+  window.game = { battle, tactical, closeup, cuWorld, setView, panels: { me: panelMe, them: panelThem }, exportReplay: () => exportReplay(battle) }; // for debugging and tests
 }
 
 // Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
@@ -169,11 +173,14 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-attachDrag(document.getElementById('tactical'), tactical, () => battle, (arg) => {
-  if (replayer || autoPilot || view !== 'tac') return;
+// One move dispatch for both maps: TAC and the close-up's world stage (same drag, same rules).
+function move(arg) {
+  if (replayer || autoPilot) return;
   const why = battle.order('me', 'move', arg);
   if (why) hud.toast(T.refusal[why], 2.2, 'no');
-});
+}
+attachDrag(document.getElementById('tactical'), tactical, () => battle, (arg) => { if (view === 'tac') move(arg); });
+attachDrag(document.getElementById('cu-world'), cuWorld, () => battle, (arg) => { if (view === 'closeup') move(arg); });
 
 // What a room does, in one line; every PDC mount shares the one line.
 const roomInfo = (room) => T.roomInfo[roomKey(room)];
@@ -190,15 +197,16 @@ function tapThem(room) {
 function tapMine(room) {
   if (!room) return;
   const pc = battle.ships[0].pieces[room];
-  hud.inspect(room);
+  hud.inspect(room); closeup.setInspect(room);
   hud.toast(`${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`, 3, 'event');
 }
 attachTap(document.getElementById('sil-them'), (x, y) => tapThem(panelThem.roomAt(x, y)));
 attachTap(document.getElementById('sil-me'), (x, y) => tapMine(panelMe.roomAt(x, y)));
-// The close-up: the same two taps on the hulls of the stage.
+// The dock: taps only (a drag that starts here never steers).
 attachTap(document.getElementById('closeup'), (x, y) => {
-  const who = closeup.sideAt(x);
-  if (who === 'them') tapThem(closeup.roomAt(x, y, 'them')); else tapMine(closeup.roomAt(x, y, 'me'));
+  const hit = closeup.roomAt(x, y);
+  if (!hit) return;
+  if (hit.side === 'them') tapThem(hit.room); else tapMine(hit.room);
 });
 
 hud.setView(view);
