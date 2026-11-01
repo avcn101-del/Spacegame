@@ -107,6 +107,7 @@ nav#orders.replay button { pointer-events: none; }
 #tactical { position: fixed; inset: 0; width: 100vw; height: 100dvh; display: none; touch-action: none; }
 body.tac #tactical { display: block; }
 body.tac #closeup-wrap { display: none; }
+#picker { position: absolute; display: none; border-radius: 4px; touch-action: none; z-index: 3; }
 #closeup-wrap { display: flex; position: absolute; left: 0; right: 0; top: var(--top); height: calc(100dvh - var(--top) - var(--bottom) - var(--status)); flex-direction: column; }
 #cu-world { flex: 1 1 auto; min-height: 0; width: 100%; display: block; touch-action: none; }
 #closeup { flex: 0 0 auto; height: clamp(96px, 40%, 150px); width: 100%; display: block; touch-action: none; border-top: 1px solid var(--line); }

@@ -6,7 +6,7 @@ in Vietnamese mixed with English; answer short, verified facts only, say
 "I don't know" when you don't, raise problems before doing work. Before any
 work longer than about an hour, give the estimate and wait for go.
 
-## Now (handover, 2026-11-01, after PR 55)
+## Now (handover, 2026-11-01, after PR 56)
 
 - Merged and accepted before: H (48), `?perf=1` (49), dpr cap 2 (50), camera floor + wedge (51), docs (52); the
   phone perf passed (frame95 33.3 ms), the FX cut order is dropped (PR 53 closed). PR 54, the anchored stage, merged.
@@ -14,6 +14,10 @@ work longer than about an hour, give the estimate and wait for go.
   PR 55 brings TAC back as a second view (ARCHITECTURE "TAC back as a second view"): the map over the whole screen,
   TAC on load, VIEW in the header, drag to steer, tap their mark to cycle the target; the close-up is PR 54's.
   Also fixed: the wedge shows when their mark is cut by the stage edge (the owner's seed 85898 screenshot).
+- PR 56: on TAC a tap on their mark opens their layout (the dock's grid, 17 px cells); tap a room to target it.
+  The tap-to-cycle of PR 55 is gone (the owner: unusable).
+- Next, owner-approved but NOT started: the "hero cam" spike (`?hero=1`, my ship rear-oblique in a window in both
+  views). Its estimate and open questions were posted; it waits for the owner's go.
 - Waiting on the owner's phone playtest of both views. G2 (audio) stays frozen until then. Nothing else starts.
 - Old remote branches (14 `claude/*`, all closed PRs) could not be deleted from the session (the git proxy refuses
   pushes to any branch but the session's own, 403); the owner deletes them on GitHub.
