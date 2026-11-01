@@ -98,7 +98,7 @@ function setView(v) {
   view = v;
   document.body.classList.toggle('closeup', v === 'closeup');
   hud.setView(v);
-  if (v === 'closeup' && battle) closeup.reset(battle);
+  if (battle) for (const r of VIEWS[v]) if (r.reset) r.reset(battle); // nothing frozen while hidden replays
 }
 
 // start() begins a fresh battle; start(replay) watches a recorded one.

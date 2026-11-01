@@ -263,8 +263,10 @@ are. The fixed stage of PR 38 is split in two, stacked, between the top bar and 
 - Input: `#cu-world` has `attachDrag` (pointer capture: a drag that passes over the dock still
   ends in one move order); `#closeup` has `attachTap` only (tap their room = target, mine =
   inspect); a drag that starts on the dock never steers. Pause, replay and auto rules are TAC's.
-- Events and draws go to the visible view only: `VIEWS.closeup = [world, closeup]`; `reset` on
-  switching in.
+- Events and draws go to the visible view only: `VIEWS.closeup = [world, closeup]`; every renderer
+  of the view switching in gets `reset` (`makeTactical` has one now: drops frozen fx, refits).
+- As built (PR 42): the brackets are drawn in `closeup.js` from `roomBounds` (the same four-corner
+  shape as `roomBracket`, which has a fixed 2 px line and cannot take the under-stroke or the flare).
 
 ## Render module contract
 

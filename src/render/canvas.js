@@ -887,7 +887,10 @@ export function makeTactical(canvas, opts = {}) {
     }
   }
 
-  return { draw, onEvent, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect };
+  // Switching this view in: drop effects frozen while it was hidden (so nothing old replays) and refit.
+  function reset() { fx.step(10); pending.length = 0; evPts = []; cam.init = false; }
+
+  return { draw, onEvent, reset, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect };
 }
 
 // --- silhouette panel --------------------------------------------------------------
