@@ -278,7 +278,8 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    theirs mirrored right). One pointer router on the close-up canvas: the region is fixed at
    pointerdown; world drags steer, dock taps target or inspect; one gesture, one order. The camera
    fits both ships, every live projectile, the slug's `{tx, ty}` and recent hit/miss/intercept points
-   for about 0.6 to 0.9 s; zoom out at once, zoom in slowly; no min scale that breaks the fit. The dock
+   for about 0.6 to 0.9 s; zoom out at once, zoom in slowly; no min scale that breaks the fit (overridden by PR 51: the engage
+   camera floors at `V.MIN_SCALE` 9 px/km; with the floor active only my own ship is guaranteed in frame). The dock
    only plays local penetration entry → cell → exit and room consequence; remove the distance-share
    torpedo mapping and the `W + 60` rail miss. `roomBracket` on the enemy target in the dock, with a
    dark under-stroke. Do not hard-code the 130 px; world and dock split what D leaves; text >= 11 px.

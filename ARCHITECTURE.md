@@ -243,7 +243,8 @@ are. The fixed stage of PR 38 is split in two, stacked, between the top bar and 
   every live projectile, a slug's `{tx, ty}`, and the points of `railMiss`, `torpMiss`,
   `torpKilled`, `railHit`, `torpHit` for 0.8 s of real (unpaused) time. Center = middle of their
   bounds; scale = min((rect.w - 2 pad) / max(bw, 1 km), (rect.h - 2 pad) / max(bh, 1 km)), capped by
-  `MAX_SCALE` only (no `MIN_SCALE`); pad = clamp(0.15 * min(rect.w, rect.h), 24, 48) px. Zoom out at
+  `MAX_SCALE` only (no `MIN_SCALE`; overridden by PR 51: the engage camera floors at `V.MIN_SCALE`, and with the floor
+  active only my own ship is guaranteed in frame); pad = clamp(0.15 * min(rect.w, rect.h), 24, 48) px. Zoom out at
   once, zoom in eased (about 0.4 s); if after easing any required point is outside the rect less pad,
   snap to the target. Exposed for tests: `requiredPoints()` (km) and `safeRect()` (CSS px, rect less pad).
 - Dock `#closeup` (`closeup.js`): both forms, mine left bow right, theirs right mirrored, label
@@ -387,6 +388,8 @@ scale that breaks the fit".) Now:
   needed them), a wedge in their colour on the canvas edge (`V.WEDGE_INSET` 10 px in, `V.WEDGE_PX` 6) on the line from
   my mark toward them, pointing at them, and `T.bearing` (`PELLA 18.2 km`, 11 px, dark backplate) behind it, inside
   the canvas. Drawn over the vignette, before the ghost. `cuWorld.bearing()` returns its geometry for tests.
+  The owner decided (2026-11-01): one rule in every mode, the wedge shows whenever they are off the stage, not only at
+  the floor; revisit only if it flickers on the phone when they hug the edge.
 - `railMiss` points are the slug's end, 0.6 km off the target (`weapons.js`), not far away; they did not cause this.
 
 ## Render module contract
