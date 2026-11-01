@@ -6,6 +6,24 @@ in Vietnamese mixed with English; answer short, verified facts only, say
 "I don't know" when you don't, raise problems before doing work. Before any
 work longer than about an hour, give the estimate and wait for go.
 
+## Now (handover, 2026-11-01, after PR 52)
+
+- Merged and accepted: H (PR 48, one view), `?perf=1` overlay (PR 49, tap the line to reset), dpr cap 2 (PR 50),
+  engage camera floor 9 px/km + bearing wedge (PR 51; the wedge shows whenever their ship is off the stage, the
+  owner's rule), docs (PR 52).
+- Waiting on the owner: one clean phone measurement with `?perf=1` (tap-reset right before a knife fight, read after
+  the densest beat). After the dpr cap it was frame95 66.4 -> 33.2 ms at dpr 2.8.
+- Prepared, NOT merged: "vignette off in the world stage" (step 1 of the locked cut order: vignette, then star count,
+  then dock shading), an open PR from branch `claude/pr-h-merge-views-587y40`. Merge it only if the owner's
+  measurement has frame95 > ~30 ms or the eye catches stutter on torp hits / tears; else close it. Then the next
+  step of the order only on a new measurement.
+- G2 (audio) stays frozen until the owner reports the phone run. Nothing else starts.
+- Checks that worked this session (scripts are ad hoc, not in the repo): serve the branch on :8123 and origin/main from
+  a git worktree on :8124 (`python3 -m http.server`); compare rects with both pages PAUSED (running pages differ in
+  clock/range text); compare drag orders by heading/speed within 1e-6, never by `t`, and keep test drags off the
+  12 px dead-zone edge; inject state (ship positions, torpedoes) then `game.cuWorld.reset()` for camera probes.
+  Kill servers with `pgrep -f "http[.]server"`, never `pkill -f`.
+
 ## Where things are
 
 - Game is live at https://spacegame.avcn101.workers.dev/ (Cloudflare Workers
@@ -278,7 +296,8 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    theirs mirrored right). One pointer router on the close-up canvas: the region is fixed at
    pointerdown; world drags steer, dock taps target or inspect; one gesture, one order. The camera
    fits both ships, every live projectile, the slug's `{tx, ty}` and recent hit/miss/intercept points
-   for about 0.6 to 0.9 s; zoom out at once, zoom in slowly; no min scale that breaks the fit. The dock
+   for about 0.6 to 0.9 s; zoom out at once, zoom in slowly; no min scale that breaks the fit (overridden by PR 51: the engage
+   camera floors at `V.MIN_SCALE` 9 px/km; with the floor active only my own ship is guaranteed in frame). The dock
    only plays local penetration entry → cell → exit and room consequence; remove the distance-share
    torpedo mapping and the `W + 60` rail miss. `roomBracket` on the enemy target in the dock, with a
    dark under-stroke. Do not hard-code the 130 px; world and dock split what D leaves; text >= 11 px.
