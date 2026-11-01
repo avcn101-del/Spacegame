@@ -288,6 +288,12 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    header, two at most, kinds ok / no / event. Modes REPLAY / AUTO / PAUSED in the title slot. The deck
    and toasts take no pointers. Measured usable height on the phone (844 x 390): close-up canvas 262 px
    (was 280; 390 - 34 - 50 - 44); TAC map between header and deck 240 px.
+   E done (PR 42, a Sonnet render agent did canvas.js and closeup.js): two stacked canvases instead of
+   one router (`#cu-world` drag only, `#closeup` dock taps only; pointer capture keeps a world drag
+   that ends over the dock to one order). Measured on the phone: world 157 px, dock 105 px. Playwright:
+   same drag vector gives the same order on TAC and close-up; dock drag and tap never move; no
+   required point left the safe rect in a torpedo/rail/tear fight and in injected rail misses at 14 km
+   and 1.2 km (844 x 390 dpr 1 and 2.6, 1440 x 900).
    C: every button says why it cannot act (`OUT 12/10`, `NEED BOW`, `12s`, `NO SENSORS`, `DRIVE GONE`,
    `LOCKED: AIM`), not only opacity; `--dim` about #8ea1b5; hints >= 10.5 px; both views.
    Acceptance: phone 844 x 390 at dpr 1 and 2.6; desktop 1440 x 900 only a smoke test (BRIEF: no

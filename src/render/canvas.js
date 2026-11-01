@@ -21,7 +21,11 @@ const V = {
   MARK_LEN: 14,        // px, the top-down mark length
   STAR_PX_PER_KM: 30,  // parallax base: how far the far layer slides per km of camera travel
   GHOST_RAY_PX: 170,   // px, the faint guide rays while dragging a move order
+  EVENT_PT_TTL: 0.8,   // s of dt an impact / miss point keeps the engage camera wide enough to show it
+  EVENT_PT_MAX: 24,    // cap on remembered event points
+  PAD_FRAC: 0.15, PAD_MIN: 24, PAD_MAX: 48, // engage camera: margin around the required points, px
 };
+const ENGAGE_EVENTS = new Set(['railMiss', 'torpMiss', 'torpKilled', 'railHit', 'torpHit']);
 
 // --- deterministic numbers ----------------------------------------------------
 
@@ -362,7 +366,12 @@ function drawStars(ctx, stars, cam, w, h, time) {
 // margins; the ships are centered and fitted inside the remaining rect,
 // the starfield still covers the whole canvas. Default: no inset.
 //
-// Returns {draw, onEvent, toScreen, toWorld, shipScreen, setGhost}:
+// opts.camera === 'engage': frame both ships, live projectiles (a slug's end point too) and recent
+// impact points instead of the default camera. opts.quiet: this view's fx never shake or white-flash.
+//
+// Returns {draw, onEvent, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect}:
+// - requiredPoints() -> [{x, y}] km the engage camera had to show on the last frame ([] otherwise).
+// - safeRect() -> {x, y, w, h} CSS px: the view rect less the engage margin.
 // - toScreen(wx, wy) -> {x, y}: world km to CSS px of the canvas, current camera.
 // - toWorld(sx, sy) -> {x, y}: the inverse.
 // - shipScreen(shipId) -> {x, y} of that ship's mark from the last drawn
@@ -382,6 +391,12 @@ export function makeTactical(canvas, opts = {}) {
   const toScreen = (ax, ay) => ({ x: rect.x + rect.w / 2 + (ax - cam.x) * cam.scale, y: rect.y + rect.h / 2 + (ay - cam.y) * cam.scale });
   const toWorld = (sx, sy) => ({ x: cam.x + (sx - rect.x - rect.w / 2) / cam.scale, y: cam.y + (sy - rect.y - rect.h / 2) / cam.scale });
   const fx = makeFx(toScreen);
+  // quiet: this view never shakes the screen or flashes it white (another view owns those beats)
+  if (opts.quiet === true) { fx.shakeIt = () => {}; fx.whiteFlash = () => {}; }
+  const engage = opts.camera === 'engage';
+  let evPts = [];      // engage camera: {x, y, ttl} km points of recent impacts and misses
+  let reqPts = [];     // the required points of the last drawn frame, km
+  let pad = V.PAD_MIN; // px, the engage camera margin of the last drawn frame
   const pending = []; // delayed secondary explosions: {ax, ay, delay}
   const tint = (id) => (id === 'me' ? C.me : C.them);
   const shipOf = (id) => (last ? (last.shipById ? last.shipById(id) : last.ships.find((s) => s.id === id)) : null);
@@ -404,13 +419,17 @@ export function makeTactical(canvas, opts = {}) {
     rect.h = Math.max(1, h - rect.y - (ins.bottom || 0));
     const [me, them] = battle.ships;
 
-    // camera: center between the ships, scale so both fit in the inset rect with margin
-    const tx = (me.x + them.x) / 2, ty = (me.y + them.y) / 2;
-    const spanX = Math.abs(me.x - them.x) + 2.0, spanY = Math.abs(me.y - them.y) + 1.6;
-    const ts = clamp(Math.min(rect.w * 0.78 / spanX, rect.h * 0.72 / spanY), V.MIN_SCALE, V.MAX_SCALE);
-    if (!cam.init || !Number.isFinite(cam.scale)) { cam.x = tx; cam.y = ty; cam.scale = ts; cam.init = true; } else {
-      const k = 1 - Math.exp(-dt * 4), ks = 1 - Math.exp(-dt * 2.5);
-      cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.scale += (ts - cam.scale) * ks;
+    pad = clamp(V.PAD_FRAC * Math.min(rect.w, rect.h), V.PAD_MIN, V.PAD_MAX);
+    if (engage) engageCamera(battle, me, them, dt);
+    else {
+      // camera: center between the ships, scale so both fit in the inset rect with margin
+      const tx = (me.x + them.x) / 2, ty = (me.y + them.y) / 2;
+      const spanX = Math.abs(me.x - them.x) + 2.0, spanY = Math.abs(me.y - them.y) + 1.6;
+      const ts = clamp(Math.min(rect.w * 0.78 / spanX, rect.h * 0.72 / spanY), V.MIN_SCALE, V.MAX_SCALE);
+      if (!cam.init || !Number.isFinite(cam.scale)) { cam.x = tx; cam.y = ty; cam.scale = ts; cam.init = true; } else {
+        const k = 1 - Math.exp(-dt * 4), ks = 1 - Math.exp(-dt * 2.5);
+        cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.scale += (ts - cam.scale) * ks;
+      }
     }
 
     // delayed effects and particle motion
@@ -439,6 +458,38 @@ export function makeTactical(canvas, opts = {}) {
     const wa = fx.white();
     if (wa > 0) { ctx.fillStyle = `rgba(255,240,225,${wa})`; ctx.fillRect(0, 0, w, h); }
   }
+
+  // The engage camera: frames both ships, every projectile in flight (a slug's end point too) and
+  // the points of recent impacts and misses. Zooms out at once, zooms in eased; if an easing step
+  // leaves a required point inside the pad margin it snaps to the target.
+  function engageCamera(battle, me, them, dt) {
+    for (let i = evPts.length - 1; i >= 0; i--) { evPts[i].ttl -= dt; if (evPts[i].ttl <= 0) evPts.splice(i, 1); }
+    const pts = [{ x: me.x, y: me.y }, { x: them.x, y: them.y }];
+    for (const p of battle.projectiles) {
+      if (p.dead) continue;
+      pts.push({ x: p.x, y: p.y });
+      if (p.kind === 'slug') pts.push({ x: p.tx, y: p.ty });
+    }
+    for (const e of evPts) pts.push({ x: e.x, y: e.y });
+    reqPts = pts;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of pts) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+    const tx = (x0 + x1) / 2, ty = (y0 + y1) / 2;
+    const ts = Math.min(Math.max(1, rect.w - 2 * pad) / Math.max(x1 - x0, 1), Math.max(1, rect.h - 2 * pad) / Math.max(y1 - y0, 1), V.MAX_SCALE);
+    if (!cam.init || !Number.isFinite(cam.scale)) { cam.x = tx; cam.y = ty; cam.scale = ts; cam.init = true; return; }
+    cam.x += (tx - cam.x) * (1 - Math.exp(-dt * 6));
+    cam.y += (ty - cam.y) * (1 - Math.exp(-dt * 6));
+    if (ts < cam.scale) cam.scale = ts; else cam.scale += (ts - cam.scale) * (1 - Math.exp(-dt * 2.5));
+    for (const p of pts) {
+      const s = toScreen(p.x, p.y);
+      if (s.x < rect.x + pad - 0.5 || s.x > rect.x + rect.w - pad + 0.5 || s.y < rect.y + pad - 0.5 || s.y > rect.y + rect.h - pad + 0.5) {
+        cam.x = tx; cam.y = ty; cam.scale = ts;
+        break;
+      }
+    }
+  }
+  const requiredPoints = () => (engage ? reqPts.map((p) => ({ x: p.x, y: p.y })) : []);
+  const safeRect = () => ({ x: rect.x + pad, y: rect.y + pad, w: Math.max(1, rect.w - 2 * pad), h: Math.max(1, rect.h - 2 * pad) });
 
   // The move order under the finger: guide rays for the bow, broadside and
   // stern zones, an arrow from the 'me' mark along the drag as long as the
@@ -737,6 +788,10 @@ export function makeTactical(canvas, opts = {}) {
 
   function onEvent(ev) {
     const a = { ax: ev.x, ay: ev.y };
+    if (engage && ENGAGE_EVENTS.has(ev.type) && Number.isFinite(ev.x) && Number.isFinite(ev.y)) {
+      if (evPts.length >= V.EVENT_PT_MAX) evPts.shift();
+      evPts.push({ x: ev.x, y: ev.y, ttl: V.EVENT_PT_TTL });
+    }
     switch (ev.type) {
       case 'pdcHit':
         fx.sparks(a, 3, { speedMin: 40, speedMax: 110, lifeMin: 0.15, lifeMax: 0.3, size: 1.2 });
@@ -832,7 +887,10 @@ export function makeTactical(canvas, opts = {}) {
     }
   }
 
-  return { draw, onEvent, toScreen, toWorld, shipScreen, setGhost };
+  // Switching this view in: drop effects frozen while it was hidden (so nothing old replays) and refit.
+  function reset() { fx.step(10); pending.length = 0; evPts = []; cam.init = false; }
+
+  return { draw, onEvent, reset, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect };
 }
 
 // --- silhouette panel --------------------------------------------------------------

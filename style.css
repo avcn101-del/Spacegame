@@ -107,10 +107,13 @@ nav#orders.replay button { opacity: 0.35; pointer-events: none; }
 
 /* close-up: a stage over the map and both panels; the bars, order line and buttons stay */
 /* explicit height: a canvas with height auto takes its pixel buffer's height, which grows with devicePixelRatio on a phone */
-#closeup { display: none; position: absolute; left: 0; right: 0; top: var(--top); width: 100%; height: calc(100dvh - var(--top) - var(--bottom) - var(--status)); touch-action: none; }
+/* The close-up: the world stage on top (real positions, drag to steer), the cutaway dock below (tap rooms). */
+#closeup-wrap { display: none; position: absolute; left: 0; right: 0; top: var(--top); height: calc(100dvh - var(--top) - var(--bottom) - var(--status)); flex-direction: column; }
+#cu-world { flex: 1 1 auto; min-height: 0; width: 100%; display: block; touch-action: none; }
+#closeup { flex: 0 0 auto; height: clamp(96px, 40%, 150px); width: 100%; display: block; touch-action: none; border-top: 1px solid var(--line); }
 /* the close-up gives the hulls more room: shorter order buttons, no hint line under the label */
 body.closeup { --bottom: 50px; }
 body.closeup nav button .hint { display: none; }
-body.closeup #closeup { display: block; }
+body.closeup #closeup-wrap { display: flex; }
 body.closeup #status, body.closeup #toasts { left: 10px; right: 10px; }
 body.closeup #tactical, body.closeup .panel { display: none; }

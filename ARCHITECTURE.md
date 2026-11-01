@@ -211,7 +211,8 @@ Render (Sonnet agent; owns new `src/render/closeup.js`, `index.html`, `style.css
 - A view button in the top bar, `CLOSE-UP` / `TAC`. TAC is today's screen, unchanged. The close-up
   covers the tactical map and both side panels (the area between the top bar and the order line);
   the top numbers, the order line, toasts and the order buttons stay and work. Drag-to-steer is off
-  in the close-up; pause works. The view only changes when the button is pressed.
+  in the close-up; pause works. The view only changes when the button is pressed. (Replaced by the
+  world stage + dock below, step E.)
 - A fixed stage: my ship on the left half, bow right; theirs on the right half, bow left (mirrored);
   each form horizontal, as big as fits (Tachi about 14 px cells; a bigger form scales down). Whatever
   the real range and headings. The side chevrons show where the fire comes from (`shotFrom`).
@@ -222,6 +223,50 @@ Render (Sonnet agent; owns new `src/render/closeup.js`, `index.html`, `style.css
   room's cells burst; tear: the cut cells drift away (form.js already draws cut cells adrift).
   Torpedoes in flight cross the gap between the hulls (position as a share of their real distance).
 - Tap-a-room on their hull in the close-up targets it, like the panel (`closeup.roomAt(x, y)`).
+
+## Close-up: world stage + cutaway dock (HUD plan step E, 2026-11-01; render and input only)
+
+The owner: the close-up must take the same orders as TAC and show the projectiles where they really
+are. The fixed stage of PR 38 is split in two, stacked, between the top bar and the status deck:
+
+- `#closeup-wrap` (a flex column, the area the old `#closeup` had): `#cu-world` on top takes what is
+  left, `#closeup` below is the dock, `height: clamp(96px, 40%, 150px)`. Phone 844 x 390: wrap 262 px,
+  dock about 105, world about 157.
+- World stage `#cu-world`: a second `makeTactical(canvas, {inset, camera: 'engage', quiet: true})`.
+  Same drawing as TAC (marks, real headings, plume, aim lines, tracers, torpedoes, slugs, rings,
+  ghost), the same `attachDrag` and the same move dispatch as TAC: one drag model, `readDrag`,
+  no camera rotation. `quiet: true`: its fx never shake the screen and never white-flash
+  (`shakeIt` and `whiteFlash` are no-ops there); the dock owns those beats.
+  `camera: 'engage'` (TAC keeps its own camera): every frame the required points are both ships,
+  every live projectile, a slug's `{tx, ty}`, and the points of `railMiss`, `torpMiss`,
+  `torpKilled`, `railHit`, `torpHit` for 0.8 s of real (unpaused) time. Center = middle of their
+  bounds; scale = min((rect.w - 2 pad) / max(bw, 1 km), (rect.h - 2 pad) / max(bh, 1 km)), capped by
+  `MAX_SCALE` only (no `MIN_SCALE`); pad = clamp(0.15 * min(rect.w, rect.h), 24, 48) px. Zoom out at
+  once, zoom in eased (about 0.4 s); if after easing any required point is outside the rect less pad,
+  snap to the target. Exposed for tests: `requiredPoints()` (km) and `safeRect()` (CSS px, rect less pad).
+- Dock `#closeup` (`closeup.js`): both forms, mine left bow right, theirs right mirrored, label
+  `CUTAWAY · NOT TO SCALE`, ship names >= 11 px. Only local consequence: hit cell (`ev.at`),
+  rail penetration as a bolt `r.entry -> cell -> exit` (not from the shooter's muzzle), torpedo
+  impact as a short bolt `r.entry -> cell`, spill, PDC sparks and scars (no tracer streams from
+  mounts across the gap), room death, smoulder, soot, tear, cut cells drifting, rail and tube muzzle
+  flashes on the shooter's own hull, the plume, side chevrons. Removed: torpedoes in the gap
+  (`torpTarget`, `stepTorps`, `torpDisp`, the distance share), the rail miss path to `W + 60`,
+  `torpKilled` pops, guard/rake tracer bolts. Shake and white flash stay here (rail hit and tear
+  biggest).
+  Brackets: the room `me.target` on their hull, `roomBracket` with a dark under-stroke (3 to 4 px)
+  under a 1.5 to 2 px stroke in their colour, label `TARGET · DRIVE` (>= 11 px, backplate
+  `rgba(5,7,12,0.85)`), drawn last; pulses once (150 ms) when the target changes; gone at once when
+  cleared or dead. `setInspect(room | null)`: my tapped room gets a white bracket `INSPECT · CREW`
+  for 5.5 s. Both through the same mirror transform as the hull.
+  API: `makeCloseup(canvas)` returns `{draw, onEvent, reset, roomAt(x, y), setInspect}`;
+  `roomAt` returns `{side: 'me' | 'them', room}` or null (hull boxes of this canvas only).
+- Input: `#cu-world` has `attachDrag` (pointer capture: a drag that passes over the dock still
+  ends in one move order); `#closeup` has `attachTap` only (tap their room = target, mine =
+  inspect); a drag that starts on the dock never steers. Pause, replay and auto rules are TAC's.
+- Events and draws go to the visible view only: `VIEWS.closeup = [world, closeup]`; every renderer
+  of the view switching in gets `reset` (`makeTactical` has one now: drops frozen fx, refits).
+- As built (PR 42): the brackets are drawn in `closeup.js` from `roomBounds` (the same four-corner
+  shape as `roomBracket`, which has a fixed 2 px line and cannot take the under-stroke or the flare).
 
 ## Render module contract
 
