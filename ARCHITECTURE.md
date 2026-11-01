@@ -303,6 +303,11 @@ Presentation only: no sim, rng or balance change; TAC unchanged (every new behav
   rake tracer is seen it makes a small spark there (2 to 3 sparks, a 4 px flash, life <= 0.15 s).
   `pdcHit`, `torpHit`, `railHit` world fx anchor on the mark edge on the shooter's (or torpedo's) side.
   No new shake or white flash (the world stage is quiet).
+- As built (PR 44): no pumping when torpedoes die: once a projectile of the current mode is gone, or
+  the mode lingers, the camera does not zoom in again until the mode changes (a snap then only moves
+  the centre); it holds on the intercept and pulls back once. `torpHit` carries the victim's centre,
+  so its world fx take the direction of the nearest live torpedo recorded on the frame before. TAC
+  pixel-identical to before (compared at 844 x 390, dpr 2.6).
 - Threat ticks on the dock (`closeup.js`): for live torpedoes with `target === 'me'`, grouped by
   `shotFrom(me, p.x, p.y)` (bow, stern, top, bottom), a red tick on that edge of my hull pointing in,
   label `▼ 4 · 2.3` (count, nearest distance km, 11 px, dark backplate), clamped in the canvas,

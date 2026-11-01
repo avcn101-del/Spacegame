@@ -302,6 +302,13 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    hint. Unavailable = dashed dark frame, the label and reason stay bright (no opacity). The close-up
    hides hints but keeps reasons. `--dim` #8ea1b5; reasons 11 px, hints 10.5, labels 10.5 to 11, canvas
    labels 11. The plan A, D, E, C is done; the owner plays.
+   F done (PR 44, the owner after playing A to E; two Sonnet render agents): close-up camera modes
+   inbound > outbound (my ship always in) > rail > idle, 1 s linger, no zoom-in after a torpedo of the
+   mode died; `maxScale` 90 px/km in the close-up (kept after screenshots at 1.4 km); big top-down hull
+   marks 36 to 48 px from the form; rake tracers end on the hull edge with a small spark; red threat
+   ticks with count and distance on my hull in the dock. Measured: no hard point out of frame, camera
+   still while paused mid-salvo, no zoom-in from the first death through the mode change, drag parity,
+   TAC pixel-identical.
    Acceptance: phone 844 x 390 at dpr 1 and 2.6; desktop 1440 x 900 only a smoke test (BRIEF: no
    desktop layout). Parked in NOTES: CMD vector, threat ticks, close-up Burn burst, reduced motion,
    help responsive, hangar. FX groups offered before (wounds, big moments) wait behind this.
