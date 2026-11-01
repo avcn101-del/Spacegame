@@ -5,6 +5,7 @@
 
 // Visual-only knobs. Not game numbers.
 export const LOOK = {
+  MAX_DPR: 2,                 // backing store cap: a 2.8 phone fills 2x the pixels of 2 for no visible gain (owner's run: stutter on big beats)
   KEY: norm(-0.55, -0.835),  // where the one key light comes from, screen space (upper left), every view
   SHADE_LIT: 0.16,            // white over the lit side of a hull (alpha)
   SHADE_DARK: 0.42,           // black over the shadow side of a hull (alpha)
@@ -37,7 +38,9 @@ export function hash01(n) {
   x = Math.imul(x ^ (x >>> 13), 0xC2B2AE3D);
   return ((x ^ (x >>> 16)) >>> 0) / 4294967296;
 }
-const dprOf = () => (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+// The pixel ratio every battle canvas and cache is drawn at: the device's, capped at LOOK.MAX_DPR.
+export const renderDpr = () => Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, LOOK.MAX_DPR);
+const dprOf = renderDpr;
 const newCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
 
 // --- glow sprites --------------------------------------------------------------------------

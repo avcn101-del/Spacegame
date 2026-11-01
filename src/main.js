@@ -7,6 +7,7 @@ import { makeEnemy } from './ai/enemy.js';
 import { makeTactical } from './render/canvas.js';
 import { makeCloseup } from './render/closeup.js';
 import { makeHud } from './render/hud.js';
+import { renderDpr } from './render/look.js';
 import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
 import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
 import { DESIGNS, DEFAULT_DESIGN } from './ships/index.js';
@@ -123,7 +124,7 @@ const pct = (a, q) => { if (!a.length) return 0; const s = [...a].sort((x, y) =>
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const r1 = (v) => Math.round(v * 10) / 10;
 function perf() {
-  return { frames: perfGap.length, dpr: window.devicePixelRatio || 1, frameAvg: r1(avg(perfGap)), frameP95: r1(pct(perfGap, 0.95)), fps: r1(1000 / (avg(perfGap) || 1)), workAvg: r1(avg(perfWork)), workP95: r1(pct(perfWork, 0.95)) };
+  return { frames: perfGap.length, dpr: window.devicePixelRatio || 1, renderDpr: renderDpr(), frameAvg: r1(avg(perfGap)), frameP95: r1(pct(perfGap, 0.95)), fps: r1(1000 / (avg(perfGap) || 1)), workAvg: r1(avg(perfWork)), workP95: r1(pct(perfWork, 0.95)) };
 }
 perf.reset = () => { perfGap.length = 0; perfWork.length = 0; };
 const perfPush = (a, v) => { a.push(v); if (a.length > PERF_N) a.shift(); };
@@ -139,7 +140,7 @@ if (params.get('perf') === '1') {
   document.body.appendChild(el);
   setInterval(() => {
     const p = perf();
-    el.textContent = `dpr ${r1(p.dpr)} · work95 ${p.workP95} · frame95 ${p.frameP95} ms · ${p.fps} fps · ${p.frames} f`;
+    el.textContent = `dpr ${r1(p.dpr)}→${r1(p.renderDpr)} · work95 ${p.workP95} · frame95 ${p.frameP95} ms · ${p.fps} fps · ${p.frames} f`;
   }, 1000);
 }
 
