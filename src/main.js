@@ -32,7 +32,7 @@ let battle, enemy, paused = false, slowmo = 0, acc = 0;
 const cssPx = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
 const tactical = makeTactical(document.getElementById('tactical'), {
   // the part of the screen not covered by HUD; the camera fits the ships in here
-  inset: () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + 26, left: cssPx('--side') + 8, right: cssPx('--side') + 8 }),
+  inset: () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status'), left: cssPx('--side') + 8, right: cssPx('--side') + 8 }),
 });
 const panelMe = makeSilhouettePanel(document.getElementById('sil-me'), 'me', { orientation: 'vertical' });
 const panelThem = makeSilhouettePanel(document.getElementById('sil-them'), 'them', { orientation: 'vertical' });
@@ -46,7 +46,7 @@ const hud = makeHud({
   onOrder(o, arg) {
     if (replayer || autoPilot) return;
     const why = battle.order('me', o, arg);
-    if (why) hud.toast(T.refusal[why]);
+    if (why) hud.toast(T.refusal[why], 2.2, 'no');
     else if (o === 'torps') hud.toast(T.order.torpsAway);
     else if (o === 'burn') hud.toast(T.order.burn);
   },
@@ -154,12 +154,12 @@ function frame(now) {
     const frameDead = ev.type === 'pieceDead' && isFrame(ev.piece); // a frame room dying is a flash, not a beat or a line
     if (ev.type === 'railHit' || (ev.type === 'pieceDead' && !frameDead)) slowmo = N.SLOWMO_TIME;
     if (ev.type === 'railHit' || ev.type === 'torpHit' || (ev.type === 'pieceDead' && !frameDead)) hud.hit(ev.ship);
-    if (ev.type === 'pieceDead' && ev.cause !== 'tear' && !frameDead) hud.toast(`${T.lost[ev.ship]} ${T.pieces[roomKey(ev.piece)].toUpperCase()} ${T.gone}: ${T.roomDead[roomKey(ev.piece)]}.`, 3);
+    if (ev.type === 'pieceDead' && ev.cause !== 'tear' && !frameDead) hud.toast(`${T.lost[ev.ship]} ${T.pieces[roomKey(ev.piece)].toUpperCase()} ${T.gone}: ${T.roomDead[roomKey(ev.piece)]}.`, 3.2, 'event');
     if (ev.type === 'tear') {
       const names = [...new Set(ev.pieces.map((r) => T.pieces[roomKey(r)].toLowerCase()))]; // frame rooms and PDC mounts fold into one word each
       hud.toast(ev.pieces.every(isFrame)
         ? `${T.lost[ev.ship]} ${T.frameAdrift}.`
-        : `${T.lost[ev.ship]} ${T.tear[ev.end]}: ${names.join(', ')} ${T.adrift}.`, 4);
+        : `${T.lost[ev.ship]} ${T.tear[ev.end]}: ${names.join(', ')} ${T.adrift}.`, 4, 'event');
     }
     for (const r of VIEWS[view]) r.onEvent(ev);
   }
@@ -172,7 +172,7 @@ function frame(now) {
 attachDrag(document.getElementById('tactical'), tactical, () => battle, (arg) => {
   if (replayer || autoPilot || view !== 'tac') return;
   const why = battle.order('me', 'move', arg);
-  if (why) hud.toast(T.refusal[why]);
+  if (why) hud.toast(T.refusal[why], 2.2, 'no');
 });
 
 // What a room does, in one line; every PDC mount shares the one line.
@@ -184,13 +184,14 @@ function tapThem(room) {
   const info = `${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`;
   const arg = { room: me.target === room ? null : room };
   const why = battle.order('me', 'target', arg);
-  if (why) hud.toast(`${T.refusal[why]} ${info}`);
+  if (why) hud.toast(`${T.refusal[why]} ${info}`, 2.4, 'no');
   else hud.toast(arg.room ? `${T.order.target} ${T.pieces[roomKey(room)].toLowerCase()}. ${info}` : `${T.order.targetCleared} ${info}`);
 }
 function tapMine(room) {
   if (!room) return;
   const pc = battle.ships[0].pieces[room];
-  hud.toast(`${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`);
+  hud.inspect(room);
+  hud.toast(`${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`, 3, 'event');
 }
 attachTap(document.getElementById('sil-them'), (x, y) => tapThem(panelThem.roomAt(x, y)));
 attachTap(document.getElementById('sil-me'), (x, y) => tapMine(panelMe.roomAt(x, y)));

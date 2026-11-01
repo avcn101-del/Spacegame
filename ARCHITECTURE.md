@@ -33,7 +33,7 @@ src/render/form.js    the form drawn as a grid (vertical in a panel, horizontal 
 src/render/hangar.js  the hangar drawing: hardpoints with their picks over the form, slotAt for the tap
 src/render/silhouette.js  Roci outline (the tactical mark and the art tables)
 src/render/canvas.js  tactical strip, tracers, impacts, debris, shake
-src/render/hud.js     four numbers, current order, buttons, paused badge, help menu (HELP opens it, pause does not), result, the hangar overlay (onFit hands the fit back; main.js keeps it in the URL `?fit=` and localStorage)
+src/render/hud.js     four numbers, status deck (alerts, order summary, room inspector), toasts, buttons, mode badges, help menu (HELP opens it, pause does not), result, the hangar overlay (onFit hands the fit back; main.js keeps it in the URL `?fit=` and localStorage)
 ```
 
 ## State contract (what render reads)
