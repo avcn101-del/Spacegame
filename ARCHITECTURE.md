@@ -268,6 +268,46 @@ are. The fixed stage of PR 38 is split in two, stacked, between the top bar and 
 - As built (PR 42): the brackets are drawn in `closeup.js` from `roomBounds` (the same four-corner
   shape as `roomBracket`, which has a fixed 2 px line and cannot take the under-stroke or the flare).
 
+## Close-up combat feel: action-framing camera, big marks, contact sparks, threat ticks (PR F, 2026-11-01)
+
+The owner after playing A to E: in the world stage the marks are too small and the fit-everything
+camera stays too wide while projectiles fly, so tracers, hull impacts and intercepts do not read.
+Presentation only: no sim, rng or balance change; TAC unchanged (every new behaviour is behind a
+`makeTactical` option the close-up passes).
+
+- Camera modes (`camera: 'engage'`), picked every frame, first that applies:
+  1. `inbound`: live torpedoes with `target === 'me'` -> required = my ship + those torpedoes.
+  2. `outbound`: live torpedoes with `target === 'them'` -> required = their ship + those torpedoes +
+     my ship (always: the drag ghost starts at my mark).
+  3. `rail`: either ship's `railAim >= 0`, or a live slug -> required = both ships + every live slug's
+     position and `{tx, ty}`.
+  4. `idle`: both ships.
+  Recent event points (0.8 s, as now) join the required set of the mode they belong to: `torpHit`,
+  `torpMiss` (`ev.ship` = the ship that was targeted) and `torpKilled` (`ev.by` = the guarding ship) go to
+  inbound when that ship is me, to outbound when it is them; `railHit`, `railMiss` go to rail.
+  Linger: when a mode's trigger ends, the camera keeps that mode (its last required points plus the
+  event points) for `MODE_LINGER` 1.0 s of dt, then takes the new mode. Within a mode: zoom out at
+  once, zoom in eased (as now). On a mode change only: the points the new mode adds may ease in over
+  0.35 s (zoom out eased, k = 1 - exp(-dt / 0.12)); the points both modes share stay hard. `requiredPoints()`
+  returns the hard set: the no-clip test holds on it every frame. Paused (dt 0): nothing moves, the
+  mode cannot change. Expose `cameraState()` -> `{x, y, scale, mode}` for tests.
+  `opts.maxScale` overrides `V.MAX_SCALE` for this instance; the close-up passes 90 px/km (overlap of
+  the big marks then starts under about 0.45 km). If it looks bloated in screenshots, back to 55.
+- Big hull marks (`opts.markPx: [36, 48]`): each ship is drawn top-down from its form, living cells
+  only (cut cells gone, dead rooms dark, job rooms in their room colour dimmed, frame in the ship
+  tint), rotated to the real heading (bow along `noseAngle`), length L = clamp(0.25 * rect.h, 36, 48)
+  px, width L * form.h / form.w, a 1 px outline. Plume, velocity vector and aim reticle start from
+  the mark's edge (stern / centre) instead of `MARK_LEN`. Without the option: today's mark.
+- Contact points (big marks only): a tracer whose end is within the target mark's box is drawn to
+  where its line enters the box (the rotated rectangle), not to the ship centre; the first frame a
+  rake tracer is seen it makes a small spark there (2 to 3 sparks, a 4 px flash, life <= 0.15 s).
+  `pdcHit`, `torpHit`, `railHit` world fx anchor on the mark edge on the shooter's (or torpedo's) side.
+  No new shake or white flash (the world stage is quiet).
+- Threat ticks on the dock (`closeup.js`): for live torpedoes with `target === 'me'`, grouped by
+  `shotFrom(me, p.x, p.y)` (bow, stern, top, bottom), a red tick on that edge of my hull pointing in,
+  label `▼ 4 · 2.3` (count, nearest distance km, 11 px, dark backplate), clamped in the canvas,
+  drawn after the hulls and before the brackets. HUD only: no travel. Gone when no torpedo comes.
+
 ## Render module contract
 
 - `silhouette.js`: one art table per design (profile, rooms as shapes,
