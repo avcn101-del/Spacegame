@@ -374,6 +374,21 @@ The sections above that mention TAC, the side panels, `--side`, the VIEW button 
   (`drawRangeRings`, `drawGhost`, `drawArcs`, `drawPdcCounts` at `cam.scale`); nothing moved.
 - `makeTactical` keeps its default camera and small-mark branches (no caller now; harmless, small).
 
+## Engage camera floor and bearing wedge (PR 51, 2026-11-01, render only)
+
+The owner's phone: the world stage is about 108 px tall, so a long-range approach along the screen's vertical
+axis fit at about 4 px/km and the 36 to 48 px marks read as point-blank. (PR E had no min scale on purpose: "no min
+scale that breaks the fit".) Now:
+- `target()` of the engage camera: when the fit scale is below `V.MIN_SCALE` (9 px/km) the scale is 9 and the centre
+  moves toward the fit centre only as far as keeps my ship inside the pad margin. Then only my ship is a hard point
+  (`requiredPoints()` returns it alone; the snap guards it); the enemy, torpedoes and event points may leave the frame.
+  Same rule in every mode. `cameraState().floor` says whether the floor held on the last frame.
+- `drawBearing`: whenever their ship's centre is off the world canvas (the floor, or the inbound mode, which never
+  needed them), a wedge in their colour on the canvas edge (`V.WEDGE_INSET` 10 px in, `V.WEDGE_PX` 6) on the line from
+  my mark toward them, pointing at them, and `T.bearing` (`PELLA 18.2 km`, 11 px, dark backplate) behind it, inside
+  the canvas. Drawn over the vignette, before the ghost. `cuWorld.bearing()` returns its geometry for tests.
+- `railMiss` points are the slug's end, 0.6 km off the target (`weapons.js`), not far away; they did not cause this.
+
 ## Render module contract
 
 - `silhouette.js`: `drawShipMark` and `COLORS` are used; the art tables

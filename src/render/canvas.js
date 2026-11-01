@@ -10,6 +10,7 @@ import { alive, pdcRooms, mountSide } from '../sim/ship.js';
 import { drawArcs, drawPdcCounts, railKm } from './arcs.js';
 import { drawShipMark, COLORS } from './silhouette.js';
 import { roomColor } from './form.js';
+import { T } from '../text.js';
 import { BLOOM, bloom, drawPlume, makeLitSprites, makeVignette, makeStarfield, renderDpr } from './look.js';
 
 // Visual-only knobs. Not game numbers, so they live here, not in numbers.js.
@@ -17,7 +18,7 @@ const V = {
   PARTICLE_CAP: 400,   // per canvas; keeps draw cost modest on a phone
   MAX_DT: 0.1,         // clamp a long frame (tab switch) so effects do not jump
   TRACER_TTL: 0.12,    // matches the ttl weapons.js gives tracers; places the streak along the line
-  MIN_SCALE: 9,        // px per km; ships never shrink to nothing
+  MIN_SCALE: 9,        // px per km; ships never shrink to nothing (the engage camera's floor too: past it the enemy leaves the frame)
   MAX_SCALE: 55,       // px per km; at knife range the strip still shows both rings
   MARK_LEN: 14,        // px, the top-down mark length
   STAR_PX_PER_KM: 30,  // parallax base: how far the far layer slides per km of camera travel
@@ -25,6 +26,8 @@ const V = {
   EVENT_PT_TTL: 0.8,   // s of dt an impact / miss point keeps the engage camera wide enough to show it
   EVENT_PT_MAX: 24,    // cap on remembered event points
   PAD_FRAC: 0.15, PAD_MIN: 24, PAD_MAX: 48, // engage camera: margin around the required points, px
+  WEDGE_PX: 6,         // half width of the bearing wedge at the stage edge, px
+  WEDGE_INSET: 10,     // px from the canvas edge to the wedge tip
   MODE_LINGER: 1.0,    // s of dt the engage camera keeps a mode after its trigger ends (so a hit is seen before the cut)
   MODE_TRANS: 0.35,    // s of dt the points a new mode adds ease in (the points both modes share stay hard)
   TRANS_TAU: 0.12,     // s, the ease time constant of that transition
@@ -395,6 +398,8 @@ export function makeTactical(canvas, opts = {}) {
   const objIds = new WeakMap(); let objSeq = 0;
   const oid = (o) => { let i = objIds.get(o); if (i === undefined) { i = ++objSeq; objIds.set(o, i); } return i; };
   let pad = V.PAD_MIN; // px, the engage camera margin of the last drawn frame
+  let floorOn = false; // engage: the camera sat at its floor scale on the last frame
+  let wedge = null;    // engage: the bearing wedge drawn on the last frame (for tests), or null
   const pending = []; // delayed secondary explosions: {ax, ay, delay}
   const tint = (id) => (id === 'me' ? C.me : C.them);
   const shipOf = (id) => (last ? (last.shipById ? last.shipById(id) : last.ships.find((s) => s.id === id)) : null);
@@ -457,6 +462,7 @@ export function makeTactical(canvas, opts = {}) {
     drawBlooms();
     ctx.restore();
     vignette(ctx, w, h, rect); // decoration over the scene; no text on this canvas, the HUD is DOM above it
+    wedge = engage ? drawBearing(battle) : null; // over the vignette: it is a readout, like the ghost
     if (ghost) drawGhost(battle); // input overlay: outside the shake, so the finger point stays put
     const wa = fx.white();
     if (wa > 0) { ctx.fillStyle = `rgba(255,240,225,${wa})`; ctx.fillRect(0, 0, w, h); }
@@ -507,16 +513,25 @@ export function makeTactical(canvas, opts = {}) {
     if (trans && prevKeys) { hard = full.filter((p) => prevKeys.has(p.key)); if (hard.length === 0) hard = full; }
     reqPts = hard;
 
+    // The fit of a list of points. Below the floor (V.MIN_SCALE) the scale stays at the floor and the centre
+    // slides toward the fit's centre only as far as keeps my ship inside the margin: the rest may leave the frame.
     const target = (list) => {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       for (const p of list) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
-      return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, s: Math.min(Math.max(1, rect.w - 2 * pad) / Math.max(x1 - x0, 1), Math.max(1, rect.h - 2 * pad) / Math.max(y1 - y0, 1), maxScale) };
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      const s = Math.min(Math.max(1, rect.w - 2 * pad) / Math.max(x1 - x0, 1), Math.max(1, rect.h - 2 * pad) / Math.max(y1 - y0, 1), maxScale);
+      if (s >= V.MIN_SCALE) return { x: cx, y: cy, s, floor: false };
+      const f = V.MIN_SCALE, hx = Math.max(0, rect.w / 2 - pad) / f, hy = Math.max(0, rect.h / 2 - pad) / f;
+      return { x: me.x + clamp(cx - me.x, -hx, hx), y: me.y + clamp(cy - me.y, -hy, hy), s: f, floor: true };
     };
     const outside = (list) => list.some((p) => {
       const s = toScreen(p.x, p.y);
       return s.x < rect.x + pad - 0.5 || s.x > rect.x + rect.w - pad + 0.5 || s.y < rect.y + pad - 0.5 || s.y > rect.y + rect.h - pad + 0.5;
     });
-    const tf = target(full), th = hard === full ? tf : target(hard);
+    const tf = target(full);
+    let th = hard === full ? tf : target(hard);
+    if (tf.floor) { hard = [sp(me)]; reqPts = hard; th = tf; } // at the floor only my ship is required in frame
+    floorOn = tf.floor;
     if (!cam.init || !Number.isFinite(cam.scale)) { cam.x = tf.x; cam.y = tf.y; cam.scale = tf.s; cam.init = true; trans = false; return; }
     if (dt <= 0) return; // paused: nothing moves, the mode cannot change
     if (trans) {
@@ -537,7 +552,7 @@ export function makeTactical(canvas, opts = {}) {
     }
   }
   const requiredPoints = () => (engage ? reqPts.map((p) => ({ x: p.x, y: p.y })) : []);
-  const cameraState = () => ({ x: cam.x, y: cam.y, scale: cam.scale, mode: engage ? camMode : null });
+  const cameraState = () => ({ x: cam.x, y: cam.y, scale: cam.scale, mode: engage ? camMode : null, floor: floorOn });
   const safeRect = () => ({ x: rect.x + pad, y: rect.y + pad, w: Math.max(1, rect.w - 2 * pad), h: Math.max(1, rect.h - 2 * pad) });
 
   // --- big marks: the form seen from above ---------------------------------------------------
@@ -685,6 +700,38 @@ export function makeTactical(canvas, opts = {}) {
       ctx.beginPath(); ctx.arc(ghost.ex, ghost.ey, 13, 0, 6.2832); ctx.stroke();
     }
     ctx.restore();
+  }
+
+  // Their ship off the stage (the camera floor, or a mode that does not need them): a wedge on the stage
+  // edge on the line from my mark toward them, pointing at them, and the range in km beside it.
+  function drawBearing(battle) {
+    const me = battle.ships[0], them = battle.ships[1];
+    const q = toScreen(them.x, them.y), p = toScreen(me.x, me.y);
+    if (q.x >= 0 && q.x <= w && q.y >= 0 && q.y <= h) return null;
+    const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
+    if (!(d > 0)) return null;
+    const ux = dx / d, uy = dy / d, m = V.WEDGE_INSET;
+    // where the ray from my mark leaves the canvas less the inset
+    let t = Infinity;
+    if (ux > 0) t = Math.min(t, (w - m - p.x) / ux); else if (ux < 0) t = Math.min(t, (m - p.x) / ux);
+    if (uy > 0) t = Math.min(t, (h - m - p.y) / uy); else if (uy < 0) t = Math.min(t, (m - p.y) / uy);
+    t = Math.max(0, t);
+    const tx = clamp(p.x + ux * t, m, w - m), ty = clamp(p.y + uy * t, m, h - m), s = V.WEDGE_PX;
+    const nx = -uy, ny = ux, bx = tx - ux * s * 1.6, by = ty - uy * s * 1.6;
+    ctx.save();
+    ctx.fillStyle = rgba(C.them, 0.9);
+    ctx.strokeStyle = 'rgba(5,7,12,0.85)'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(bx + nx * s, by + ny * s); ctx.lineTo(bx - nx * s, by - ny * s); ctx.closePath();
+    ctx.stroke(); ctx.fill();
+    const text = T.bearing(T.ships.them, battle.range().toFixed(1));
+    ctx.font = '11px "SF Mono", Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const lw = ctx.measureText(text).width + 8, lh = 15;
+    // the label sits behind the wedge (toward my mark), kept inside the canvas
+    const lx = clamp(tx - ux * (s * 1.6 + 6 + lw / 2), lw / 2 + 2, w - lw / 2 - 2), ly = clamp(ty - uy * (s * 1.6 + 6 + lh / 2), lh / 2 + 2, h - lh / 2 - 2);
+    ctx.fillStyle = 'rgba(5,7,12,0.85)'; ctx.fillRect(lx - lw / 2, ly - lh / 2, lw, lh);
+    ctx.fillStyle = rgba(C.them, 1); ctx.fillText(text, lx, ly + 0.5);
+    ctx.restore();
+    return { tip: { x: tx, y: ty }, dir: { x: ux, y: uy }, label: { x: lx - lw / 2, y: ly - lh / 2, w: lw, h: lh }, text, canvas: { w, h } };
   }
 
   function drawRangeRings(battle) {
@@ -1104,5 +1151,5 @@ export function makeTactical(canvas, opts = {}) {
     seenTracers = new WeakSet();
   }
 
-  return { draw, onEvent, reset, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect, cameraState };
+  return { draw, onEvent, reset, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect, cameraState, bearing: () => wedge };
 }
