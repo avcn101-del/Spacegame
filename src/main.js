@@ -40,6 +40,7 @@ const closeup = makeCloseup(document.getElementById('closeup'));
 // The close-up's world stage: the same map as TAC (same drag), a camera that keeps every projectile in frame.
 const cuWorld = makeTactical(document.getElementById('cu-world'), {
   inset: () => ({ top: 0, bottom: 0, left: 0, right: 0 }), camera: 'engage', quiet: true,
+  maxScale: 90, markPx: [36, 48], // knife range reads closer; big top-down hull marks (TAC keeps its own)
 });
 // One view at a time (button only): TAC is the map and both panels, CLOSE-UP the stage that covers them.
 // Events and draws go only to the view on show, so a hidden view never replays old effects.
