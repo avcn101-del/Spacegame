@@ -459,6 +459,26 @@ target and edge indicators, mapped to our top-down stage. No sim, AI, RNG, `numb
   the ships during big beats; the alert lane in the status deck keeps what matters. The `#toasts` rect is the only
   DOM rect that differs from main (38 -> 18 px tall when two toasts would have shown).
 
+## Hero window spike, S1 (`?hero=1`, 2026-11-01, render only, not merged before the owner's beauty gate)
+
+My ship as an object, rear-oblique, in a window at the left of both views. `src/render/hero.js`; default off.
+- Flag: `?hero=1`, read at boot in `main.js`. Off: no window, `makeHero` is never called, both insets are what they
+  were (TAC left 8, close-up 0). Proof: every DOM rect and the 12 km / knife camera probes equal main in both views at
+  844 x 390 dpr 2.6 and 1, 844 x 332, 1440 x 900.
+- Layout: canvas-drawn on the view's own canvas after its draw (TAC: `#tactical`; close-up: `#cu-world`), no DOM, no
+  hit-testing. TAC: x 8, from `--top` + 6 to the status deck - 6 (at most 300 tall); the close-up: x 0, the stage's
+  full height. Width fitted to the ship's beam (`BEAM_SHARE`), TAC at most 34 % of the screen. Its right edge + 6 px
+  is the LEFT INSET of that view's camera (`opts.inset`), so fit, required points, wedge, labels and rulers inherit it.
+- Hull: derived from `ship.form`, `ship.cells` and the design's room kinds only. Box-blurred cell mask thresholded
+  (round, not cells), keystone warp (bow end 20 % narrower), fixed pitch, hull wall, deck lit along `LOOK.KEY` with
+  a rim, faint job-room tint and plate seams; raised blocks per room kind (`HERO.HEIGHT`) with contact shadows, far
+  first; PDC domes at `form.mounts`; a rail spine and barrel only when the form has rail cells; an engine bell at the
+  drive's stern edge and an idle plume; running lights (port red, starboard green, bow strobe). Dead rooms sink and
+  go dark, cut and torn cells drop out.
+- Cache: one bitmap per battle, view, window size, dpr and hull state (dead, torn, cut); per frame only the plume,
+  bell glow and lights (~0.05 ms). A bake costs 15 to 30 ms headless at dpr 2.6 (one-off; again on each room death).
+- S2 (not built): bank, plume by thrust, Burn lines, hit flashes, local impact frame, scorch via a dock getter.
+
 ## Render module contract
 
 - `silhouette.js`: `drawShipMark` and `COLORS` are used; the art tables

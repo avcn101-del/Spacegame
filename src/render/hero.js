@@ -1,0 +1,398 @@
+// The hero window (spike, `?hero=1`, default off): my ship as an object, seen from astern and above, in a
+// small window at the left of both battle views. Presentation only: reads battle, never writes it, owns no
+// input (no hit-testing; drag and tap work underneath) and no screen fx (the close-up keeps shake and flash).
+// Every shape is derived from the form (ship.form, ship.cells, the design's room kinds) by generic rules:
+// a smooth silhouette from the grid (box blur + threshold), a keystone warp (the bow end narrower), a hull
+// wall toward the camera, the deck lit from LOOK.KEY, a rim, raised blocks per room kind with contact
+// shadows, PDC domes at form.mounts, a rail spine and barrel when the form has rail cells, an engine bell
+// at the drive's stern edge, running lights. Nothing is drawn per class. The static hull is baked into one
+// bitmap per battle and rebuilt when a room dies or a cell is cut; each frame draws only the plume and the
+// lights. No Math.random: flicker and blink hash battle.t.
+import { DESIGNS } from '../ships/index.js';
+import { isPdc } from '../sim/ship.js';
+import { roomColor } from './form.js';
+import { LOOK, drawPlume, glow, renderDpr } from './look.js';
+
+// Visual-only knobs. Not game numbers.
+export const HERO = {
+  PITCH: 0.95,          // rad the camera looks down from the hull's plane: deck readable, wall still shows
+  KEYSTONE: 0.2,        // the bow end is this much narrower than the stern end (the far end is further away)
+  SHIP_LEN: 0.62,       // share of the window height the hull may take; the rest is plume below and air above
+  PLUME_LEN: 0.2,       // share of the window height the idle plume runs toward the camera
+  BEAM_SHARE: 0.62,     // share of the window width the beam takes when the width is fitted to the ship
+  TAC_MAX_W: 0.34,      // TAC: the window is at most this share of the screen width
+  TAC_MAX_H: 300,       // css px: on a tall screen the window stops growing
+  TAC_MIN_W: 96,        // css px
+  CU_MIN_W: 72,         // css px: the close-up window, never narrower
+  CU_MAX_W: 140,        // css px
+  GAP: 6,               // css px between the window and the map the camera fits in
+  PAD: 6,               // css px between the TAC window and the HUD above and below
+  ALPHA: 0.9,           // window background opacity
+  RADIUS: 10,           // css px corner radius
+  TEX: 10,              // texture px per cell: the shapes are blurred anyway; 16 doubled the bake for no visible gain
+  BLUR: 0.42,           // box-blur radius as a share of a cell: rounds corners, keeps one-cell mounts
+  THR_HULL: 0.36,       // threshold of the blurred hull: a little fatter than the cells, one cell survives
+  THR_ROOM: 0.6,        // threshold of a room's blurred footprint: the block sits inside the hull
+  WALL: 0.75,           // cells: hull wall height
+  // Raised block height per room kind (cells above the deck): the drive highest, the bridge a tower,
+  // crew and tubes mid, frame flat. A dead room sinks to DEAD_H and goes dark.
+  HEIGHT: { drive: 1.5, core: 1.25, crew: 0.6, launcher: 0.6, sensors: 0.5, gun: 0.3, pdc: 0, frame: 0 },
+  DEAD_H: 0.12,
+  DOME: 0.55,           // cells: PDC dome radius
+  BARREL: 2.2,          // cells the rail barrel runs past the bow
+};
+
+const STEEL = [92, 104, 118], STEEL_DARK = [34, 40, 48], WALL_C = [52, 60, 70], DEAD = [26, 29, 34];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+const mul = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
+const css = (c, a = 1) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a})`;
+const newCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; };
+
+// A room's kind from its design (gun, sensors, core, crew, launcher, drive), pdc for a mount, frame else.
+function kindOf(ship, room) {
+  if (isPdc(room)) return 'pdc';
+  const r = ((DESIGNS[ship.design] || {}).rooms || []).find((q) => q.id === room);
+  return r ? r.kind : 'frame';
+}
+const standing = (ship, c) => !!c && !c.cut && !!ship.pieces[c.room] && !ship.pieces[c.room].torn;
+
+// --- geometry: the window and the projection -----------------------------------------------------
+
+// Cell size (css px) that fits the hull's length in a window wh tall.
+function cellForHeight(ship, wh) {
+  const W = ship.form.w, zTop = HERO.WALL + Math.max(...Object.values(HERO.HEIGHT));
+  return HERO.SHIP_LEN * wh / (W * Math.sin(HERO.PITCH) * (1 - HERO.KEYSTONE / 2) + zTop * Math.cos(HERO.PITCH));
+}
+// The window rect (css px, canvas coords) for a view on a canvas cw x ch. hud: {top, bottom} covered (TAC).
+export function heroRect(view, ship, cw, ch, hud) {
+  const Hc = ship.form.h;
+  if (view === 'tac') {
+    const y = hud.top + HERO.PAD, h = Math.max(40, Math.min(HERO.TAC_MAX_H, ch - hud.top - hud.bottom - 2 * HERO.PAD));
+    const w = clamp(Math.ceil(cellForHeight(ship, h) * Hc / HERO.BEAM_SHARE), HERO.TAC_MIN_W, Math.round(cw * HERO.TAC_MAX_W));
+    return { x: 8, y, w, h };
+  }
+  const h = ch, w = clamp(Math.ceil(cellForHeight(ship, h) * Hc / HERO.BEAM_SHARE), HERO.CU_MIN_W, HERO.CU_MAX_W);
+  return { x: 0, y: 0, w, h };
+}
+
+// The projection for a window ww x wh: form x (stern 0, bow W) runs up the window, form y across it (row 0
+// on the left: bow up, as the map draws a ship heading up). z: cells above the hull's base.
+function projection(ship, ww, wh) {
+  const W = ship.form.w, Hc = ship.form.h, sp = Math.sin(HERO.PITCH), cp = Math.cos(HERO.PITCH), K = HERO.KEYSTONE;
+  const c = Math.min(cellForHeight(ship, wh), HERO.BEAM_SHARE * ww / Hc);
+  const zTop = HERO.WALL + Math.max(...Object.values(HERO.HEIGHT));
+  const hull = c * (W * sp * (1 - K / 2) + zTop * cp), plume = HERO.PLUME_LEN * wh;
+  const yNear = Math.round((wh - hull - plume) / 2 + hull + HERO.WALL * cp * c * 0.5);
+  const k = (u) => 1 - K * u;
+  // gx in cells from the stern, gy in cells from row 0's outer edge, z in cells
+  const P = (gx, gy, z = 0) => {
+    const u = gx / W;
+    return { x: ww / 2 + (gy - Hc / 2) * c * k(u), y: yNear - c * W * sp * (u - K * u * u / 2) - z * c * cp * k(u), k: k(u) };
+  };
+  return { c, P, zPx: c * cp, W, Hc, ww, wh, yNear };
+}
+
+// --- masks: blur + threshold of a set of cells, in texture space (TEX px per cell, row 0 = bow) ---------
+
+function boxBlur(src, w, h, r) {
+  const tmp = new Float32Array(w * h), out = new Float32Array(w * h), n = 2 * r + 1;
+  for (let y = 0; y < h; y++) {
+    let s = 0;
+    for (let x = -r; x <= r; x++) s += src[y * w + clamp(x, 0, w - 1)] * (x >= 0 && x < w ? 1 : 0);
+    for (let x = 0; x < w; x++) {
+      tmp[y * w + x] = s / n;
+      const a = x - r, b = x + r + 1;
+      if (a >= 0) s -= src[y * w + a];
+      if (b < w) s += src[y * w + b];
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let s = 0;
+    for (let y = 0; y <= r && y < h; y++) s += tmp[y * w + x];
+    for (let y = 0; y < h; y++) {
+      out[y * w + x] = s / n;
+      const a = y - r, b = y + r + 1;
+      if (a >= 0) s -= tmp[a * w + x];
+      if (b < h) s += tmp[b * w + x];
+    }
+  }
+  return out;
+}
+// A soft mask of the cells that pass `keep`, as alpha 0..1, cropped to their bounding box plus one cell.
+// gy0: the form row (cells) at the texture's left edge; gxTop: the form x (cells from the stern) at its top.
+function blob(ship, keep, thr) {
+  const T = HERO.TEX, W = ship.form.w, Hc = ship.form.h;
+  let x0 = W, x1 = -1, y0 = Hc, y1 = -1;
+  for (let y = 0; y < Hc; y++) for (let x = 0; x < W; x++) if (keep(ship.cells[y][x], x, y)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  if (x1 < 0) return null;
+  const gy0 = y0 - 1, gxTop = x1 + 2, tw = (y1 - y0 + 3) * T, th = (x1 - x0 + 3) * T, a = new Float32Array(tw * th);
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if (!keep(ship.cells[y][x], x, y)) continue;
+    const tx0 = (y - gy0) * T, ty0 = (gxTop - 1 - x) * T;
+    for (let j = 0; j < T; j++) a.fill(1, (ty0 + j) * tw + tx0, (ty0 + j) * tw + tx0 + T);
+  }
+  const r = Math.max(1, Math.round(HERO.BLUR * T));
+  const b = boxBlur(boxBlur(a, tw, th, r), tw, th, r);
+  for (let i = 0; i < b.length; i++) { const v = (b[i] - thr) / 0.12 + 0.5; b[i] = v <= 0 ? 0 : v >= 1 ? 1 : v; }
+  return { a: b, tw, th, gy0, gxTop };
+}
+// Paint a mask into a canvas: colour per texel from fn(tx, ty) -> [r, g, b], alpha from the mask.
+function paint(m, fn, alpha = 1) {
+  const cv = newCanvas(m.tw, m.th), g = cv.getContext('2d'), img = g.createImageData(m.tw, m.th), d = img.data;
+  for (let ty = 0; ty < m.th; ty++) for (let tx = 0; tx < m.tw; tx++) {
+    const i = ty * m.tw + tx, v = m.a[i];
+    if (v <= 0) continue;
+    const col = fn(tx, ty);
+    d[i * 4] = col[0]; d[i * 4 + 1] = col[1]; d[i * 4 + 2] = col[2]; d[i * 4 + 3] = 255 * v * alpha;
+  }
+  g.putImageData(img, 0, 0);
+  return cv;
+}
+
+// Warp a texture onto ctx through the projection at height z (cells): one slice per two texture rows.
+function warp(ctx, tex, m, pr, z) {
+  const T = HERO.TEX, step = 2;
+  for (let ty = 0; ty < m.th; ty += step) {
+    const gx0 = m.gxTop - ty / T, gx1 = m.gxTop - (ty + step) / T; // far edge, near edge of the slice
+    const a = pr.P(gx0, m.gy0, z), b = pr.P(gx1, m.gy0, z), e = pr.P(gx1, m.gy0 + m.tw / T, z);
+    ctx.drawImage(tex, 0, ty, m.tw, step, b.x, a.y, e.x - b.x, b.y - a.y + 0.35);
+  }
+}
+// Warp once into a scratch layer, then stack it from 0 to px css px up (a wall or a block's sides).
+function stack(g, scratch, tex, m, pr, z, px, dpr) {
+  const q = scratch.getContext('2d');
+  q.setTransform(1, 0, 0, 1, 0, 0); q.clearRect(0, 0, scratch.width, scratch.height);
+  q.setTransform(dpr, 0, 0, dpr, 0, 0); warp(q, tex, m, pr, z);
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+  for (let s = 0; s <= px; s += 0.75) g.drawImage(scratch, 0, -Math.round(s * dpr));
+  g.restore();
+  return scratch;
+}
+
+// Fill a canvas layer with the key-light gradient over what is already there (source-atop).
+function keyLight(g, ww, wh, lit, dark) {
+  const K = LOOK.KEY, cx = ww / 2, cy = wh / 2, L = Math.hypot(ww, wh) / 2;
+  const gr = g.createLinearGradient(cx + K.x * L, cy + K.y * L, cx - K.x * L, cy - K.y * L);
+  gr.addColorStop(0, `rgba(255,255,255,${lit})`); gr.addColorStop(0.5, 'rgba(255,255,255,0)'); gr.addColorStop(1, `rgba(0,0,0,${dark})`);
+  g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = gr; g.fillRect(0, 0, ww, wh); g.restore();
+}
+// A rim on the edges facing the light: the shape less itself shifted away from the light.
+let rimCv = null;
+function rim(dst, layer, dpr, col, a, px = LOOK.RIM_PX) {
+  if (!rimCv || rimCv.width !== layer.width || rimCv.height !== layer.height) rimCv = newCanvas(layer.width, layer.height);
+  const r = rimCv, g = r.getContext('2d');
+  g.globalCompositeOperation = 'copy'; g.drawImage(layer, 0, 0);
+  g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, r.width, r.height);
+  g.globalCompositeOperation = 'destination-out';
+  g.drawImage(layer, -LOOK.KEY.x * px * dpr, -LOOK.KEY.y * px * dpr);
+  dst.save(); dst.setTransform(1, 0, 0, 1, 0, 0); dst.globalAlpha = a; dst.drawImage(r, 0, 0); dst.restore();
+}
+
+// --- the bake: the static hull, one bitmap per battle and hull state --------------------------------
+
+function bake(ship, ww, wh, dpr) {
+  const pr = projection(ship, ww, wh), { c, P, zPx } = pr;
+  const out = newCanvas(ww * dpr, wh * dpr), g = out.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const layer = () => { const l = newCanvas(ww * dpr, wh * dpr), q = l.getContext('2d'); q.setTransform(dpr, 0, 0, dpr, 0, 0); return [l, q]; };
+  const hull = blob(ship, (cell) => standing(ship, cell), HERO.THR_HULL);
+  const info = { lights: [], bell: null, pr };
+  if (!hull) return { canvas: out, info };
+  const T = HERO.TEX;
+  // deck colour per cell: steel, a faint tint of a job room (dark when dead)
+  const deckCol = ship.cells.map((row) => row.map((cell) => {
+    if (!cell || kindOf(ship, cell.room) === 'frame') return STEEL;
+    return mix(STEEL, ship.pieces[cell.room].alive ? roomColor(cell.room) || STEEL : DEAD, 0.16);
+  }));
+  const scratch = newCanvas(ww * dpr, wh * dpr);
+
+  // 1. the hull wall: the silhouette at the base, stacked up to the deck; the side toward the light lighter
+  const wallTex = paint(hull, () => WALL_C);
+  const [wl, wq] = layer();
+  stack(wq, scratch, wallTex, hull, pr, 0, HERO.WALL * zPx, dpr);
+  const gr = wq.createLinearGradient(0, 0, ww, 0);
+  gr.addColorStop(0, 'rgba(255,255,255,0.10)'); gr.addColorStop(1, 'rgba(0,0,0,0.45)');
+  wq.save(); wq.globalCompositeOperation = 'source-atop'; wq.fillStyle = gr; wq.fillRect(0, 0, ww, wh); wq.restore();
+  g.drawImage(wl, 0, 0, ww, wh);
+
+  // 2. the deck: steel, a faint tint of each job room, plate seams every cell
+  const deckTex = paint(hull, (tx, ty) => {
+    const y = Math.floor(tx / T) + hull.gy0, x = hull.gxTop - 1 - Math.floor(ty / T);
+    let col = y >= 0 && y < ship.form.h && x >= 0 && x < ship.form.w ? deckCol[y][x] : STEEL;
+    if (tx % (2 * T) === 0 || ty % (2 * T) === 0) col = mul(col, 0.92); // seams every two cells: plates, not a grid
+    return col;
+  });
+  const [dl, dq] = layer();
+  warp(dq, deckTex, hull, pr, HERO.WALL);
+  keyLight(dq, ww, wh, LOOK.SHADE_LIT, LOOK.SHADE_DARK);
+  g.drawImage(dl, 0, 0, ww, wh);
+  rim(g, dl, dpr, 'rgb(220,236,255)', LOOK.RIM);
+
+  // 3. raised blocks per room kind, far (bow) first so the near ones overlap
+  const rooms = [];
+  for (let y = 0; y < ship.form.h; y++) for (let x = 0; x < ship.form.w; x++) {
+    const cell = ship.cells[y][x];
+    if (!standing(ship, cell)) continue;
+    let r = rooms.find((q) => q.room === cell.room);
+    if (!r) rooms.push(r = { room: cell.room, kind: kindOf(ship, cell.room), sx: 0, sy: 0, n: 0, x0: x, x1: x });
+    r.sx += x + 0.5; r.sy += y + 0.5; r.n++; r.x0 = Math.min(r.x0, x); r.x1 = Math.max(r.x1, x);
+  }
+  rooms.sort((p, q) => q.sx / q.n - p.sx / p.n);
+  const deckZ = HERO.WALL, [tl, tq] = layer(); // one layer for every block's top, cleared per block
+  for (const r of rooms) {
+    const alive = ship.pieces[r.room].alive, h = alive ? HERO.HEIGHT[r.kind] || 0 : (r.kind === 'frame' || r.kind === 'pdc' ? 0 : HERO.DEAD_H);
+    if (!(h > 0)) continue;
+    const m = blob(ship, (cell) => standing(ship, cell) && cell.room === r.room, HERO.THR_ROOM);
+    if (!m) continue;
+    const top = alive ? mix(STEEL, roomColor(r.room) || STEEL, 0.55) : DEAD;
+    const hPx = h * zPx;
+    // contact shadow: the footprint, dark, pushed away from the light by the block's height
+    const sh = paint(m, () => [0, 0, 0], 0.5);
+    g.save(); g.translate(-LOOK.KEY.x * hPx * 0.9, -LOOK.KEY.y * hPx * 0.9); warp(g, sh, m, pr, deckZ); g.restore();
+    // sides: the footprint stacked, darker toward the deck
+    const sideTex = paint(m, () => mul(top, 0.42));
+    stack(g, scratch, sideTex, m, pr, deckZ, hPx, dpr);
+    // top: the room colour, lit, with a rim
+    tq.setTransform(1, 0, 0, 1, 0, 0); tq.clearRect(0, 0, tl.width, tl.height); tq.setTransform(dpr, 0, 0, dpr, 0, 0);
+    warp(tq, paint(m, () => top), m, pr, deckZ + h);
+    keyLight(tq, ww, wh, LOOK.SHADE_LIT * 1.4, LOOK.SHADE_DARK * 0.8);
+    g.drawImage(tl, 0, 0, ww, wh);
+    rim(g, tl, dpr, 'rgb(240,248,255)', alive ? LOOK.RIM : 0.25);
+    r.top = deckZ + h;
+  }
+
+  // 4. the rail: a spine along its cells and a barrel past the bow (only when the form has rail cells)
+  const rail = rooms.find((r) => r.kind === 'gun');
+  if (rail) {
+    const gy = rail.sy / rail.n, z = (rail.top || deckZ) + 0.05;
+    const a = P(rail.x0 + 0.2, gy, z), b = P(rail.x1 + 1, gy, z), e = P(rail.x1 + 1 + HERO.BARREL, gy, z);
+    const alive = ship.pieces[rail.room].alive;
+    g.lineCap = 'round';
+    g.strokeStyle = css(alive ? [70, 84, 100] : DEAD); g.lineWidth = c * 0.62 * a.k; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+    g.strokeStyle = css(alive ? [150, 196, 235] : [50, 56, 64]); g.lineWidth = c * 0.22 * a.k; g.beginPath(); g.moveTo(a.x - c * 0.1, a.y); g.lineTo(b.x - c * 0.1, b.y); g.stroke();
+    g.strokeStyle = css(alive ? [110, 124, 140] : DEAD); g.lineWidth = c * 0.34 * e.k; g.beginPath(); g.moveTo(b.x, b.y); g.lineTo(e.x, e.y); g.stroke();
+    g.fillStyle = css(alive ? [180, 220, 255] : [60, 66, 74]); g.beginPath(); g.arc(e.x, e.y, c * 0.22 * e.k, 0, Math.PI * 2); g.fill();
+  }
+
+  // 5. PDC domes at the mounts
+  (ship.form.mounts || []).forEach(([mx, my], i) => {
+    const room = `pdc${i + 1}`, cell = ship.cells[my] && ship.cells[my][mx];
+    if (!standing(ship, cell)) return;
+    const alive = ship.pieces[room].alive, p = P(mx + 0.5, my + 0.5, deckZ), r = HERO.DOME * c * p.k;
+    g.fillStyle = 'rgba(0,0,0,0.45)';
+    g.beginPath(); g.ellipse(p.x - LOOK.KEY.x * r * 0.6, p.y - LOOK.KEY.y * r * 0.4, r * 1.1, r * 0.8, 0, 0, Math.PI * 2); g.fill();
+    const base = alive ? roomColor(room) : DEAD, top = { x: p.x, y: p.y - r * 0.45 };
+    const dg = g.createRadialGradient(top.x + LOOK.KEY.x * r * 0.45, top.y + LOOK.KEY.y * r * 0.45, r * 0.1, top.x, top.y, r * 1.05);
+    dg.addColorStop(0, css(mix(base, [255, 255, 255], alive ? 0.55 : 0.1))); dg.addColorStop(0.55, css(mix(base, STEEL, 0.35))); dg.addColorStop(1, css(mul(base, 0.35)));
+    g.fillStyle = dg;
+    g.beginPath(); g.ellipse(top.x, top.y, r, r * 0.85, 0, 0, Math.PI * 2); g.fill();
+  });
+
+  // 6. the engine bell at the drive's stern edge (dynamic glow and plume are drawn per frame)
+  const drive = rooms.find((r) => r.kind === 'drive');
+  if (drive) {
+    let y0 = Infinity, y1 = -Infinity;
+    for (let y = 0; y < ship.form.h; y++) for (let x = 0; x <= drive.x0; x++) {
+      const cell = ship.cells[y][x];
+      if (standing(ship, cell) && cell.room === drive.room && x === drive.x0) { y0 = Math.min(y0, y); y1 = Math.max(y1, y + 1); }
+    }
+    const gy = (y0 + y1) / 2, mouth = P(drive.x0 - 0.35, gy, HERO.WALL * 0.5), rw = Math.max(1.5, (y1 - y0) * 0.36 * c);
+    const alive = ship.pieces[drive.room].alive;
+    const bg = g.createLinearGradient(mouth.x - rw, 0, mouth.x + rw, 0);
+    bg.addColorStop(0, css([128, 138, 150])); bg.addColorStop(0.45, css([70, 78, 88])); bg.addColorStop(1, css(STEEL_DARK));
+    g.fillStyle = bg;
+    g.beginPath();
+    g.moveTo(mouth.x - rw * 0.7, mouth.y - rw * 0.9); g.lineTo(mouth.x + rw * 0.7, mouth.y - rw * 0.9);
+    g.lineTo(mouth.x + rw, mouth.y); g.lineTo(mouth.x - rw, mouth.y); g.closePath(); g.fill();
+    g.fillStyle = css(alive ? [40, 30, 34] : [16, 18, 22]);
+    g.beginPath(); g.ellipse(mouth.x, mouth.y, rw, rw * 0.42, 0, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(200,214,230,0.6)'; g.lineWidth = 0.8;
+    g.beginPath(); g.ellipse(mouth.x, mouth.y, rw, rw * 0.42, 0, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+    if (alive) info.bell = { x: mouth.x, y: mouth.y, r: rw };
+  }
+
+  // 7. running lights: the outermost standing cells port (row 0 side, red) and starboard (green) nearest a
+  // quarter of the way from the stern, and the bow tip (white strobe). Positions only; drawn per frame.
+  const side = (pick) => {
+    let best = null;
+    for (let y = 0; y < ship.form.h; y++) for (let x = 0; x < ship.form.w; x++) {
+      if (!standing(ship, ship.cells[y][x])) continue;
+      const score = pick(y) * 100 - Math.abs(x - ship.form.w * 0.25);
+      if (!best || score > best.score) best = { score, x, y };
+    }
+    return best;
+  };
+  const port = side((y) => -y), star = side((y) => y);
+  if (port) info.lights.push({ ...P(port.x + 0.5, port.y + 0.15, deckZ), col: [255, 70, 70], kind: 'steady' });
+  if (star) info.lights.push({ ...P(star.x + 0.5, star.y + 0.85, deckZ), col: [80, 255, 140], kind: 'steady' });
+  let bow = null;
+  for (let x = ship.form.w - 1; x >= 0 && !bow; x--) {
+    const ys = [];
+    for (let y = 0; y < ship.form.h; y++) if (standing(ship, ship.cells[y][x])) ys.push(y);
+    if (ys.length) bow = { x, y: (ys[0] + ys[ys.length - 1] + 1) / 2 };
+  }
+  if (bow) info.lights.push({ ...P(bow.x + 0.9, bow.y, deckZ + 0.1), col: [255, 255, 255], kind: 'strobe' });
+  return { canvas: out, info };
+}
+
+// The hull state that invalidates the bake: dead and torn rooms, cut cells.
+function hullKey(ship) {
+  let k = '';
+  for (const id in ship.pieces) { const p = ship.pieces[id]; if (!p.alive || p.torn) k += id + (p.torn ? 't' : 'd') + ','; }
+  for (let y = 0; y < ship.form.h; y++) for (let x = 0; x < ship.form.w; x++) { const c = ship.cells[y][x]; if (c && c.cut) k += `${x}.${y},`; }
+  return k;
+}
+
+// --- the window -----------------------------------------------------------------------------
+
+// canvases: {tac, closeup} the canvas each view draws on; hud(): {top, bottom} css px the HUD covers on TAC.
+export function makeHero(canvases, hud) {
+  let cache = null; // {key, canvas, info}
+  const rectFor = (view, ship) => {
+    const cv = canvases[view];
+    if (!cv || !cv.clientWidth || !cv.clientHeight) return null;
+    return heroRect(view, ship, cv.clientWidth, cv.clientHeight, view === 'tac' ? hud() : { top: 0, bottom: 0 });
+  };
+  // css px the camera's view rect must leave free at the left, past the window (0 when there is no window)
+  function left(view, battle) {
+    const r = battle && rectFor(view, battle.ships[0]);
+    return r ? r.x + r.w + HERO.GAP : 0;
+  }
+  function draw(view, battle) {
+    const cv = canvases[view], ship = battle.ships[0], r = rectFor(view, ship);
+    if (!r) return;
+    const dpr = renderDpr(), key = `${battle.seed}|${view}|${r.w}x${r.h}@${dpr}|${hullKey(ship)}`;
+    if (!cache || cache.key !== key) cache = { key, ...bake(ship, r.w, r.h, dpr) };
+    const g = cv.getContext('2d');
+    g.save();
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.translate(r.x, r.y);
+    // the window: dark glass, rounded (the close-up's sits on the stage's left edge: square there)
+    const rad = HERO.RADIUS, sq = view === 'closeup';
+    g.beginPath();
+    if (g.roundRect) g.roundRect(0, 0, r.w, r.h, sq ? [0, rad, rad, 0] : rad); else g.rect(0, 0, r.w, r.h);
+    const bg = g.createLinearGradient(0, 0, 0, r.h);
+    bg.addColorStop(0, `rgba(10,15,26,${HERO.ALPHA})`); bg.addColorStop(1, `rgba(4,6,11,${HERO.ALPHA})`);
+    g.fillStyle = bg; g.fill();
+    g.strokeStyle = 'rgba(140,165,200,0.28)'; g.lineWidth = 1; g.stroke();
+    g.clip();
+    const t = battle.t || 0, info = cache.info;
+    // the idle plume, behind the bell's mouth toward the camera
+    if (info.bell) {
+      const b = info.bell;
+      drawPlume(g, b.x, b.y, 0, 1, HERO.PLUME_LEN * r.h, b.r * 0.9, t, 11);
+    }
+    g.drawImage(cache.canvas, 0, 0, r.w, r.h);
+    if (info.bell) glow(g, info.bell.x, info.bell.y, info.bell.r * 1.6, [150, 200, 255], 0.35, false);
+    // running lights: steady with a slow breath, the bow strobe flashes once every 1.6 s
+    for (const L of info.lights) {
+      const a = L.kind === 'strobe' ? ((t % 1.6) < 0.08 ? 0.9 : 0) : 0.55 + 0.15 * Math.sin(t * 2.1);
+      if (a <= 0) continue;
+      g.fillStyle = css(L.col, Math.min(1, a + 0.3)); g.beginPath(); g.arc(L.x, L.y, 1.1, 0, Math.PI * 2); g.fill();
+      glow(g, L.x, L.y, 6, L.col, a * 0.6, false);
+    }
+    g.restore();
+  }
+  return { draw, left, reset() { cache = null; } };
+}
