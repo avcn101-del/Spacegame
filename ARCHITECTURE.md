@@ -310,7 +310,9 @@ Presentation only: no sim, rng or balance change; TAC unchanged (every new behav
   pixel-identical to before (compared at 844 x 390, dpr 2.6).
 - Threat ticks on the dock (`closeup.js`): for live torpedoes with `target === 'me'`, grouped by
   `shotFrom(me, p.x, p.y)` (bow, stern, top, bottom), a red tick on that edge of my hull pointing in,
-  label `▼ 4 · 2.3` (count, nearest distance km, 11 px, dark backplate), clamped in the canvas,
+  label `▼ 4 · 2.3` (count, nearest distance km, 11 px, dark backplate) next to its own tick (beside it
+  for top and bottom, under it for bow and stern; F.1), tick and label clamped in the canvas with the shake
+  (a tick with too little margin slides inward onto the hull edge),
   drawn after the hulls and before the brackets. HUD only: no travel. Gone when no torpedo comes.
 
 ## Render module contract

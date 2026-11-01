@@ -352,39 +352,54 @@ export function makeCloseup(canvas) {
   // Torpedoes still in flight at me, grouped by the hull edge they come at (the same shotFrom as the chevrons):
   // a red tick on that edge of my hull and "arrow count · nearest km". HUD only: nothing travels, it just breathes.
   const WARN = 'rgb(255,77,77)', GLYPH = { top: '\u25BC', bottom: '\u25B2', bow: '\u25C0', stern: '\u25B6' };
-  function drawThreats(battle) {
+  let threatGeom = [];   // last drawn ticks and labels, canvas px with the shake: for tests only (threats())
+  function drawThreats(battle, so) {
     const me = battle.shipById('me'), groups = {};
     for (const p of battle.projectiles) {
       if (p.kind !== 'torp' || p.target !== 'me' || p.dead) continue;
       const g = (groups[shotFrom(me, p.x, p.y)] ||= { n: 0, d: Infinity });
       g.n++; g.d = Math.min(g.d, Math.hypot(p.x - me.x, p.y - me.y));
     }
-    const b = B.me, pulseK = 0.8 + 0.2 * Math.sin(time * 5), bh = 13, ts = 4;
+    const b = B.me, pulseK = 0.8 + 0.2 * Math.sin(time * 5), bh = 13, ts = 4, gap = 2;
     const midY = b.y + b.h / 2, bow = bowEdge('me'), stern = sternEdge('me');
+    // the drawing is shaken by so: the safe rect in drawing space, 1 px inside the canvas
+    const x0 = 1 - so.x, y0 = 1 - so.y, x1 = W - 1 - so.x, y1 = H - 1 - so.y;
+    const fitIn = (lo, hi, a0, a1) => (a0 < lo ? lo - a0 : a1 > hi ? Math.max(lo - a0, hi - a1) : 0);
+    threatGeom = [];
     ctx.save();
     ctx.font = V.LABEL_FONT; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     for (const f of ['top', 'bottom', 'bow', 'stern']) {
       const g = groups[f];
       if (!g) continue;
-      // tick: a triangle whose tip touches the hull edge and points into the hull; anchor = [tip x, tip y, dx, dy]
-      let tx, ty, dx, dy, lx, ly;
+      // tick: a triangle whose tip touches the hull edge and points into the hull (dx, dy), its base ts + 1 outside
+      let tx, ty, dx, dy;
+      if (f === 'top') { tx = b.x + b.w * 0.5; ty = b.y; dx = 0; dy = 1; }
+      else if (f === 'bottom') { tx = b.x + b.w * 0.5; ty = b.y + b.h; dx = 0; dy = -1; }
+      else if (f === 'bow') { tx = bow; ty = midY; dx = -b.bow; dy = 0; }
+      else { tx = stern; ty = midY; dx = b.bow; dy = 0; }
+      const nx = -dy, ny = dx;
+      let pts = [[tx, ty], [tx - dx * (ts + 1) + nx * ts, ty - dy * (ts + 1) + ny * ts], [tx - dx * (ts + 1) - nx * ts, ty - dy * (ts + 1) - ny * ts]];
+      // too little margin outside the hull: slide the tick inward onto the hull edge until it is all inside
+      const tb = (q) => ({ l: Math.min(...q.map((v) => v[0])) - 0.5, r: Math.max(...q.map((v) => v[0])) + 0.5, t: Math.min(...q.map((v) => v[1])) - 0.5, b: Math.max(...q.map((v) => v[1])) + 0.5 });
+      let k = tb(pts);
+      const sx = fitIn(x0, x1, k.l, k.r), sy = fitIn(y0, y1, k.t, k.b);
+      if (sx || sy) { pts = pts.map(([px, py]) => [px + sx, py + sy]); k = tb(pts); }
+      // label next to its own tick: beside it for top and bottom, under it for bow and stern (over a few cells is fine)
       const text = GLYPH[f] + ' ' + g.n + ' \u00B7 ' + g.d.toFixed(1);
       const bw = ctx.measureText(text).width + 8;
-      if (f === 'top') { tx = b.x + b.w * 0.5; ty = b.y; dx = 0; dy = 1; lx = tx + ts + 2; ly = Math.max(V.LABEL_H, b.y - bh + 3); }
-      else if (f === 'bottom') { tx = b.x + b.w * 0.5; ty = b.y + b.h; dx = 0; dy = -1; lx = tx + ts + 2; ly = b.y + b.h - 3; }
-      else if (f === 'bow') { tx = bow; ty = midY; dx = -b.bow; dy = 0; lx = W / 2 - bw / 2; ly = H - bh - 1; }
-      else { tx = stern; ty = midY; dx = b.bow; dy = 0; lx = 1; ly = H - bh - 1; }
-      lx = clamp(lx, 1, Math.max(1, W - bw - 1)); ly = clamp(ly, 1, Math.max(1, H - bh - 1));
+      let lx, ly;
+      if (f === 'top' || f === 'bottom') { lx = k.r + gap; ly = (k.t + k.b) / 2 - bh / 2; }
+      else { lx = (k.l + k.r) / 2 - bw / 2; ly = k.b + gap; }
+      lx = clamp(lx, x0, Math.max(x0, x1 - bw)); ly = clamp(ly, y0, Math.max(y0, y1 - bh));
       ctx.globalAlpha = pulseK;
-      // triangle: tip (tx, ty), base ts + 1 back along the approach, half-width ts
-      const nx = -dy, ny = dx, bx = tx - dx * (ts + 1), by = ty - dy * (ts + 1);
-      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(bx + nx * ts, by + ny * ts); ctx.lineTo(bx - nx * ts, by - ny * ts); ctx.closePath();
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(pts[1][0], pts[1][1]); ctx.lineTo(pts[2][0], pts[2][1]); ctx.closePath();
       ctx.fillStyle = WARN; ctx.fill();
       ctx.strokeStyle = 'rgba(5,7,12,0.85)'; ctx.lineWidth = 1; ctx.stroke();
       ctx.fillStyle = 'rgba(5,7,12,0.85)'; ctx.fillRect(lx, ly, bw, bh);
       ctx.strokeStyle = 'rgba(255,77,77,0.5)'; ctx.strokeRect(lx + 0.5, ly + 0.5, bw - 1, bh - 1);
       ctx.fillStyle = WARN; ctx.fillText(text, lx + 4, ly + bh / 2 + 0.5);
       ctx.globalAlpha = 1;
+      threatGeom.push({ from: f, text, tick: { x: k.l + so.x, y: k.t + so.y, w: k.r - k.l, h: k.b - k.t }, label: { x: lx + so.x, y: ly + so.y, w: bw, h: bh } });
     }
     ctx.restore();
   }
@@ -561,7 +576,7 @@ export function makeCloseup(canvas) {
     ctx.restore();
     ctx.save();
     ctx.translate(so.x, so.y);
-    drawThreats(battle);
+    drawThreats(battle, so);
     drawBrackets(battle);
     ctx.restore();
   }
@@ -616,5 +631,8 @@ export function makeCloseup(canvas) {
     inspectTtl = room ? V.INSPECT_TTL : 0;
   }
 
-  return { draw, onEvent, reset, roomAt, setInspect };
+  // Debug: the threat ticks and labels as last drawn, {from, text, tick, label} rects in CSS px of this canvas.
+  const threats = () => threatGeom.map((t) => ({ ...t, canvas: { w: W, h: H } }));
+
+  return { draw, onEvent, reset, roomAt, setInspect, threats };
 }
