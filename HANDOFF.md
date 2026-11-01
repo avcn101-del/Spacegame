@@ -311,6 +311,20 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    TAC pixel-identical.
    F.1 done (PR 45): every threat label sits next to its own tick (top/bottom beside it, bow/stern under it), tick and label clamped inside the dock (with the shake); `closeup.threats()` returns the drawn rects for tests.
    G1 done (PR 46, the owner's go after his phone run of F/F.1): the look, render only (`look.js`, ARCHITECTURE "The look"): key light shading + rim, bloom by the amplitude hierarchy, impact tint, Expanse plume, parallax starfield, vignette/grade, `game.perf()`. G2 (audio) waits for the owner's G1 playtest.
+   G1 accepted (the owner, desktop dpr 1: 60 fps, work 1.6 ms). Yellow flag, phone rule: if a knife fight visibly
+   stutters or `game.perf()` p95 is over about 25 ms at dpr 2.6, cut in the measured order: vignette, then star count,
+   then dock shading.
+   F.2 done (PR 47): no frame rect round the world-stage mark (the hull reads on its own); dock from a canvas 1024 px
+   wide (`V.WIDE`) puts my hull at the left edge and theirs at the right, the middle free for ticks and labels;
+   under 1024 (844 x 390, 932 x 430) the dock is the centred pair exactly as before (roomAt scan identical to main).
+   Next, in order, each stopped for the owner's playtest: PR H, then G2 (audio).
+   PR H (the owner, 2026-11-01): merge the two views. The close-up is a superset of TAC (world stage = map, dock =
+   silhouette panels): delete the TAC view, the side silhouette panels and the VIEW toggle; the close-up layout is the
+   only layout at every viewport. Audit before deleting: hangar / replay / result / auto flows, the `.panel.hit`
+   feedback (reduced-motion references it), range-ring and arc parity in the world stage, every test that references
+   TAC. Update ARCHITECTURE / HANDOFF / STATUS. Sim untouched, selfplay deterministic, A to F and G1 behaviours keep
+   passing on the one view at 844 x 390 (dpr 1 and 2.6) and 1440 x 900. Over an hour: give the estimate and wait.
+   G2 starts only after H is merged and played.
    Acceptance: phone 844 x 390 at dpr 1 and 2.6; desktop 1440 x 900 only a smoke test (BRIEF: no
    desktop layout). Parked in NOTES: CMD vector, threat ticks, close-up Burn burst, reduced motion,
    help responsive, hangar. FX groups offered before (wounds, big moments) wait behind this.

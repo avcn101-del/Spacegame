@@ -15,6 +15,7 @@ import { LOOK, BLOOM, bloom, drawPlume as lookPlume, makeStarfield } from './loo
 const V = {
   MARGIN: 12,        // px from the canvas edge to the outer end of a hull
   GAP: 40,           // px between the two bows (the dock is short and wide: spend the height on cells)
+  WIDE: 1024,        // px: from this canvas width the hulls sit at the outer edges, the middle stays free for ticks and labels (phones keep the centred pair)
   CELL_MAX: 16,      // px: a small form (Belter) does not blow up past this
   LABEL_H: 16,       // px kept free along the top for the ship names and the CUTAWAY label
   VPAD: 7,           // px above and below a hull: chevrons and plume need a little air
@@ -88,7 +89,8 @@ export function makeCloseup(canvas) {
     const cell = Math.max(2, Math.min(V.CELL_MAX, slot / a.form.w, slot / b.form.w, availH / Math.max(a.form.h, b.form.h)));
     const mk = (ship, left) => {
       const w = cell * ship.form.w, h = cell * ship.form.h;
-      return { x: left ? W / 2 - V.GAP / 2 - w : W / 2 + V.GAP / 2, y: Math.round(V.LABEL_H + V.VPAD + (availH - h) / 2), w, h, cell, horizontal: true, bow: left ? 1 : -1, mirror: !left };
+      const x = W >= V.WIDE ? (left ? V.MARGIN : W - V.MARGIN - w) : (left ? W / 2 - V.GAP / 2 - w : W / 2 + V.GAP / 2);
+      return { x, y: Math.round(V.LABEL_H + V.VPAD + (availH - h) / 2), w, h, cell, horizontal: true, bow: left ? 1 : -1, mirror: !left };
     };
     return { me: mk(a, true), them: mk(b, false) };
   }
