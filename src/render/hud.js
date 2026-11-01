@@ -151,7 +151,8 @@ export function makeHud({ onOrder, onPause, onHelp, onResume, onRestart, onNew, 
   $('#legend').innerHTML = Object.keys(T.legend)
     .map((o) => `<li><b>${T.buttons[o] || o.toUpperCase()}</b> <span>${T.legend[o]}</span></li>`).join('');
 
-  // Toasts: a queue of two at most, under the header; the same text again only refreshes its time.
+  // Toast: one line at the top edge of the world stage, the newest wins (PR 54: two lines covered the ships on a
+  // 108 px stage; the alert lane keeps what matters); the same text again only refreshes its time.
   // kind: 'ok' (accepted), 'no' (refused), 'event' (what just happened). Alerts never go here.
   const toasts = [];
   let toastKey = '', alertKey = '';
@@ -172,7 +173,7 @@ export function makeHud({ onOrder, onPause, onHelp, onResume, onRestart, onNew, 
       const same = toasts.find((t) => t.text === text);
       if (same) { same.ttl = Math.max(same.ttl, ttl); return; }
       toasts.push({ text, ttl, kind });
-      while (toasts.length > 2) toasts.shift();
+      while (toasts.length > 1) toasts.shift();
     },
     // Tap on one of my rooms: the inspector shows it for a while; the enemy target stays underneath.
     inspect(room) { inspect = room ? { room, ttl: 5.5 } : null; },

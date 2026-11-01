@@ -392,13 +392,47 @@ scale that breaks the fit".) Now:
   the floor; revisit only if it flickers on the phone when they hug the edge.
 - `railMiss` points are the slug's end, 0.6 km off the target (`weapons.js`), not far away; they did not cause this.
 
+## Anchored stage (PR 54, 2026-11-01, render only)
+
+The owner's playtest: on the merged view's world stage he lost his own ship's position, their bearing and the feel
+of range (the old TAC did this better). Reference: a chase camera with the own ship anchored, a range on every
+target and edge indicators, mapped to our top-down stage. No sim, AI, RNG, `numbers.js`, input or rule change.
+- The anchor (`anchorCamera` in `canvas.js`, called by `engageCamera` after the mode and its points are worked out).
+  `sBoth` is the honest fit of my ship and theirs (the same formula as `target()`: pad, 1 km span floor, no
+  `maxScale` cap). Below `V.ANCHOR_IN` (18 px/km) the stage is anchored until it rises above `V.ANCHOR_OUT` (22).
+  Anchored, in every mode (the owner approved the deviation from "idle only": a 20 km sniper fight with the rail
+  aim toggling would otherwise jump between frames): the scale is `V.MIN_SCALE` (9 px/km) and my ship sits at
+  `V.ANCHOR_X` of the width (0.3, or 0.7 when they are left of me on entry) and half the height. Only my ship is
+  required; their ship, torpedoes and event points may leave the frame. The side flips when their bearing has
+  crossed the vertical centreline by `V.ANCHOR_FLIP_DEG` (20) for `V.ANCHOR_FLIP_HOLD` (1.5 s of dt) in a row.
+  Entering (from where my ship is drawn now, at the current scale) and flipping ease over `V.ANCHOR_EASE` (0.4 s,
+  smoothstep). On exit the fit camera eases back in (its zoom-in hold and transition are cleared). Paused: nothing
+  changes. Above the threshold the fit camera (modes, PR 51 floor, snaps) is the same code as before: the probes
+  at 12 km horizontal and at knife range are identical to main to the pixel. At 1440 x 900 the stage is tall
+  enough that a vertical approach still fits above 18 px/km, so it is rarely anchored there.
+  `cameraState()` adds `anchored` and `anchor` `{x, y, side}` (CSS px).
+- Rings: their ship keeps both envelopes (PDC solid, torpedo dashed: range is symmetric, so their torpedo ring
+  reads both ways); my ship keeps the PDC ring (the defensive bubble) and loses its torpedo ring. Round my ship
+  the ruler, `V.RULER_KM` 1 / 2 / 4 / 8 km at true scale (same `cam.scale` as the arcs), neutral grey dotted
+  `[1, 4]`, so it never reads as a weapon range. A ring that does not cross the canvas is skipped. Labels
+  (`T.ruler`, 11 px) go only on rings wider than my mark; each sits at the first of `V.RULER_ANGLES` (200, 340,
+  160, 20 degrees) whose point is on the stage, clamped inside it, and is dropped if it would sit on a label
+  already drawn. `cuWorld.rulerLabels()` returns them for tests.
+- Their range, always: on the stage, `T.bearing` (`PELLA 14.5 km`, the wedge's string) under their mark (over it
+  when there is no room), on a dark plate, kept inside the canvas (`cuWorld.rangeLabel()`); off the stage the
+  PR 51 wedge, which already starts from my mark, so anchored it reads from the anchor.
+- Toast: one line at the top of the world stage, the newest wins (`hud.js` keeps at most one). Two lines covered
+  the ships during big beats; the alert lane in the status deck keeps what matters. The `#toasts` rect is the only
+  DOM rect that differs from main (38 -> 18 px tall when two toasts would have shown).
+
 ## Render module contract
 
 - `silhouette.js`: `drawShipMark` and `COLORS` are used; the art tables
   (`drawSilhouette`, `shipPoint`, `piecePoint`, `landmark`, `SHIP_ASPECT`, ...)
   have had no caller since the panels drew the form; cleanup PR later.
 - `canvas.js`: `makeTactical(canvas, opts)` returns `{draw, onEvent, reset,
-  toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect, cameraState}`
+  toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect, cameraState, bearing, rangeLabel,
+  rulerLabels}`
   (one instance since PR H: the world stage). `closeup.js`: `makeCloseup(canvas)`
   returns `{draw, onEvent, reset, roomAt, setInspect, threats}`. They own their
   own particles, shake and flashes. They never mutate battle.

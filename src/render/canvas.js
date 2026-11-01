@@ -35,6 +35,14 @@ const V = {
   MARK_DIM: 0.58,      // big marks: how much of a job room's colour shows (the rest is the dark background)
   MARK_FRAME: 0.4,     // big marks: how much of the ship tint the frame cells show
   SPARK_LIFE: 0.15,    // s, the longest life of a contact spark
+  ANCHOR_IN: 18,       // px per km: the both-ships fit below this pins my ship (the anchored stage) ...
+  ANCHOR_OUT: 22,      // ... and above this lets go (the gap stops it flapping at the edge)
+  ANCHOR_X: [0.3, 0.7],// my ship's anchor, share of the stage width: left (they are right of me) or right
+  ANCHOR_EASE: 0.4,    // s of dt to ease into the anchor and from side to side
+  ANCHOR_FLIP_DEG: 20, // degrees past the stage's vertical centreline their bearing must cross to flip the side ...
+  ANCHOR_FLIP_HOLD: 1.5, // ... for this many s of dt in a row
+  RULER_KM: [1, 2, 4, 8], // km, the faint ruler rings round my ship (not weapon ranges)
+  RULER_ANGLES: [200, 340, 160, 20], // deg, where a ruler label sits on its ring: the first whose point is on the stage
 };
 const MODE_ORDER = ['inbound', 'outbound', 'rail', 'idle'];
 const BG_RGB = [6, 8, 15], DEAD_CSS = 'rgb(18,21,26)';
@@ -400,6 +408,11 @@ export function makeTactical(canvas, opts = {}) {
   let pad = V.PAD_MIN; // px, the engage camera margin of the last drawn frame
   let floorOn = false; // engage: the camera sat at its floor scale on the last frame
   let wedge = null;    // engage: the bearing wedge drawn on the last frame (for tests), or null
+  let rangeLab = null; // engage: their range label beside their mark on the last frame (for tests), or null
+  let rulerLabs = [];  // the ruler ring labels drawn on the last frame (for tests): {km, r, x, y, w, h}
+  // engage: the anchored stage. on: my ship pinned; side 0/1 picks V.ANCHOR_X; fx, fy, s: the anchor now
+  // (stage shares, px per km); tw: an ease in progress {t, from, to}; wrongT: s their bearing sat on the wrong side
+  const anc = { on: false, side: 0, fx: 0.5, fy: 0.5, s: V.MIN_SCALE, tw: null, wrongT: 0 };
   const pending = []; // delayed secondary explosions: {ax, ay, delay}
   const tint = (id) => (id === 'me' ? C.me : C.them);
   const shipOf = (id) => (last ? (last.shipById ? last.shipById(id) : last.ships.find((s) => s.id === id)) : null);
@@ -462,7 +475,7 @@ export function makeTactical(canvas, opts = {}) {
     drawBlooms();
     ctx.restore();
     vignette(ctx, w, h, rect); // decoration over the scene; no text on this canvas, the HUD is DOM above it
-    wedge = engage ? drawBearing(battle) : null; // over the vignette: it is a readout, like the ghost
+    wedge = engage ? drawBearing(battle) : (rangeLab = null); // over the vignette: it is a readout, like the ghost
     if (ghost) drawGhost(battle); // input overlay: outside the shake, so the finger point stays put
     const wa = fx.white();
     if (wa > 0) { ctx.fillStyle = `rgba(255,240,225,${wa})`; ctx.fillRect(0, 0, w, h); }
@@ -532,6 +545,7 @@ export function makeTactical(canvas, opts = {}) {
     let th = hard === full ? tf : target(hard);
     if (tf.floor) { hard = [sp(me)]; reqPts = hard; th = tf; } // at the floor only my ship is required in frame
     floorOn = tf.floor;
+    if (anchorCamera(me, them, sp, dt)) { floorOn = false; return; }
     if (!cam.init || !Number.isFinite(cam.scale)) { cam.x = tf.x; cam.y = tf.y; cam.scale = tf.s; cam.init = true; trans = false; return; }
     if (dt <= 0) return; // paused: nothing moves, the mode cannot change
     if (trans) {
@@ -551,8 +565,61 @@ export function makeTactical(canvas, opts = {}) {
       if (transT >= V.MODE_TRANS && (!outside(full) || transT >= 2.5 * V.MODE_TRANS)) trans = false;
     }
   }
+  // The anchored stage (PR 54). When both ships fit only below V.ANCHOR_IN px per km (out V.ANCHOR_OUT), in
+  // every mode: the scale is V.MIN_SCALE and my ship sits at a fixed point, V.ANCHOR_X of the width (the side
+  // that leaves the wide part toward them) and half the height. Only my ship is required; they, torpedoes and
+  // event points may leave the frame (the wedge then points at them from my mark). The side flips only when their
+  // bearing has crossed the vertical centreline by V.ANCHOR_FLIP_DEG for V.ANCHOR_FLIP_HOLD s; entering and
+  // flipping ease over V.ANCHOR_EASE s. Returns true when it set the camera (the fit camera then does nothing).
+  // Paused (dt 0): nothing changes. Above the threshold the fit camera runs as before, untouched.
+  function anchorCamera(me, them, sp, dt) {
+    const dx = them.x - me.x, dy = them.y - me.y;
+    const sBoth = Math.min(Math.max(1, rect.w - 2 * pad) / Math.max(Math.abs(dx), 1), Math.max(1, rect.h - 2 * pad) / Math.max(Math.abs(dy), 1));
+    const sideOf = () => (dx < 0 ? 1 : 0); // their bearing in the left half: anchor right
+    const at = (side) => ({ fx: V.ANCHOR_X[side], fy: 0.5, s: V.MIN_SCALE });
+    const ready = cam.init && Number.isFinite(cam.scale);
+    if (!ready) {
+      anc.on = sBoth < V.ANCHOR_IN; anc.tw = null; anc.wrongT = 0;
+      if (anc.on) { anc.side = sideOf(); Object.assign(anc, at(anc.side)); }
+    } else if (dt > 0) {
+      if (!anc.on && sBoth < V.ANCHOR_IN) {
+        // ease in from where my ship is drawn now, at the scale it is drawn at now
+        const p = toScreen(me.x, me.y);
+        anc.on = true; anc.side = sideOf(); anc.wrongT = 0;
+        anc.fx = clamp01((p.x - rect.x) / rect.w); anc.fy = clamp01((p.y - rect.y) / rect.h); anc.s = cam.scale;
+        anc.tw = { t: 0, from: { fx: anc.fx, fy: anc.fy, s: anc.s }, to: at(anc.side) };
+      } else if (anc.on && sBoth > V.ANCHOR_OUT) {
+        anc.on = false; anc.tw = null; holdIn = false; trans = false; // the fit camera eases back in from here
+      } else if (anc.on) {
+        const lim = Math.abs(dy) * Math.tan(V.ANCHOR_FLIP_DEG * Math.PI / 180);
+        const wrong = anc.side === 0 ? -dx > lim : dx > lim;
+        anc.wrongT = wrong ? anc.wrongT + dt : 0;
+        if (anc.wrongT > V.ANCHOR_FLIP_HOLD) {
+          anc.side = 1 - anc.side; anc.wrongT = 0;
+          anc.tw = { t: 0, from: { fx: anc.fx, fy: anc.fy, s: anc.s }, to: at(anc.side) };
+        }
+      }
+      if (anc.on && anc.tw) {
+        const tw = anc.tw;
+        tw.t += dt;
+        const u = clamp01(tw.t / V.ANCHOR_EASE), k = u * u * (3 - 2 * u);
+        anc.fx = lerp(tw.from.fx, tw.to.fx, k); anc.fy = lerp(tw.from.fy, tw.to.fy, k); anc.s = lerp(tw.from.s, tw.to.s, k);
+        if (u >= 1) anc.tw = null;
+      }
+    }
+    if (!anc.on) return false;
+    reqPts = [sp(me)];
+    trans = false;
+    cam.scale = anc.s;
+    cam.x = me.x - (anc.fx - 0.5) * rect.w / anc.s;
+    cam.y = me.y - (anc.fy - 0.5) * rect.h / anc.s;
+    cam.init = true;
+    return true;
+  }
+
   const requiredPoints = () => (engage ? reqPts.map((p) => ({ x: p.x, y: p.y })) : []);
-  const cameraState = () => ({ x: cam.x, y: cam.y, scale: cam.scale, mode: engage ? camMode : null, floor: floorOn });
+  const cameraState = () => ({ x: cam.x, y: cam.y, scale: cam.scale, mode: engage ? camMode : null, floor: floorOn,
+    anchored: engage && anc.on, anchor: engage && anc.on ? { x: rect.x + anc.fx * rect.w, y: rect.y + anc.fy * rect.h, side: anc.side } : null });
   const safeRect = () => ({ x: rect.x + pad, y: rect.y + pad, w: Math.max(1, rect.w - 2 * pad), h: Math.max(1, rect.h - 2 * pad) });
 
   // --- big marks: the form seen from above ---------------------------------------------------
@@ -707,7 +774,8 @@ export function makeTactical(canvas, opts = {}) {
   function drawBearing(battle) {
     const me = battle.ships[0], them = battle.ships[1];
     const q = toScreen(them.x, them.y), p = toScreen(me.x, me.y);
-    if (q.x >= 0 && q.x <= w && q.y >= 0 && q.y <= h) return null;
+    rangeLab = null;
+    if (q.x >= 0 && q.x <= w && q.y >= 0 && q.y <= h) { rangeLab = drawRangeLabel(battle, q); return null; }
     const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
     if (!(d > 0)) return null;
     const ux = dx / d, uy = dy / d, m = V.WEDGE_INSET;
@@ -734,6 +802,27 @@ export function makeTactical(canvas, opts = {}) {
     return { tip: { x: tx, y: ty }, dir: { x: ux, y: uy }, label: { x: lx - lw / 2, y: ly - lh / 2, w: lw, h: lh }, text, canvas: { w, h } };
   }
 
+  // Their ship on the stage: the same text as the wedge (T.bearing) under their mark, or over it when there is
+  // no room below, kept inside the canvas.
+  function drawRangeLabel(battle, q) {
+    const text = T.bearing(T.ships.them, battle.range().toFixed(1));
+    ctx.save();
+    ctx.font = '11px "SF Mono", Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const lw = ctx.measureText(text).width + 8, lh = 15, off = markL * 0.5 + 4 + lh / 2;
+    let ly = q.y + off;
+    if (ly + lh / 2 > h - 2) ly = q.y - off;
+    const lx = clamp(q.x, lw / 2 + 2, w - lw / 2 - 2);
+    ly = clamp(ly, lh / 2 + 2, h - lh / 2 - 2);
+    ctx.fillStyle = 'rgba(5,7,12,0.7)'; ctx.fillRect(lx - lw / 2, ly - lh / 2, lw, lh);
+    ctx.fillStyle = rgba(C.them, 0.9); ctx.fillText(text, lx, ly + 0.5);
+    ctx.restore();
+    return { x: lx - lw / 2, y: ly - lh / 2, w: lw, h: lh, text };
+  }
+
+  // Weapon envelopes: their ship keeps both (PDC solid, torpedo dashed; range is symmetric, so their torpedo
+  // ring reads both ways); mine keeps the PDC ring (the defensive bubble: a torpedo inside it can be shot).
+  // Then the ruler round my ship: V.RULER_KM at true scale, neutral grey, fainter and dotted, so it never
+  // reads as a weapon range, with a small label (V.RULER_ANGLES) kept inside the stage.
   function drawRangeRings(battle) {
     for (const s of battle.ships) {
       const p = toScreen(s.x, s.y);
@@ -742,11 +831,56 @@ export function makeTactical(canvas, opts = {}) {
       ctx.lineWidth = 1;
       ctx.setLineDash([]);
       ctx.beginPath(); ctx.arc(p.x, p.y, N.PDC_RANGE * cam.scale, 0, 6.2832); ctx.stroke();
-      ctx.strokeStyle = `rgba(${col},0.045)`;
-      ctx.setLineDash([2, 9]);
-      ctx.beginPath(); ctx.arc(p.x, p.y, N.TORP_RANGE * cam.scale, 0, 6.2832); ctx.stroke();
-      ctx.setLineDash([]);
+      if (s.id !== 'me') {
+        ctx.strokeStyle = `rgba(${col},0.045)`;
+        ctx.setLineDash([2, 9]);
+        ctx.beginPath(); ctx.arc(p.x, p.y, N.TORP_RANGE * cam.scale, 0, 6.2832); ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
+    drawRuler(battle.ships[0]);
+  }
+
+  function drawRuler(me) {
+    rulerLabs = [];
+    const p = toScreen(me.x, me.y);
+    // a ring crosses the canvas only between the nearest point of the canvas (0 when my mark is on it) and its
+    // farthest corner; outside that it is all off the stage: no ring, no label
+    const far = Math.max(Math.hypot(p.x, p.y), Math.hypot(w - p.x, p.y), Math.hypot(p.x, h - p.y), Math.hypot(w - p.x, h - p.y));
+    const near = Math.hypot(Math.max(0, -p.x, p.x - w), Math.max(0, -p.y, p.y - h));
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(170,185,200,0.16)'; // dotted: about a fifth of the ink of a solid line
+    ctx.setLineDash([1, 4]);
+    const shown = [];
+    for (const km of V.RULER_KM) {
+      const r = km * cam.scale;
+      if (r < near || r > far) continue;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.2832); ctx.stroke();
+      if (r >= markL * 0.6 + 6) shown.push({ km, r }); // a label inside my mark would only clutter it
+    }
+    ctx.setLineDash([]);
+    ctx.font = '11px "SF Mono", Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(170,185,200,0.36)';
+    const lh = 13, hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    for (const { km, r } of shown) {
+      const text = T.ruler(km), lw = ctx.measureText(text).width + 4;
+      // left and a little up when there is room there (one place for every ring: they read as one ruler),
+      // else the next angle whose point is on the stage; then kept inside it, and dropped if it would sit on
+      // a label already drawn (a label far from its ring would lie about the scale)
+      let ax = 0, ay = 0;
+      for (const deg of V.RULER_ANGLES) {
+        const a = deg * Math.PI / 180;
+        ax = p.x + Math.cos(a) * r; ay = p.y + Math.sin(a) * r;
+        if (ax >= lw / 2 + 2 && ax <= w - lw / 2 - 2 && ay >= lh / 2 + 2 && ay <= h - lh / 2 - 2) break;
+      }
+      const x = clamp(ax, lw / 2 + 2, w - lw / 2 - 2), y = clamp(ay, lh / 2 + 2, h - lh / 2 - 2);
+      const box = { km, r, x: x - lw / 2, y: y - lh / 2, w: lw, h: lh };
+      if (rulerLabs.some((l) => hit(l, box))) continue;
+      ctx.fillText(text, x, y + 0.5);
+      rulerLabs.push(box);
+    }
+    ctx.restore();
   }
 
   // bottom-left of the inset rect: ticks one km apart, out to PDC range. No text (HUD owns text).
@@ -1146,10 +1280,12 @@ export function makeTactical(canvas, opts = {}) {
   // Switching this view in: drop effects frozen while it was hidden (so nothing old replays) and refit.
   function reset() {
     fx.step(10); pending.length = 0; evPts = []; cam.init = false; tints = []; blooms = [];
+    anc.on = false; anc.tw = null; anc.wrongT = 0;
     modeInit = false; linger = 0; trans = false; holdIn = false; liveN = 0; prevKeys = null; curKeys = new Set(); snap = []; torpNear = {};
     // a WeakSet cannot be cleared: the tracers seen so far are dropped by making a fresh one
     seenTracers = new WeakSet();
   }
 
-  return { draw, onEvent, reset, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect, cameraState, bearing: () => wedge };
+  return { draw, onEvent, reset, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect, cameraState, bearing: () => wedge,
+    rangeLabel: () => rangeLab, rulerLabels: () => rulerLabs.map((l) => ({ ...l })) };
 }
