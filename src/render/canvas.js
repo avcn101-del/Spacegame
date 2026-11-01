@@ -11,7 +11,7 @@ import { drawArcs, drawPdcCounts, railKm } from './arcs.js';
 import { drawShipMark, COLORS } from './silhouette.js';
 import { roomColor } from './form.js';
 import { T } from '../text.js';
-import { BLOOM, bloom, drawPlume, makeLitSprites, makeVignette, makeStarfield, renderDpr } from './look.js';
+import { LOOK, BLOOM, bloom, drawPlume, makeLitSprites, makeVignette, makeStarfield, renderDpr } from './look.js';
 
 // Visual-only knobs. Not game numbers, so they live here, not in numbers.js.
 const V = {
@@ -461,7 +461,7 @@ export function makeTactical(canvas, opts = {}) {
     fx.draw(ctx);
     drawBlooms();
     ctx.restore();
-    vignette(ctx, w, h, rect); // decoration over the scene; no text on this canvas, the HUD is DOM above it
+    if (LOOK.VIGNETTE_ON) vignette(ctx, w, h, rect); // decoration over the scene (off: the cut order, step 1)
     wedge = engage ? drawBearing(battle) : null; // over the vignette: it is a readout, like the ghost
     if (ghost) drawGhost(battle); // input overlay: outside the shake, so the finger point stays put
     const wa = fx.white();

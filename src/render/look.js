@@ -5,6 +5,7 @@
 
 // Visual-only knobs. Not game numbers.
 export const LOOK = {
+  VIGNETTE_ON: false,         // off: step 1 of the owner's cut order (phone dpr 2.8 still at frame95 > ~30 ms after the dpr cap)
   MAX_DPR: 2,                 // backing store cap: a 2.8 phone fills 2x the pixels of 2 for no visible gain (owner's run: stutter on big beats)
   KEY: norm(-0.55, -0.835),  // where the one key light comes from, screen space (upper left), every view
   SHADE_LIT: 0.16,            // white over the lit side of a hull (alpha)
