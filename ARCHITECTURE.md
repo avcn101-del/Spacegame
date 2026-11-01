@@ -459,7 +459,7 @@ target and edge indicators, mapped to our top-down stage. No sim, AI, RNG, `numb
   the ships during big beats; the alert lane in the status deck keeps what matters. The `#toasts` rect is the only
   DOM rect that differs from main (38 -> 18 px tall when two toasts would have shown).
 
-## Hero window spike, S1 (`?hero=1`, 2026-11-01, render only, not merged before the owner's beauty gate)
+## Hero window spike, S1 (`?hero=1`, 2026-11-01, render only; merged with the flag off so the owner can play it, the beauty gate still decides S2)
 
 My ship as an object, rear-oblique, in a window at the left of both views. `src/render/hero.js`; default off.
 - Flag: `?hero=1`, read at boot in `main.js`. Off: no window, `makeHero` is never called, both insets are what they
