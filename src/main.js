@@ -8,6 +8,7 @@ import { makeTactical } from './render/canvas.js';
 import { makeCloseup } from './render/closeup.js';
 import { makeHud } from './render/hud.js';
 import { makePicker } from './render/picker.js';
+import { makeHero } from './render/hero.js';
 import { renderDpr } from './render/look.js';
 import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
 import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
@@ -36,14 +37,22 @@ let battle, enemy, paused = false, slowmo = 0, acc = 0;
 // every projectile in frame) and the cutaway dock below (both hulls, tap a room). PR 55 brought TAC back: a strip
 // a hundred-odd px tall cannot show 12 km of vertical separation at a readable scale.
 const cssPx = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
+// ?hero=1 (spike, default off): my ship rear-oblique in a window at the left of both views (render/hero.js).
+// Its width joins the left inset, so the camera fit, the wedge and the labels keep clear of it. Off: no window,
+// the insets are exactly as before.
+const hero = params.get('hero') === '1' ? makeHero(
+  { tac: document.getElementById('tactical'), closeup: document.getElementById('cu-world') },
+  () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status') }),
+) : null;
+const heroLeft = (v) => (hero ? hero.left(v, battle) : 0);
 const tactical = makeTactical(document.getElementById('tactical'), {
   // the part of the screen not covered by HUD; the camera fits the ships in here
-  inset: () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status'), left: 8, right: 8 }),
+  inset: () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status'), left: hero ? heroLeft('tac') : 8, right: 8 }),
 });
 const closeup = makeCloseup(document.getElementById('closeup'));
 const picker = makePicker(document.getElementById('picker')); // TAC: their layout, to pick a target room
 const cuWorld = makeTactical(document.getElementById('cu-world'), {
-  inset: () => ({ top: 0, bottom: 0, left: 0, right: 0 }), camera: 'engage', quiet: true,
+  inset: () => ({ top: 0, bottom: 0, left: heroLeft('closeup'), right: 0 }), camera: 'engage', quiet: true,
   maxScale: 90, markPx: [36, 48], // knife range reads closer; big top-down hull marks
 });
 // Events and draws go only to the view on show, so a hidden view never replays old effects.
@@ -203,6 +212,7 @@ function frame(now) {
   }
   battle.events.length = 0;
   for (const r of VIEWS[view]) r.draw(battle, dtGame);
+  if (hero) hero.draw(view, battle);
   if (view === 'tac') picker.draw(battle, dtReal);
   hud.draw(battle, paused, dtReal);
   perfPush(perfWork, performance.now() - t0);
