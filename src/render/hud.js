@@ -15,10 +15,10 @@ const ROOM_OF = { gun: 'rail', launcher: 'tubes', drive: 'drive', rounds: 'pdc1'
 const hasPick = (room) => !!SLOTS_OF[room] || /^pdc\d+$/.test(room); // the PDC mounts pick the rounds
 const tap = (sel, fn) => $(sel).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 
-export function makeHud({ onOrder, onView, onPause, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview, presets }) {
+export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview, presets }) {
   const el = {
     clock: $('#n-clock'), range: $('#n-range'), rate: $('#n-rate'), torps: $('#n-torps'), burns: $('#n-burns'),
-    phase: $('#phase'), order: $('#order'), pause: $('#pause'),
+    phase: $('#phase'), order: $('#order'), pause: $('#pause'), title: $('#title'),
     pausemenu: $('#pausemenu'), result: $('#result'), resultText: $('#result-text'), resultSeed: $('#result-seed'),
     panels: { me: $('#panel-me'), them: $('#panel-them') },
     buttons: {},
@@ -30,13 +30,20 @@ export function makeHud({ onOrder, onView, onPause, onResume, onRestart, onNew, 
     b.querySelector('.hint').textContent = T.hints[o];
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); onOrder(o); });
   }
+  // Pause only stops the clock; HELP opens the menu (and pauses). The menu closes on RESUME or CLOSE.
+  let helpOpen = false;
   tap('#pause', onPause);
+  tap('#help', () => { helpOpen = true; onHelp(); });
+  $('#help').textContent = T.help;
+  tap('#pm-close', () => { helpOpen = false; });
+  $('#pm-close').textContent = T.close;
   tap('#view', onView);
-  tap('#pm-resume', onResume); tap('#pm-restart', onRestart); tap('#pm-new', onNew);
+  tap('#pm-resume', () => { helpOpen = false; onResume(); }); tap('#pm-restart', () => { helpOpen = false; onRestart(); }); tap('#pm-new', () => { helpOpen = false; onNew(); });
   tap('#again', onNew); tap('#same', onRestart);
   for (const id of ['#pm-export', '#rs-export']) { tap(id, onExport); $(id).textContent = T.export; }
   for (const id of ['#pm-import', '#rs-import']) { tap(id, onImport); $(id).textContent = T.import; }
-  tap('#pm-auto', onAuto);
+  tap('#pm-auto', () => { helpOpen = false; onAuto(); });
+  tap('#pm-import', () => { helpOpen = false; });
   // The hangar: the ship's form (preview(fit) builds it), a tap on a marked part toggles that slot's
   // variant; LAUNCH hands the fit back and starts a new battle. No pick rows: every slot is on the drawing.
   let fit = {}, sel = null, hits = [], foe = null, note = null, shown = null; // note: the room last tapped; shown: {ship, W, H} last drawn // foe: the enemy preset picked here
@@ -173,21 +180,25 @@ export function makeHud({ onOrder, onView, onPause, onResume, onRestart, onNew, 
       el.phase.textContent = T.phase[battle.phase];
       el.pause.textContent = paused ? T.resume : T.pause;
       el.pause.classList.toggle('on', paused);
-      el.pausemenu.classList.toggle('show', paused && !battle.result && !hangarOpen);
+      if (battle.result || hangarOpen) helpOpen = false;
+      el.pausemenu.classList.toggle('show', helpOpen);
+      const badge = paused && !battle.result;
+      const title = badge ? T.pausedBadge : T.title;
+      if (el.title.textContent !== title) el.title.textContent = title;
+      el.title.classList.toggle('paused', badge);
 
       for (const id of ['me', 'them']) {
         if (hitTimers[id] > 0) hitTimers[id] -= dtReal;
         el.panels[id].classList.toggle('hit', hitTimers[id] > 0);
       }
 
-      // Order line: toast > warning > paused > current orders
+      // Order line: toast > warning > replay > current orders (paused is the badge in the title slot)
       if (toast) { toast.ttl -= dtReal; if (toast.ttl <= 0) toast = null; }
       let line, cls = '';
       if (toast) { line = toast.text; cls = 'toast'; }
       else if (them.railAim >= 0 && alive(them, 'rail')) { line = T.warn.railAimingAtUs; cls = 'warn'; }
       else if (battle.projectiles.some((p) => p.kind === 'torp' && p.target === 'me')) { line = T.warn.torpsIncoming; cls = 'warn'; }
       else if (replay) { line = T.replayLine; cls = 'paused'; }
-      else if (paused) { line = T.paused; cls = 'paused'; }
       else {
         const parts = [];
         parts.push(me.turnLeft > 0 ? T.order.turning : T.order[me.face]);
