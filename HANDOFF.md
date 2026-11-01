@@ -342,6 +342,12 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    the hangar keeps the device dpr. Pixels at 844 x 390 dpr 2.8: 1.73 M -> 0.88 M. Rects, roomAt scan, mark position
    identical to main. The owner re-measures; still stutters mid-knife-fight -> the locked cut order (vignette, stars,
    dock shading). Next: PR camera floor (engage min scale, bearing wedge), then G2 after the owner's go.
+   Camera floor (PR 51): the engage camera never goes under `V.MIN_SCALE` 9 px/km; past it only my ship is held in
+   frame and a wedge with `PELLA 18.2 km` on the stage edge points at them (also whenever they are off the stage, e.g.
+   the inbound mode). Measured: injected approaches (3, 18) and (-2, -25) km at 844 x 390 and 844 x 332 (108 px stage):
+   floor every frame, my ship never out, wedge exactly when they are off, ships 163 / 226 px apart; 1440 x 900 never
+   reaches the floor; AUTO fights (844 x 390 dpr 2.6 and 1, 844 x 332): 0 required points out, wedge labels inside;
+   paused rects identical to main. Next: the owner plays both (dpr cap, floor); G2 waits.
    Acceptance: phone 844 x 390 at dpr 1 and 2.6; desktop 1440 x 900 only a smoke test (BRIEF: no
    desktop layout). Parked in NOTES: CMD vector, threat ticks, close-up Burn burst, reduced motion,
    help responsive, hangar. FX groups offered before (wounds, big moments) wait behind this.

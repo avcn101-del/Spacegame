@@ -6,6 +6,7 @@ const num = (v) => String(Math.round(v * 10) / 10); // plain: no decimals unless
 export const T = {
   title: 'ROCINANTE',
   ships: { me: 'Rocinante', them: 'Pella' },
+  bearing: (name, km) => `${name.toUpperCase()} ${km} km`, // the world stage edge: their ship is off the stage that way
   numbers: { range: 'RANGE', clock: 'CLOCK' },
   phase: { approach: 'APPROACH', knife: 'KNIFE FIGHT', break: 'BREAK' },
   buttons: {
