@@ -310,6 +310,7 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    still while paused mid-salvo, no zoom-in from the first death through the mode change, drag parity,
    TAC pixel-identical.
    F.1 done (PR 45): every threat label sits next to its own tick (top/bottom beside it, bow/stern under it), tick and label clamped inside the dock (with the shake); `closeup.threats()` returns the drawn rects for tests.
+   G1 done (PR 46, the owner's go after his phone run of F/F.1): the look, render only (`look.js`, ARCHITECTURE "The look"): key light shading + rim, bloom by the amplitude hierarchy, impact tint, Expanse plume, parallax starfield, vignette/grade, `game.perf()`. G2 (audio) waits for the owner's G1 playtest.
    Acceptance: phone 844 x 390 at dpr 1 and 2.6; desktop 1440 x 900 only a smoke test (BRIEF: no
    desktop layout). Parked in NOTES: CMD vector, threat ticks, close-up Burn burst, reduced motion,
    help responsive, hangar. FX groups offered before (wounds, big moments) wait behind this.

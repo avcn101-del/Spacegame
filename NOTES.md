@@ -61,7 +61,7 @@ Sequence: F.1 → the owner's phone playtest → the owner green-lights G. Nothi
 
 - Hard constraint for the multi-class roadmap: every ship visual is generated from form data, never
   hand-authored per class. Many ship classes are planned; anything hand-made per hull is tech debt times N.
-- Tier 1 — PR G (2.5D art pass + audio): multi-layer parallax starfield; directional hull shading + rim
+- Tier 1 — PR G (2.5D art pass + audio; split by the owner: G1 visual done in PR 46, G2 audio after his G1 playtest: event-matrix sounds, a mute icon in the top bar, hit area ≥ 36 px, not a battle button, default on (armed by the first tap), choice in localStorage): multi-layer parallax starfield; directional hull shading + rim
   light (one consistent key light); Expanse-style drive plume (additive, hash-random flicker, never
   `Math.random`); fake bloom via additive core + halo sprites, strictly respecting the amplitude
   hierarchy (rail/tear > torp hit > Burn > tracers — if everything glows, nothing is epic); a brief

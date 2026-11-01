@@ -10,6 +10,7 @@ import { exposure, alive, pdcRooms, mountSide, shotFrom } from '../sim/ship.js';
 import { drawArcs, drawPdcCounts, railKm } from './arcs.js';
 import { drawShipMark, COLORS } from './silhouette.js';
 import { drawForm, roomPoint, roomBounds, roomAtPoint, roomBracket, roomColor } from './form.js';
+import { BLOOM, bloom, drawPlume, makeLitSprites, makeVignette, makeStarfield } from './look.js';
 
 // Visual-only knobs. Not game numbers, so they live here, not in numbers.js.
 const V = {
@@ -335,39 +336,6 @@ function bigImpact(fx, a, k, o = {}) {
   fx.whiteFlash(0.3 * k);
 }
 
-// --- starfield ------------------------------------------------------------------
-
-const STAR_LAYERS = [
-  { par: 0.08, n: 70, bright: 0.35, size: 1 },
-  { par: 0.18, n: 40, bright: 0.6, size: 1.2 },
-  { par: 0.35, n: 16, bright: 0.9, size: 1.6 },
-];
-
-function makeStars() {
-  const stars = [];
-  let i = 0;
-  for (const L of STAR_LAYERS) {
-    for (let k = 0; k < L.n; k++, i += 4) {
-      stars.push({
-        u: hash01(i), v: hash01(i + 1), tw: 1 + hash01(i + 2) * 3, ph: hash01(i + 3) * 6.28,
-        par: L.par, bright: L.bright, size: L.size,
-      });
-    }
-  }
-  return stars;
-}
-
-function drawStars(ctx, stars, cam, w, h, time) {
-  const mod = (a, m) => ((a % m) + m) % m;
-  for (const s of stars) {
-    const x = mod(s.u * 4096 - cam.x * V.STAR_PX_PER_KM * s.par, w);
-    const y = mod(s.v * 4096 - cam.y * V.STAR_PX_PER_KM * s.par, h);
-    const a = s.bright * (0.75 + 0.25 * Math.sin(time * s.tw + s.ph));
-    ctx.fillStyle = `rgba(200,215,240,${a})`;
-    ctx.fillRect(x, y, s.size, s.size);
-  }
-}
-
 // --- tactical view ---------------------------------------------------------------
 
 // Top-down view: camera between the ships, marks, rings, tracers,
@@ -403,7 +371,9 @@ export function makeTactical(canvas, opts = {}) {
   let w = 0, h = 0, time = 0;
   const rect = { x: 0, y: 0, w: 1, h: 1 }; // the area not covered by HUD
   let last = null; // the battle from the last draw, read-only, to resolve ship ids in events
-  const stars = makeStars();
+  const starfield = makeStarfield(0), litMark = makeLitSprites(), vignette = makeVignette();
+  let tints = [];   // impact light on a hull mark: {id, u, v (mark frame px), r, a, ttl, life}
+  let blooms = [];  // {ax, ay, x, y, kind, col, ttl, life}
   const toScreen = (ax, ay) => ({ x: rect.x + rect.w / 2 + (ax - cam.x) * cam.scale, y: rect.y + rect.h / 2 + (ay - cam.y) * cam.scale });
   const toWorld = (sx, sy) => ({ x: cam.x + (sx - rect.x - rect.w / 2) / cam.scale, y: cam.y + (sy - rect.y - rect.h / 2) / cam.scale });
   const fx = makeFx(toScreen);
@@ -468,13 +438,15 @@ export function makeTactical(canvas, opts = {}) {
       if (p.delay <= 0) { pending.splice(i, 1); secondary(p); }
     }
     fx.step(dt);
+    for (let i = tints.length - 1; i >= 0; i--) { tints[i].ttl -= dt; if (tints[i].ttl <= 0) tints.splice(i, 1); }
+    for (let i = blooms.length - 1; i >= 0; i--) { blooms[i].ttl -= dt; if (blooms[i].ttl <= 0) blooms.splice(i, 1); }
 
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, w, h);
     const so = fx.shakeOffset(time);
     ctx.save();
     ctx.translate(so.x, so.y);
-    drawStars(ctx, stars, cam, w, h, time);
+    starfield(ctx, cam.x * V.STAR_PX_PER_KM, cam.y * V.STAR_PX_PER_KM, w, h, time);
     drawRangeRings(battle);
     drawScaleBar();
     drawAimLines(battle);
@@ -482,7 +454,9 @@ export function makeTactical(canvas, opts = {}) {
     drawProjectiles(battle);
     drawMarks(battle);
     fx.draw(ctx);
+    drawBlooms();
     ctx.restore();
+    vignette(ctx, w, h, rect); // decoration over the scene; no text on this canvas, the HUD is DOM above it
     if (ghost) drawGhost(battle); // input overlay: outside the shake, so the finger point stays put
     const wa = fx.white();
     if (wa > 0) { ctx.fillStyle = `rgba(255,240,225,${wa})`; ctx.fillRect(0, 0, w, h); }
@@ -602,12 +576,11 @@ export function makeTactical(canvas, opts = {}) {
 
   // The hull from its cells: bow along +x of the form, cut and torn cells gone, dead rooms dark,
   // job rooms in their room colour (dimmed), frame in the ship tint, a 1 px outline round the bounds.
-  function drawBigMark(s, p, ang) {
+  function drawBigMark(ctx, s, ang) {
     const { L, W, hl, hw } = markGeom(s);
     const fw = s.form.w, fh = s.form.h, cell = L / fw, flip = s.facing === -1 ? -1 : 1;
     const tc = tint(s.id);
     ctx.save();
-    ctx.translate(p.x, p.y);
     ctx.rotate(ang);
     for (let y = 0; y < fh; y++) {
       for (let x = 0; x < fw; x++) {
@@ -808,6 +781,7 @@ export function makeTactical(canvas, opts = {}) {
       ctx.strokeStyle = rgba(C.white, 0.9);
       ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
+      bloom(ctx, hx, hy, 'tracer', col, 1, bloomScale());
     }
     ctx.restore();
   }
@@ -857,6 +831,7 @@ export function makeTactical(canvas, opts = {}) {
         ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - dx * len * 0.6, s.y - dy * len * 0.6); ctx.stroke();
         ctx.fillStyle = rgba(C.white, 1);
         ctx.beginPath(); ctx.arc(s.x, s.y, 2, 0, 6.2832); ctx.fill();
+        bloom(ctx, s.x, s.y, 'torp', col, flick, bloomScale());
       } else {
         // slug: a long white streak trailing behind the slug
         const ddx = p.tx - p.x, ddy = p.ty - p.y;
@@ -874,6 +849,14 @@ export function makeTactical(canvas, opts = {}) {
     ctx.restore();
   }
 
+  // What the drawn mark depends on: its angle, which rooms stand and which cells are gone (the sprite cache key).
+  function markVer(s, ang) {
+    let v = ang.toFixed(3) + '|';
+    for (const k in s.pieces) { const q = s.pieces[k]; v += q.alive ? (q.torn ? 't' : '1') : '0'; }
+    let cut = 0;
+    for (const row of s.cells) for (const c of row) if (c && c.cut) cut++;
+    return v + '|' + cut;
+  }
   function drawMarks(battle) {
     for (const s of battle.ships) {
       const e = battle.enemyOf ? battle.enemyOf(s) : battle.ships.find((o) => o !== s);
@@ -910,30 +893,28 @@ export function makeTactical(canvas, opts = {}) {
         const back = th > 0;
         const pa = ang + (back ? Math.PI : 0);
         const sx = Math.cos(pa), sy = Math.sin(pa);
-        const flick = 0.78 + 0.22 * hash01(Math.floor(time * 30) + (s.id === 'me' ? 0 : 7));
         const pk = markL / V.MARK_LEN; // the plume grows with the mark (1 for the small mark)
-        const pl = (back ? 5 + 14 * th : 3 + 7 * -th) * flick * pk;
+        const pl = (back ? 5 + 14 * th : 3 + 7 * -th) * pk;
         const pw = 3 * pk;
-        const x0 = p.x + sx * markL * 0.5, y0 = p.y + sy * markL * 0.5;
-        const x1 = x0 + sx * pl, y1 = y0 + sy * pl;
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const g = ctx.createLinearGradient(x0, y0, x1, y1);
-        g.addColorStop(0, `rgba(190,225,255,${0.85 * flick})`);
-        g.addColorStop(1, 'rgba(90,140,255,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.moveTo(x0 - sy * pw, y0 + sx * pw); ctx.lineTo(x1, y1); ctx.lineTo(x0 + sy * pw, y0 - sx * pw);
-        ctx.closePath(); ctx.fill();
-        ctx.restore();
+        drawPlume(ctx, p.x + sx * markL * 0.5, p.y + sy * markL * 0.5, sx, sy, pl, pw, time, s.id === 'me' ? 0 : 7);
       }
 
-      if (bigMarks) { drawBigMark(s, p, ang); continue; }
-      ctx.fillStyle = s.id === 'me' ? COLORS.me : COLORS.them;
-      drawShipMark(ctx, s, p.x, p.y, V.MARK_LEN, ang);
+      // the hull, lit by the key light in screen space, with the impact tints of the last moments
+      const mt = [];
+      for (const t of tints) if (t.id === s.id) {
+        const k = t.ttl / t.life, c = Math.cos(ang), si = Math.sin(ang);
+        mt.push({ x: t.u * c - t.v * si, y: t.u * si + t.v * c, r: t.r, a: t.a * k * k, col: C.fire });
+      }
+      // the angle snapped to 0.004 rad (under a quarter degree: invisible) so a steady turn reuses the sprite more
+      const angQ = Math.round(ang / 0.004) * 0.004, ver = markVer(s, angQ);
+      if (bigMarks) {
+        const g = markGeom(s);
+        litMark(ctx, s.id, p.x, p.y, Math.hypot(g.L, g.W) + 2, (c2) => drawBigMark(c2, s, angQ), mt, ver + '|' + markL);
+        continue;
+      }
+      litMark(ctx, s.id, p.x, p.y, V.MARK_LEN + 2, (c2) => { c2.fillStyle = s.id === 'me' ? COLORS.me : COLORS.them; drawShipMark(c2, s, 0, 0, V.MARK_LEN, angQ); }, mt, ver);
     }
   }
-
   // the second, smaller blast after a piece dies
   function secondary(p) {
     const a = { ax: p.ax, ay: p.ay };
@@ -975,8 +956,37 @@ export function makeTactical(canvas, opts = {}) {
     return s ? s.heading + Math.PI : Math.PI;
   }
 
+  // G1: the bloom and the impact light of a beat, sized by the amplitude hierarchy (look.js BLOOM)
+  const bloomScale = () => clamp(markL / 40, 0.5, 1.2);
+  function lookEvent(ev) {
+    if (!Number.isFinite(ev.x) || !Number.isFinite(ev.y)) return;
+    const add = (kind, col, o) => { const b = BLOOM[kind]; blooms.push({ ax: ev.x, ay: ev.y, x: o ? o.x : 0, y: o ? o.y : 0, kind, col, ttl: b.life, life: b.life }); };
+    // a warm light on the hull edge facing the other ship, in the mark's own frame so it turns with it
+    const tintHull = (id, r, a, life) => {
+      const v = shipOf(id), o = shipOf(otherId(id));
+      if (!v || !o) return;
+      const ang = markAngle(v, o), e = boxEdge(v, ang, Math.atan2(o.y - v.y, o.x - v.x)), c = Math.cos(-ang), si = Math.sin(-ang);
+      tints.push({ id, u: (e.x * c - e.y * si) * 0.8, v: (e.x * si + e.y * c) * 0.8, r: r * markL, a, ttl: life, life });
+    };
+    switch (ev.type) {
+      case 'pdcHit': tintHull(ev.ship, 0.3, 0.3, 0.15); break;
+      case 'torpHit': add('torpHit', C.fire, bigMarks ? hitAt(ev.ship, torpNear[ev.ship]) : null); tintHull(ev.ship, 0.6, 0.75, 0.4); break;
+      case 'railHit': add('rail', [200, 225, 255], bigMarks ? hitAt(ev.ship, null) : null); tintHull(ev.ship, 0.75, 0.95, 0.5); break;
+      case 'tear': add('tear', C.fire); break;
+      case 'torpKilled': add('kill', C.hot); break;
+      case 'burn': { const d = burnExhaustDir(ev.by); add('burn', C.drive, { x: Math.cos(d) * markL * 0.55, y: Math.sin(d) * markL * 0.55 }); break; }
+      case 'railFire': add('burn', C.drive); break;
+      default: break;
+    }
+  }
+  function drawBlooms() {
+    const sc = bloomScale();
+    for (const b of blooms) { const p = toScreen(b.ax, b.ay); bloom(ctx, p.x + b.x, p.y + b.y, b.kind, b.col, b.ttl / b.life, sc); }
+  }
+
   function onEvent(ev) {
     const a = { ax: ev.x, ay: ev.y };
+    lookEvent(ev);
     if (engage && ENGAGE_EVENTS.has(ev.type) && Number.isFinite(ev.x) && Number.isFinite(ev.y)) {
       if (evPts.length >= V.EVENT_PT_MAX) evPts.shift();
       // the camera mode the point belongs to: a torpedo event goes with the ship it concerned, a rail event with rail
@@ -1091,7 +1101,7 @@ export function makeTactical(canvas, opts = {}) {
 
   // Switching this view in: drop effects frozen while it was hidden (so nothing old replays) and refit.
   function reset() {
-    fx.step(10); pending.length = 0; evPts = []; cam.init = false;
+    fx.step(10); pending.length = 0; evPts = []; cam.init = false; tints = []; blooms = [];
     modeInit = false; linger = 0; trans = false; holdIn = false; liveN = 0; prevKeys = null; curKeys = new Set(); snap = []; torpNear = {};
     // a WeakSet cannot be cleared: the tracers seen so far are dropped by making a fresh one
     seenTracers = new WeakSet();

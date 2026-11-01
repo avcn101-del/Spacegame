@@ -315,6 +315,34 @@ Presentation only: no sim, rng or balance change; TAC unchanged (every new behav
   (a tick with too little margin slides inward onto the hull edge),
   drawn after the hulls and before the brackets. HUD only: no travel. Gone when no torpedo comes.
 
+## The look: key light, bloom, plume, vignette (PR G1, 2026-11-01, render only)
+
+`src/render/look.js`, shared by `canvas.js` (TAC and the close-up world stage) and `closeup.js` (the dock).
+Decoration only: never reads input, never writes battle; no `Math.random` (flicker hashes time).
+- One key light, screen space, upper left (`LOOK.KEY`), every view. World marks (TAC small mark, close-up big
+  mark) are drawn into a sprite and lit there: a gradient along the key light (source-atop), the impact
+  tints, a rim on the edges facing the light (the silhouette less itself shifted away from the light).
+  Generic for any shape. The sprite is reused while its angle (snapped to 0.004 rad), dead rooms and cut
+  cells stay the same and no tint is live. Dock only: cell shading from the form (one gradient over the
+  standing cells, a rim on light-facing cell edges with nothing beyond, a dark line on the others), baked
+  into a bitmap per hull state.
+- Fake bloom: additive halo + white core sprites per beat kind, `BLOOM` (r px, a, life). Amplitude rule:
+  tracer < torp < plume < kill < burn < torpHit < rail < tear (energy r * r * a; Playwright checks the
+  drawn light in that order). World blooms scale with the mark (`markL / 40`, 0.5 to 1.2).
+- Impact light: a warm radial tint on the hull near a hit (pdc small and short, torp, rail biggest), in the
+  mark's own frame (world) or clipped to the hull cells (dock), 0.15 to 0.5 s.
+- Drive plume (world and dock): sheath, plume, white-hot core, four shock diamonds, a nozzle glow; length
+  and width as before (not bloated at zoom 90).
+- Starfield: four parallax layers (0.04 to 0.45), three tints, batched by colour. World: camera km times
+  30 px. Dock: my ship's km times 30 px (the stars slide behind the hulls as I move).
+- Vignette and a cool grade toward the shadow corner, world canvases only, cached per size, blitted in the
+  four edge bands only. Over the scene and the fx, before the drag ghost; these canvases have no text (HUD
+  is DOM). Not in the dock (its labels and ticks are canvas text).
+- `game.perf()`: frame interval and render work (ms, avg and p95) over the last 600 frames, `fps`, `view`,
+  `dpr`; `game.perf.reset()`. Debug only.
+- Unchanged by rule: layout, hit areas, DOM geometry (Playwright: every element's rect identical to main in
+  both views at 844 x 390 dpr 2.6 and 1, 1440 x 900), drag orders (same as main), no CSS transform anywhere.
+
 ## Render module contract
 
 - `silhouette.js`: one art table per design (profile, rooms as shapes,
