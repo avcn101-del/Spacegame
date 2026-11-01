@@ -54,3 +54,28 @@ Ideas go here. They are not built until the owner asks.
   ticks and torpedo count/ETA; a dedicated Burn burst in the close-up world stage; reduced
   motion (no shake, white flash, blink); help responsive (one column on the phone, groups);
   hangar stats bigger. Build each only when the owner asks after a battle.
+
+## Long-term visual direction (the owner, 2026-11-01) — do NOT start yet
+
+Sequence: F.1 → the owner's phone playtest → the owner green-lights G. Nothing below is built before that.
+
+- Hard constraint for the multi-class roadmap: every ship visual is generated from form data, never
+  hand-authored per class. Many ship classes are planned; anything hand-made per hull is tech debt times N.
+- Tier 1 — PR G (2.5D art pass + audio): multi-layer parallax starfield; directional hull shading + rim
+  light (one consistent key light); Expanse-style drive plume (additive, hash-random flicker, never
+  `Math.random`); fake bloom via additive core + halo sprites, strictly respecting the amplitude
+  hierarchy (rail/tear > torp hit > Burn > tracers — if everything glows, nothing is epic); a brief
+  impact light tint on the hull mark near the hit point; vignette/color grade that never dims HUD text.
+  Transforms on decorative layers only — never skew interactive layers (drag parity is sacred). Must
+  hold frame rate at 844 × 390 DPR 2.6. Plus an audio pass mapped to the existing event matrix.
+- Tier 2 — CINE-2D, room-scale cutaways. The dramatic unit is the room, not the hull: players target
+  DRIVE/RAIL/SENSORS, and events carry `ev.at`. Cinematic shots key off (event type × room type), never
+  ship class — every class shares the same room types, so one shot set serves all classes. Two shot
+  families: (a) hull-plate exterior — close on the armor section covering the hit room, slug/tracer/
+  torpedo strikes the plate; (b) room interior — machinery, conduit, red emergency light, debris,
+  venting. Cut only on big beats: room death, rail hit/penetration, tear, maybe torp hull hit; never per
+  PDC spark. 2–3 variants per shot (clean vs smouldering), flippable to the event's real bearing,
+  skippable and toggleable, never blocks command input. The same room art should enrich dock cells (one
+  investment, two payoffs). Presentation only: reads events, never touches sim.
+- Tier 3 — parked: a 3D presentation spike (extrude the room grid into low-poly hulls) only if, after G
+  + CINE-2D, it still does not feel right; the owner expects it will not be needed.
