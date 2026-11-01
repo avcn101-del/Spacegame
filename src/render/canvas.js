@@ -575,9 +575,9 @@ export function makeTactical(canvas, opts = {}) {
   }
 
   // The hull from its cells: bow along +x of the form, cut and torn cells gone, dead rooms dark,
-  // job rooms in their room colour (dimmed), frame in the ship tint, a 1 px outline round the bounds.
+  // job rooms in their room colour (dimmed), frame in the ship tint. No outline box (F.2: the hull reads on its own).
   function drawBigMark(ctx, s, ang) {
-    const { L, W, hl, hw } = markGeom(s);
+    const { L } = markGeom(s);
     const fw = s.form.w, fh = s.form.h, cell = L / fw, flip = s.facing === -1 ? -1 : 1;
     const tc = tint(s.id);
     ctx.save();
@@ -597,9 +597,6 @@ export function makeTactical(canvas, opts = {}) {
         ctx.fillRect(u - cell / 2 - 0.2, v - cell / 2 - 0.2, cell + 0.4, cell + 0.4);
       }
     }
-    ctx.strokeStyle = rgba(tc, 0.85);
-    ctx.lineWidth = 1;
-    ctx.strokeRect(-hl, -hw, L, W);
     ctx.restore();
   }
 

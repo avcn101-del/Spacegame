@@ -343,6 +343,13 @@ Decoration only: never reads input, never writes battle; no `Math.random` (flick
 - Unchanged by rule: layout, hit areas, DOM geometry (Playwright: every element's rect identical to main in
   both views at 844 x 390 dpr 2.6 and 1, 1440 x 900), drag orders (same as main), no CSS transform anywhere.
 
+## F.2: mark without a box, wide dock (PR 47, 2026-11-01, render only)
+
+- The world-stage big mark no longer draws its 1 px outline rect; `markGeom`, `boxEdge` and `boxEntry` keep the
+  box for contact points and hit offsets (nothing drawn).
+- Dock `boxes()`: canvas width >= `V.WIDE` (1024 px): my hull at `V.MARGIN` from the left, theirs at `V.MARGIN` from
+  the right, the middle for threat ticks and labels. Below: the centred pair with `V.GAP` 40 (844 x 390 unchanged).
+
 ## Render module contract
 
 - `silhouette.js`: one art table per design (profile, rooms as shapes,
