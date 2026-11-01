@@ -9,7 +9,7 @@ import { N } from '../numbers.js';
 import { exposure, alive, pdcRooms, mountSide, shotFrom } from '../sim/ship.js';
 import { drawArcs, drawPdcCounts, railKm } from './arcs.js';
 import { drawShipMark, COLORS } from './silhouette.js';
-import { drawForm, roomPoint, roomBounds, roomAtPoint, roomBracket } from './form.js';
+import { drawForm, roomPoint, roomBounds, roomAtPoint, roomBracket, roomColor } from './form.js';
 
 // Visual-only knobs. Not game numbers, so they live here, not in numbers.js.
 const V = {
@@ -24,7 +24,17 @@ const V = {
   EVENT_PT_TTL: 0.8,   // s of dt an impact / miss point keeps the engage camera wide enough to show it
   EVENT_PT_MAX: 24,    // cap on remembered event points
   PAD_FRAC: 0.15, PAD_MIN: 24, PAD_MAX: 48, // engage camera: margin around the required points, px
+  MODE_LINGER: 1.0,    // s of dt the engage camera keeps a mode after its trigger ends (so a hit is seen before the cut)
+  MODE_TRANS: 0.35,    // s of dt the points a new mode adds ease in (the points both modes share stay hard)
+  TRANS_TAU: 0.12,     // s, the ease time constant of that transition
+  MARK_LEN_FRAC: 0.25, // big marks: length as a share of the view height (clamped by opts.markPx)
+  MARK_DIM: 0.58,      // big marks: how much of a job room's colour shows (the rest is the dark background)
+  MARK_FRAME: 0.4,     // big marks: how much of the ship tint the frame cells show
+  SPARK_LIFE: 0.15,    // s, the longest life of a contact spark
 };
+const MODE_ORDER = ['inbound', 'outbound', 'rail', 'idle'];
+const BG_RGB = [6, 8, 15], DEAD_CSS = 'rgb(18,21,26)';
+const mixRgb = (a, b, k) => `rgb(${Math.round(lerp(a[0], b[0], k))},${Math.round(lerp(a[1], b[1], k))},${Math.round(lerp(a[2], b[2], k))})`;
 const ENGAGE_EVENTS = new Set(['railMiss', 'torpMiss', 'torpKilled', 'railHit', 'torpHit']);
 
 // --- deterministic numbers ----------------------------------------------------
@@ -369,8 +379,14 @@ function drawStars(ctx, stars, cam, w, h, time) {
 // opts.camera === 'engage': frame both ships, live projectiles (a slug's end point too) and recent
 // impact points instead of the default camera. opts.quiet: this view's fx never shake or white-flash.
 //
-// Returns {draw, onEvent, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect}:
-// - requiredPoints() -> [{x, y}] km the engage camera had to show on the last frame ([] otherwise).
+// opts.maxScale: px per km cap of the engage camera (default V.MAX_SCALE).
+// opts.markPx: [min, max] px. Set: big top-down hull marks drawn from the form (length
+// clamp(0.25 * view height, min, max)), tracers end where they enter the mark box, rake tracers
+// spark there, and pdc/torp/rail hit fx sit on the mark edge facing the shooter. Unset: today's mark.
+//
+// Returns {draw, onEvent, reset, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect, cameraState}:
+// - cameraState() -> {x, y, scale, mode} of the camera (mode: inbound | outbound | rail | idle; null when not engage).
+// - requiredPoints() -> [{x, y}] km the engage camera had to show (the hard points) on the last frame ([] otherwise).
 // - safeRect() -> {x, y, w, h} CSS px: the view rect less the engage margin.
 // - toScreen(wx, wy) -> {x, y}: world km to CSS px of the canvas, current camera.
 // - toWorld(sx, sy) -> {x, y}: the inverse.
@@ -394,8 +410,20 @@ export function makeTactical(canvas, opts = {}) {
   // quiet: this view never shakes the screen or flashes it white (another view owns those beats)
   if (opts.quiet === true) { fx.shakeIt = () => {}; fx.whiteFlash = () => {}; }
   const engage = opts.camera === 'engage';
-  let evPts = [];      // engage camera: {x, y, ttl} km points of recent impacts and misses
-  let reqPts = [];     // the required points of the last drawn frame, km
+  const maxScale = Number.isFinite(opts.maxScale) ? opts.maxScale : V.MAX_SCALE;
+  const bigMarks = Array.isArray(opts.markPx) && opts.markPx.length >= 2;
+  let markL = V.MARK_LEN; // px, the mark length of the last drawn frame (the small mark unless markPx is set)
+  let seenTracers = new WeakSet(); // tracers whose contact spark was already made
+  let torpNear = {};   // big marks: per targeted ship id, the torpedo nearest to it at the last draw {x, y}
+  let evPts = [];      // engage camera: {x, y, ttl, mode, key} km points of recent impacts and misses, per camera mode
+  let evSeq = 0;
+  let reqPts = [];     // the required (hard) points of the last drawn frame, km
+  let camMode = 'idle', modeInit = false, linger = 0; // engage camera mode, and how long its trigger has been over
+  let holdIn = false, liveN = 0; // engage: zoom-in held after a projectile of the mode died (see engageCamera)
+  let trans = false, transT = 0, prevKeys = null, curKeys = new Set(); // mode change: the points the new mode adds ease in
+  let snap = [];       // the projectile points of the current mode while its trigger was last on
+  const objIds = new WeakMap(); let objSeq = 0;
+  const oid = (o) => { let i = objIds.get(o); if (i === undefined) { i = ++objSeq; objIds.set(o, i); } return i; };
   let pad = V.PAD_MIN; // px, the engage camera margin of the last drawn frame
   const pending = []; // delayed secondary explosions: {ax, ay, delay}
   const tint = (id) => (id === 'me' ? C.me : C.them);
@@ -420,6 +448,7 @@ export function makeTactical(canvas, opts = {}) {
     const [me, them] = battle.ships;
 
     pad = clamp(V.PAD_FRAC * Math.min(rect.w, rect.h), V.PAD_MIN, V.PAD_MAX);
+    if (bigMarks) markL = clamp(V.MARK_LEN_FRAC * rect.h, opts.markPx[0], opts.markPx[1]);
     if (engage) engageCamera(battle, me, them, dt);
     else {
       // camera: center between the ships, scale so both fit in the inset rect with margin
@@ -459,37 +488,147 @@ export function makeTactical(canvas, opts = {}) {
     if (wa > 0) { ctx.fillStyle = `rgba(255,240,225,${wa})`; ctx.fillRect(0, 0, w, h); }
   }
 
-  // The engage camera: frames both ships, every projectile in flight (a slug's end point too) and
-  // the points of recent impacts and misses. Zooms out at once, zooms in eased; if an easing step
-  // leaves a required point inside the pad margin it snaps to the target.
+  // The engage camera. Four modes, the first whose trigger holds (MODE_ORDER):
+  //   inbound   live torpedoes aimed at me          -> my ship + those torpedoes
+  //   outbound  live torpedoes aimed at them        -> their ship + those torpedoes + my ship (the ghost starts there)
+  //   rail      a railgun aiming, or a live slug    -> both ships + every slug (position and end point)
+  //   idle      -> both ships
+  // Recent event points (EVENT_PT_TTL) join only the mode they belong to. When the current mode's
+  // trigger ends the camera keeps that mode (its last projectile points) for MODE_LINGER of dt, then
+  // takes the new one. On a change the points the new mode adds ease in over MODE_TRANS (soft); the
+  // points both modes had stay hard. Zoom out at once, zoom in eased within a mode; if after easing a
+  // hard point is outside the pad margin the camera snaps to the target. dt 0 (paused): nothing moves.
   function engageCamera(battle, me, them, dt) {
     for (let i = evPts.length - 1; i >= 0; i--) { evPts[i].ttl -= dt; if (evPts[i].ttl <= 0) evPts.splice(i, 1); }
-    const pts = [{ x: me.x, y: me.y }, { x: them.x, y: them.y }];
+    const live = { inbound: [], outbound: [], rail: [], idle: [] };
     for (const p of battle.projectiles) {
       if (p.dead) continue;
-      pts.push({ x: p.x, y: p.y });
-      if (p.kind === 'slug') pts.push({ x: p.tx, y: p.ty });
+      const id = oid(p);
+      if (p.kind === 'torp') (p.target === 'me' ? live.inbound : live.outbound).push({ key: 'p' + id, x: p.x, y: p.y });
+      else if (p.kind === 'slug') live.rail.push({ key: 'p' + id, x: p.x, y: p.y }, { key: 't' + id, x: p.tx, y: p.ty });
     }
-    for (const e of evPts) pts.push({ x: e.x, y: e.y });
-    reqPts = pts;
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const p of pts) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
-    const tx = (x0 + x1) / 2, ty = (y0 + y1) / 2;
-    const ts = Math.min(Math.max(1, rect.w - 2 * pad) / Math.max(x1 - x0, 1), Math.max(1, rect.h - 2 * pad) / Math.max(y1 - y0, 1), V.MAX_SCALE);
-    if (!cam.init || !Number.isFinite(cam.scale)) { cam.x = tx; cam.y = ty; cam.scale = ts; cam.init = true; return; }
-    cam.x += (tx - cam.x) * (1 - Math.exp(-dt * 6));
-    cam.y += (ty - cam.y) * (1 - Math.exp(-dt * 6));
-    if (ts < cam.scale) cam.scale = ts; else cam.scale += (ts - cam.scale) * (1 - Math.exp(-dt * 2.5));
-    for (const p of pts) {
-      const s = toScreen(p.x, p.y);
-      if (s.x < rect.x + pad - 0.5 || s.x > rect.x + rect.w - pad + 0.5 || s.y < rect.y + pad - 0.5 || s.y > rect.y + rect.h - pad + 0.5) {
-        cam.x = tx; cam.y = ty; cam.scale = ts;
-        break;
+    const aiming = (s) => s.railAim >= 0 && s.pieces.rail.alive;
+    const trig = { inbound: live.inbound.length > 0, outbound: live.outbound.length > 0, rail: aiming(me) || aiming(them) || live.rail.length > 0, idle: true };
+    const want = MODE_ORDER.find((m) => trig[m]);
+    const fresh = !modeInit;
+    if (fresh) { camMode = want; modeInit = true; linger = 0; trans = false; snap = []; holdIn = false; liveN = 0; }
+    else if (dt > 0) {
+      if (want === camMode) linger = 0;
+      else {
+        if (!trig[camMode]) linger += dt;
+        if (trig[camMode] || linger >= V.MODE_LINGER) { prevKeys = curKeys; camMode = want; linger = 0; trans = true; transT = 0; holdIn = false; liveN = 0; }
       }
+    }
+    // No pumping when torpedoes die: once one of this mode's projectiles is gone (or the mode lingers),
+    // the camera stops zooming in; it holds on the intercept and pulls back once, at the mode change.
+    if (dt > 0) { const n = live[camMode].length; if (n < liveN || linger > 0) holdIn = true; liveN = n; }
+    if (trig[camMode]) snap = live[camMode];
+
+    const sp = (s) => ({ key: 'ship:' + s.id, x: s.x, y: s.y });
+    const full = camMode === 'inbound' ? [sp(me)] : camMode === 'outbound' ? [sp(them), sp(me)] : [sp(me), sp(them)];
+    for (const p of snap) full.push(p);
+    for (const e of evPts) if (e.mode === camMode) full.push(e);
+    curKeys = new Set(full.map((p) => p.key));
+    let hard = full;
+    if (trans && prevKeys) { hard = full.filter((p) => prevKeys.has(p.key)); if (hard.length === 0) hard = full; }
+    reqPts = hard;
+
+    const target = (list) => {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const p of list) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+      return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, s: Math.min(Math.max(1, rect.w - 2 * pad) / Math.max(x1 - x0, 1), Math.max(1, rect.h - 2 * pad) / Math.max(y1 - y0, 1), maxScale) };
+    };
+    const outside = (list) => list.some((p) => {
+      const s = toScreen(p.x, p.y);
+      return s.x < rect.x + pad - 0.5 || s.x > rect.x + rect.w - pad + 0.5 || s.y < rect.y + pad - 0.5 || s.y > rect.y + rect.h - pad + 0.5;
+    });
+    const tf = target(full), th = hard === full ? tf : target(hard);
+    if (!cam.init || !Number.isFinite(cam.scale)) { cam.x = tf.x; cam.y = tf.y; cam.scale = tf.s; cam.init = true; trans = false; return; }
+    if (dt <= 0) return; // paused: nothing moves, the mode cannot change
+    if (trans) {
+      const k = 1 - Math.exp(-dt / V.TRANS_TAU);
+      cam.x += (tf.x - cam.x) * k; cam.y += (tf.y - cam.y) * k; cam.scale += (tf.s - cam.scale) * k;
+    } else {
+      cam.x += (tf.x - cam.x) * (1 - Math.exp(-dt * 6));
+      cam.y += (tf.y - cam.y) * (1 - Math.exp(-dt * 6));
+      if (tf.s < cam.scale) cam.scale = tf.s; else if (!holdIn) cam.scale += (tf.s - cam.scale) * (1 - Math.exp(-dt * 2.5));
+    }
+    // snap to keep every hard point in frame; while holding, never as a zoom-in (a smaller scale at the
+    // target centre still fits every point)
+    if (outside(hard)) { cam.x = th.x; cam.y = th.y; cam.scale = holdIn ? Math.min(cam.scale, th.s) : th.s; }
+    if (trans) {
+      transT += dt;
+      // done after MODE_TRANS once the soft points are inside too (so the hard set growing never snaps the camera)
+      if (transT >= V.MODE_TRANS && (!outside(full) || transT >= 2.5 * V.MODE_TRANS)) trans = false;
     }
   }
   const requiredPoints = () => (engage ? reqPts.map((p) => ({ x: p.x, y: p.y })) : []);
+  const cameraState = () => ({ x: cam.x, y: cam.y, scale: cam.scale, mode: engage ? camMode : null });
   const safeRect = () => ({ x: rect.x + pad, y: rect.y + pad, w: Math.max(1, rect.w - 2 * pad), h: Math.max(1, rect.h - 2 * pad) });
+
+  // --- big marks: the form seen from above ---------------------------------------------------
+
+  // The mark box of a ship: L along the nose, W across, centred on the ship.
+  function markGeom(s) {
+    const L = markL, W = L * s.form.h / s.form.w;
+    return { L, W, hl: L / 2, hw: W / 2 };
+  }
+  const markAngle = (s, e) => noseAngle(s, Math.atan2(e.y - s.y, e.x - s.x));
+
+  // Where a ray from the ship's centre along screen angle dir leaves its mark box, px from the centre.
+  function boxEdge(s, a, dir) {
+    const g = markGeom(s);
+    const ux = Math.abs(Math.cos(dir - a)), uy = Math.abs(Math.sin(dir - a));
+    const t = Math.min(ux > 1e-6 ? g.hl / ux : Infinity, uy > 1e-6 ? g.hw / uy : Infinity);
+    return { x: Math.cos(dir) * t, y: Math.sin(dir) * t };
+  }
+
+  // Where the segment A -> B enters the box (centre c, nose a, half sizes hl hw), or null when B is not inside it.
+  function boxEntry(A, B, c, a, hl, hw) {
+    const co = Math.cos(a), si = Math.sin(a);
+    const u0 = (A.x - c.x) * co + (A.y - c.y) * si, v0 = -(A.x - c.x) * si + (A.y - c.y) * co;
+    const u1 = (B.x - c.x) * co + (B.y - c.y) * si, v1 = -(B.x - c.x) * si + (B.y - c.y) * co;
+    if (Math.abs(u1) > hl || Math.abs(v1) > hw) return null;
+    let t0 = 0;
+    for (const [p0, p1, h] of [[u0, u1, hl], [v0, v1, hw]]) {
+      const d = p1 - p0;
+      if (Math.abs(d) < 1e-9) continue;
+      const ta = (-h - p0) / d, tb = (h - p0) / d;
+      t0 = Math.max(t0, Math.min(ta, tb));
+    }
+    t0 = clamp01(t0);
+    return { x: A.x + (B.x - A.x) * t0, y: A.y + (B.y - A.y) * t0 };
+  }
+
+  // The hull from its cells: bow along +x of the form, cut and torn cells gone, dead rooms dark,
+  // job rooms in their room colour (dimmed), frame in the ship tint, a 1 px outline round the bounds.
+  function drawBigMark(s, p, ang) {
+    const { L, W, hl, hw } = markGeom(s);
+    const fw = s.form.w, fh = s.form.h, cell = L / fw, flip = s.facing === -1 ? -1 : 1;
+    const tc = tint(s.id);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(ang);
+    for (let y = 0; y < fh; y++) {
+      for (let x = 0; x < fw; x++) {
+        const c = s.cells[y][x];
+        const pc = c && s.pieces[c.room];
+        if (!c || c.cut || (pc && pc.torn)) continue;
+        const rc = roomColor(c.room);
+        let fill;
+        if (!pc || !pc.alive) fill = DEAD_CSS;
+        else if (rc) fill = mixRgb(rc, BG_RGB, 1 - V.MARK_DIM);
+        else fill = mixRgb(tc, BG_RGB, 1 - V.MARK_FRAME);
+        ctx.fillStyle = fill;
+        const u = (x + 0.5 - fw / 2) * cell, v = flip * (y + 0.5 - fh / 2) * cell;
+        ctx.fillRect(u - cell / 2 - 0.2, v - cell / 2 - 0.2, cell + 0.4, cell + 0.4);
+      }
+    }
+    ctx.strokeStyle = rgba(tc, 0.85);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-hl, -hw, L, W);
+    ctx.restore();
+  }
 
   // The move order under the finger: guide rays for the bow, broadside and
   // stern zones, an arrow from the 'me' mark along the drag as long as the
@@ -515,7 +654,7 @@ export function makeTactical(canvas, opts = {}) {
     ctx.beginPath();
     for (const o of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
       const a = bearing + o;
-      ctx.moveTo(p.x + Math.cos(a) * V.MARK_LEN, p.y + Math.sin(a) * V.MARK_LEN);
+      ctx.moveTo(p.x + Math.cos(a) * markL, p.y + Math.sin(a) * markL);
       ctx.lineTo(p.x + Math.cos(a) * V.GHOST_RAY_PX, p.y + Math.sin(a) * V.GHOST_RAY_PX);
     }
     ctx.stroke();
@@ -545,12 +684,12 @@ export function makeTactical(canvas, opts = {}) {
     }
 
     // ghost mark just past the arrow tip (or over the ship when holding), turned to the asked facing
-    const off = len > 2 ? V.MARK_LEN * 0.8 : 0;
+    const off = len > 2 ? markL * 0.8 : 0;
     const gx = ex + Math.cos(ang) * off, gy = ey + Math.sin(ang) * off;
     ctx.save();
     ctx.globalAlpha = 0.25 + 0.3 * pulse;
     ctx.fillStyle = rgba(col, 1);
-    drawShipMark(ctx, me, gx, gy, V.MARK_LEN, nose);
+    drawShipMark(ctx, me, gx, gy, markL, nose);
     ctx.restore();
 
     // my firing arcs at the asked heading, to scale, and what bears on them at this range
@@ -612,7 +751,18 @@ export function makeTactical(canvas, opts = {}) {
       const e = battle.enemyOf ? battle.enemyOf(s) : battle.ships.find((o) => o !== s);
       const p = clamp01(s.railAim / N.RAIL_AIM_TIME);
       const pulse = 0.65 + 0.35 * Math.sin(time * (8 + 12 * p));
-      const a = toScreen(s.x, s.y), b = toScreen(e.x, e.y);
+      let a = toScreen(s.x, s.y), b = toScreen(e.x, e.y);
+      // big marks: the reticle rings the bigger hull, and the line runs from the shooter's mark edge to the ring
+      const r = 9 + 10 * (1 - p) + (bigMarks ? markL * 0.5 : 0);
+      const c0 = b;
+      if (bigMarks) {
+        const dd = Math.hypot(b.x - a.x, b.y - a.y);
+        if (dd > markL * 0.5 + r) {
+          const ux = (b.x - a.x) / dd, uy = (b.y - a.y) / dd;
+          a = { x: a.x + ux * markL * 0.5, y: a.y + uy * markL * 0.5 };
+          b = { x: b.x - ux * r, y: b.y - uy * r };
+        }
+      }
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.strokeStyle = rgba(C.warn, (0.18 + 0.7 * p) * pulse);
@@ -621,7 +771,7 @@ export function makeTactical(canvas, opts = {}) {
       ctx.lineDashOffset = -time * 80;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       ctx.setLineDash([]);
-      const r = 9 + 10 * (1 - p);
+      b = c0;
       ctx.lineWidth = 1 + p;
       ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, 6.2832); ctx.stroke();
       ctx.beginPath();
@@ -642,7 +792,9 @@ export function makeTactical(canvas, opts = {}) {
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
     for (const tr of battle.tracers) {
-      const a = toScreen(tr.x1, tr.y1), b = toScreen(tr.x2, tr.y2);
+      const a = toScreen(tr.x1, tr.y1);
+      let b = toScreen(tr.x2, tr.y2);
+      if (bigMarks) b = contactPoint(battle, tr, a, b);
       const col = tint(tr.owner);
       const p = clamp01(1 - tr.ttl / V.TRACER_TTL);
       const p0 = Math.max(0, p - 0.3);
@@ -660,7 +812,26 @@ export function makeTactical(canvas, opts = {}) {
     ctx.restore();
   }
 
+  // Big marks: a tracer ending inside its target's mark box is drawn only to where its line enters the
+  // box. The first frame such a (rake) tracer is seen it throws a few short sparks from that point.
+  function contactPoint(battle, tr, a, b) {
+    const t = battle.ships.find((o) => o.id !== tr.owner), o = battle.ships.find((q) => q.id === tr.owner);
+    if (!t || !o) return b;
+    const c = toScreen(t.x, t.y), g = markGeom(t), ang = markAngle(t, o);
+    const E = boxEntry(a, b, c, ang, g.hl, g.hw);
+    if (!E) return b;
+    if (!seenTracers.has(tr)) {
+      seenTracers.add(tr);
+      const an = { ax: t.x, ay: t.y }, ox = E.x - c.x, oy = E.y - c.y;
+      const back = Math.atan2(a.y - b.y, a.x - b.x); // back toward the muzzle
+      fx.sparks(an, 2 + Math.floor(fx.rnd() * 2), { x: ox, y: oy, dir: back, spread: 1.6, speedMin: 40, speedMax: 110, lifeMin: 0.06, lifeMax: V.SPARK_LIFE, size: 1.2, col: C.hot });
+      fx.flash(an, { x: ox, y: oy, r: 4, life: 0.1, col: C.hot, col2: C.spark });
+    }
+    return E;
+  }
+
   function drawProjectiles(battle) {
+    if (bigMarks) torpNear = {};
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
@@ -668,6 +839,11 @@ export function makeTactical(canvas, opts = {}) {
       if (p.dead) continue;
       const s = toScreen(p.x, p.y);
       if (p.kind === 'torp') {
+        if (bigMarks) {
+          const tg = battle.ships.find((o) => o.id === p.target);
+          const cur = torpNear[p.target];
+          if (tg && (!cur || Math.hypot(p.x - tg.x, p.y - tg.y) < Math.hypot(cur.x - tg.x, cur.y - tg.y))) torpNear[p.target] = { x: p.x, y: p.y };
+        }
         const sp = Math.hypot(p.vx, p.vy) || 1e-6;
         const dx = p.vx / sp, dy = p.vy / sp;
         const len = 7 + 12 * Math.min(1, sp / N.TORP_SPEED);
@@ -702,7 +878,7 @@ export function makeTactical(canvas, opts = {}) {
     for (const s of battle.ships) {
       const e = battle.enemyOf ? battle.enemyOf(s) : battle.ships.find((o) => o !== s);
       const p = toScreen(s.x, s.y);
-      const ang = noseAngle(s, Math.atan2(e.y - s.y, e.x - s.x));
+      const ang = markAngle(s, e);
       const col = tint(s.id);
 
       // velocity vector: where the ship will be in 2.5 s. Nothing when still.
@@ -735,8 +911,10 @@ export function makeTactical(canvas, opts = {}) {
         const pa = ang + (back ? Math.PI : 0);
         const sx = Math.cos(pa), sy = Math.sin(pa);
         const flick = 0.78 + 0.22 * hash01(Math.floor(time * 30) + (s.id === 'me' ? 0 : 7));
-        const pl = (back ? 5 + 14 * th : 3 + 7 * -th) * flick;
-        const x0 = p.x + sx * V.MARK_LEN * 0.5, y0 = p.y + sy * V.MARK_LEN * 0.5;
+        const pk = markL / V.MARK_LEN; // the plume grows with the mark (1 for the small mark)
+        const pl = (back ? 5 + 14 * th : 3 + 7 * -th) * flick * pk;
+        const pw = 3 * pk;
+        const x0 = p.x + sx * markL * 0.5, y0 = p.y + sy * markL * 0.5;
         const x1 = x0 + sx * pl, y1 = y0 + sy * pl;
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
@@ -745,11 +923,12 @@ export function makeTactical(canvas, opts = {}) {
         g.addColorStop(1, 'rgba(90,140,255,0)');
         ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.moveTo(x0 - sy * 3, y0 + sx * 3); ctx.lineTo(x1, y1); ctx.lineTo(x0 + sy * 3, y0 - sx * 3);
+        ctx.moveTo(x0 - sy * pw, y0 + sx * pw); ctx.lineTo(x1, y1); ctx.lineTo(x0 + sy * pw, y0 - sx * pw);
         ctx.closePath(); ctx.fill();
         ctx.restore();
       }
 
+      if (bigMarks) { drawBigMark(s, p, ang); continue; }
       ctx.fillStyle = s.id === 'me' ? COLORS.me : COLORS.them;
       drawShipMark(ctx, s, p.x, p.y, V.MARK_LEN, ang);
     }
@@ -773,6 +952,16 @@ export function makeTactical(canvas, opts = {}) {
     return Math.atan2(y - s.y, x - s.x);
   }
   const otherId = (id) => (id === 'me' ? 'them' : 'me');
+  // Big marks: the px offset (from the victim's centre) of the point on its mark edge facing `from`
+  // ({x, y} km, default the other ship), and `out`, the screen angle from the victim to it.
+  function hitAt(victimId, from) {
+    const v = shipOf(victimId), o = shipOf(otherId(victimId));
+    if (!v || !o) return { x: 0, y: 0, out: 0 };
+    const src = from || o;
+    const out = Math.atan2(src.y - v.y, src.x - v.x);
+    const e = boxEdge(v, markAngle(v, o), out);
+    return { x: e.x, y: e.y, out };
+  }
   // where a ship's stern points on the map right now (radians); +x when unknown
   function sternDir(id) {
     const s = shipOf(id), e = shipOf(otherId(id));
@@ -790,23 +979,34 @@ export function makeTactical(canvas, opts = {}) {
     const a = { ax: ev.x, ay: ev.y };
     if (engage && ENGAGE_EVENTS.has(ev.type) && Number.isFinite(ev.x) && Number.isFinite(ev.y)) {
       if (evPts.length >= V.EVENT_PT_MAX) evPts.shift();
-      evPts.push({ x: ev.x, y: ev.y, ttl: V.EVENT_PT_TTL });
+      // the camera mode the point belongs to: a torpedo event goes with the ship it concerned, a rail event with rail
+      const who = ev.type === 'torpKilled' ? ev.by : ev.ship;
+      const mode = ev.type === 'railMiss' || ev.type === 'railHit' ? 'rail' : who === 'me' ? 'inbound' : 'outbound';
+      evPts.push({ key: 'e' + (++evSeq), x: ev.x, y: ev.y, ttl: V.EVENT_PT_TTL, mode });
     }
     switch (ev.type) {
-      case 'pdcHit':
-        fx.sparks(a, 3, { speedMin: 40, speedMax: 110, lifeMin: 0.15, lifeMax: 0.3, size: 1.2 });
-        fx.flash(a, { r: 6, life: 0.08, col: C.hot, col2: C.spark });
+      case 'pdcHit': {
+        // big marks: the hit sits on the edge of the victim's mark facing the shooter
+        const o = bigMarks ? hitAt(ev.ship, null) : null;
+        const ox = o ? o.x : undefined, oy = o ? o.y : undefined;
+        fx.sparks(a, 3, { x: ox, y: oy, speedMin: 40, speedMax: 110, lifeMin: 0.15, lifeMax: 0.3, size: 1.2 });
+        fx.flash(a, { x: ox, y: oy, r: 6, life: 0.08, col: C.hot, col2: C.spark });
         break;
+      }
       case 'torpHit': {
         const dir = fromShooter(otherId(ev.ship), ev.x, ev.y);
-        bigImpact(fx, a, 1.0, { away: dir });
+        if (bigMarks) {
+          const o = hitAt(ev.ship, torpNear[ev.ship]);
+          bigImpact(fx, a, 1.0, { away: o.out, x: o.x, y: o.y });
+        } else bigImpact(fx, a, 1.0, { away: dir });
         break;
       }
       case 'railHit': {
         const dir = fromShooter(otherId(ev.ship), ev.x, ev.y);
-        bigImpact(fx, a, 1.3, { away: dir });
-        fx.streak(a, { dx: Math.cos(dir), dy: Math.sin(dir), len: 160, life: 0.35, width: 3 });
-        fx.ring(a, { r0: 2, vr: 320, life: 0.3, width: 1.5, col: C.white });
+        const o = bigMarks ? hitAt(ev.ship, null) : null;
+        bigImpact(fx, a, 1.3, { away: o ? o.out : dir, x: o ? o.x : undefined, y: o ? o.y : undefined });
+        fx.streak(a, { x: o ? o.x : undefined, y: o ? o.y : undefined, dx: Math.cos(dir), dy: Math.sin(dir), len: 160, life: 0.35, width: 3 });
+        fx.ring(a, { x: o ? o.x : undefined, y: o ? o.y : undefined, r0: 2, vr: 320, life: 0.3, width: 1.5, col: C.white });
         break;
       }
       case 'pieceDead':
@@ -853,8 +1053,9 @@ export function makeTactical(canvas, opts = {}) {
         // thruster puffs around the mark: four short pale-blue jets off the hull corners
         const ang = sternDir(ev.by) + Math.PI; // nose
         const cx = Math.cos(ang), cy = Math.sin(ang);
+        const msc = markL / V.MARK_LEN;
         for (const [along, side] of [[0.35, -1], [0.35, 1], [-0.3, -1], [-0.3, 1]]) {
-          const ox = cx * along * V.MARK_LEN - cy * side * 3, oy = cy * along * V.MARK_LEN + cx * side * 3;
+          const ox = cx * along * markL - cy * side * 3 * msc, oy = cy * along * markL + cx * side * 3 * msc;
           const out = Math.atan2(cx * side, -cy * side); // perpendicular, away from the hull
           fx.sparks(a, 3, { x: ox, y: oy, dir: out, spread: 0.5, speedMin: 25, speedMax: 70, lifeMin: 0.12, lifeMax: 0.3, size: 1.2, col: C.drive });
         }
@@ -874,8 +1075,9 @@ export function makeTactical(canvas, opts = {}) {
         // two small flashes at the tube deck, one each side of the hull
         const st = sternDir(ev.by);
         const sx = Math.cos(st), sy = Math.sin(st);
+        const lsc = markL / V.MARK_LEN;
         for (const side of [-1, 1]) {
-          const ox = sx * 4 - sy * side * 4, oy = sy * 4 + sx * side * 4;
+          const ox = (sx * 4 - sy * side * 4) * lsc, oy = (sy * 4 + sx * side * 4) * lsc;
           fx.flash(a, { x: ox, y: oy, r: 7, life: 0.25, col: C.white, col2: C.fire });
           fx.sparks(a, 4, { x: ox, y: oy, dir: st + Math.PI, spread: 0.6, speedMin: 40, speedMax: 100, lifeMin: 0.15, lifeMax: 0.3 });
         }
@@ -888,9 +1090,14 @@ export function makeTactical(canvas, opts = {}) {
   }
 
   // Switching this view in: drop effects frozen while it was hidden (so nothing old replays) and refit.
-  function reset() { fx.step(10); pending.length = 0; evPts = []; cam.init = false; }
+  function reset() {
+    fx.step(10); pending.length = 0; evPts = []; cam.init = false;
+    modeInit = false; linger = 0; trans = false; holdIn = false; liveN = 0; prevKeys = null; curKeys = new Set(); snap = []; torpNear = {};
+    // a WeakSet cannot be cleared: the tracers seen so far are dropped by making a fresh one
+    seenTracers = new WeakSet();
+  }
 
-  return { draw, onEvent, reset, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect };
+  return { draw, onEvent, reset, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect, cameraState };
 }
 
 // --- silhouette panel --------------------------------------------------------------

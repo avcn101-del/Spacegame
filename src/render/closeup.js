@@ -348,6 +348,46 @@ export function makeCloseup(canvas) {
     }
     ctx.restore();
   }
+  // --- threat ticks --------------------------------------------------------------------
+  // Torpedoes still in flight at me, grouped by the hull edge they come at (the same shotFrom as the chevrons):
+  // a red tick on that edge of my hull and "arrow count · nearest km". HUD only: nothing travels, it just breathes.
+  const WARN = 'rgb(255,77,77)', GLYPH = { top: '\u25BC', bottom: '\u25B2', bow: '\u25C0', stern: '\u25B6' };
+  function drawThreats(battle) {
+    const me = battle.shipById('me'), groups = {};
+    for (const p of battle.projectiles) {
+      if (p.kind !== 'torp' || p.target !== 'me' || p.dead) continue;
+      const g = (groups[shotFrom(me, p.x, p.y)] ||= { n: 0, d: Infinity });
+      g.n++; g.d = Math.min(g.d, Math.hypot(p.x - me.x, p.y - me.y));
+    }
+    const b = B.me, pulseK = 0.8 + 0.2 * Math.sin(time * 5), bh = 13, ts = 4;
+    const midY = b.y + b.h / 2, bow = bowEdge('me'), stern = sternEdge('me');
+    ctx.save();
+    ctx.font = V.LABEL_FONT; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    for (const f of ['top', 'bottom', 'bow', 'stern']) {
+      const g = groups[f];
+      if (!g) continue;
+      // tick: a triangle whose tip touches the hull edge and points into the hull; anchor = [tip x, tip y, dx, dy]
+      let tx, ty, dx, dy, lx, ly;
+      const text = GLYPH[f] + ' ' + g.n + ' \u00B7 ' + g.d.toFixed(1);
+      const bw = ctx.measureText(text).width + 8;
+      if (f === 'top') { tx = b.x + b.w * 0.5; ty = b.y; dx = 0; dy = 1; lx = tx + ts + 2; ly = Math.max(V.LABEL_H, b.y - bh + 3); }
+      else if (f === 'bottom') { tx = b.x + b.w * 0.5; ty = b.y + b.h; dx = 0; dy = -1; lx = tx + ts + 2; ly = b.y + b.h - 3; }
+      else if (f === 'bow') { tx = bow; ty = midY; dx = -b.bow; dy = 0; lx = W / 2 - bw / 2; ly = H - bh - 1; }
+      else { tx = stern; ty = midY; dx = b.bow; dy = 0; lx = 1; ly = H - bh - 1; }
+      lx = clamp(lx, 1, Math.max(1, W - bw - 1)); ly = clamp(ly, 1, Math.max(1, H - bh - 1));
+      ctx.globalAlpha = pulseK;
+      // triangle: tip (tx, ty), base ts + 1 back along the approach, half-width ts
+      const nx = -dy, ny = dx, bx = tx - dx * (ts + 1), by = ty - dy * (ts + 1);
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(bx + nx * ts, by + ny * ts); ctx.lineTo(bx - nx * ts, by - ny * ts); ctx.closePath();
+      ctx.fillStyle = WARN; ctx.fill();
+      ctx.strokeStyle = 'rgba(5,7,12,0.85)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = 'rgba(5,7,12,0.85)'; ctx.fillRect(lx, ly, bw, bh);
+      ctx.strokeStyle = 'rgba(255,77,77,0.5)'; ctx.strokeRect(lx + 0.5, ly + 0.5, bw - 1, bh - 1);
+      ctx.fillStyle = WARN; ctx.fillText(text, lx + 4, ly + bh / 2 + 0.5);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
   // The drive's plume out of the stern while it pushes.
   function drawPlume(ship, sid) {
     const drive = ship.pieces.drive, thrust = Math.abs(ship.thrust || 0);
@@ -521,6 +561,7 @@ export function makeCloseup(canvas) {
     ctx.restore();
     ctx.save();
     ctx.translate(so.x, so.y);
+    drawThreats(battle);
     drawBrackets(battle);
     ctx.restore();
   }
