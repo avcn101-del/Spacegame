@@ -118,7 +118,7 @@ function start(replay = null) {
   const fitQ = fitString(battle.designs.me.fit);
   history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}`);
   closeup.reset(battle);
-  window.game = { battle, tactical, closeup, cuWorld, setView, panels: { me: panelMe, them: panelThem }, exportReplay: () => exportReplay(battle) }; // for debugging and tests
+  window.game = { battle, tactical, closeup, cuWorld, setView, panels: { me: panelMe, them: panelThem }, exportReplay: () => exportReplay(battle), perf }; // for debugging and tests
 }
 
 // Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
@@ -133,8 +133,22 @@ document.addEventListener('pointerdown', function once() {
 
 const isFrame = (room) => room.startsWith('frame:');
 
+// game.perf(): frame interval and render work over the last PERF_N frames, ms (avg and p95), so a phone
+// check gives a number. game.perf.reset() starts a fresh window. Debug only: reads clocks, never the sim.
+const PERF_N = 600, perfGap = [], perfWork = [];
+const pct = (a, q) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
+const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+const r1 = (v) => Math.round(v * 10) / 10;
+function perf() {
+  return { frames: perfGap.length, view, dpr: window.devicePixelRatio || 1, frameAvg: r1(avg(perfGap)), frameP95: r1(pct(perfGap, 0.95)), fps: r1(1000 / (avg(perfGap) || 1)), workAvg: r1(avg(perfWork)), workP95: r1(pct(perfWork, 0.95)) };
+}
+perf.reset = () => { perfGap.length = 0; perfWork.length = 0; };
+const perfPush = (a, v) => { a.push(v); if (a.length > PERF_N) a.shift(); };
+
 let last = performance.now();
 function frame(now) {
+  const t0 = performance.now();
+  perfPush(perfGap, now - last);
   const dtReal = Math.min(0.1, (now - last) / 1000);
   last = now;
   const scale = slowmo > 0 ? N.SLOWMO_SCALE : 1;
@@ -171,6 +185,7 @@ function frame(now) {
   battle.events.length = 0;
   for (const r of VIEWS[view]) r.draw(battle, dtGame);
   hud.draw(battle, paused, dtReal);
+  perfPush(perfWork, performance.now() - t0);
   requestAnimationFrame(frame);
 }
 

@@ -9,6 +9,7 @@ import { shotFrom, alive } from '../sim/ship.js';
 import { T, roomKey } from '../text.js';
 import { drawForm, roomAtPoint, roomBounds } from './form.js';
 import { makeFx, fit } from './canvas.js';
+import { LOOK, BLOOM, bloom, drawPlume as lookPlume, makeStarfield } from './look.js';
 
 // Visual-only knobs. Not game numbers.
 const V = {
@@ -27,6 +28,7 @@ const V = {
   DRIFT: 3,          // cut cells drift this many times further than on the panels, to read at this size
   BOLTS: 90,         // cap on streaks alive: keeps a phone smooth
   SCARS: 40, SMOULDER: 14, CHAR_MAX: 0.75,
+  STAR_PX_PER_KM: 30, // dock starfield: px the far layer would slide per km my ship travels
 };
 const C = {
   white: [255, 255, 255], hot: [255, 230, 200], fire: [255, 154, 60], ember: [255, 110, 30], pdc: [255, 220, 130],
@@ -72,6 +74,8 @@ export function makeCloseup(canvas) {
   let W = 0, H = 0, time = 0, cur = null;
   let bolts = [], scars = [], smoulder = [], breaks = [], later = [], charMap = new Map();
   let inspect = null, inspectTtl = 0, lastTarget = null, pulse = 0;
+  let blooms = [], tints = [];   // G1: {x, y, kind, col, ttl, life} glows; {sid, x, y, r, a, ttl, life} impact light on the hull
+  const starfield = makeStarfield(3);
   const flash = { me: {}, them: {} };       // room -> 0..1, like the panels
   const bump = (sid, room, v) => { flash[sid][room] = Math.max(flash[sid][room] || 0, v); };
 
@@ -180,6 +184,13 @@ export function makeCloseup(canvas) {
   const after = (delay, fn) => later.push({ t: delay, fn });
 
   // --- the impacts -------------------------------------------------------------------
+  // G1: a glow of one kind of beat (look.js BLOOM, the amplitude hierarchy) and a warm light on the hull near a hit
+  function addBloom(p, kind, col, k) { const b = BLOOM[kind]; blooms.push({ x: p.x, y: p.y, kind, col, k: k || 1, ttl: b.life, life: b.life }); }
+  function addTint(sid, p, r, a, life) { tints.push({ sid, x: p.x, y: p.y, r, a, ttl: life, life }); }
+  function onBurn(ev) {
+    const b = B[ev.by], k = scale();
+    addBloom({ x: sternEdge(ev.by) - b.bow * b.cell * 0.5, y: b.y + b.h / 2 }, 'burn', [190, 225, 255], k);
+  }
   function torpBlast(sid, p, ang, k) {
     const a = A(p);
     fx.flash(a, { r: 26 * k, grow: 46 * k, life: 0.5, col: C.white, col2: C.fire });
@@ -190,6 +201,7 @@ export function makeCloseup(canvas) {
     fx.sparks(a, 20, { dir: ang + Math.PI, spread: 2.2, speedMin: 90 * k, speedMax: 300 * k, lifeMin: 0.2, lifeMax: 0.55, size: 1.5, col: C.hot });
     fx.embers(a, 10, {}); fx.smoke(a, 5, {});
     scar(p, 17 * k, 3.5, C.ember);
+    addBloom(p, 'torpHit', C.fire, k); addTint(sid, p, 34 * k, 0.75, 0.4);
     fx.shakeIt(5 * k, 0.35); fx.whiteFlash(0.12);
   }
   function railBlast(sid, p, ang, k) {
@@ -201,6 +213,7 @@ export function makeCloseup(canvas) {
     fx.debris(a, 12, { dir: ang, spread: 1.4, speedMin: 60 * k, speedMax: 260 * k, sizeMin: 1.5 * k, sizeMax: 3.5 * k });
     fx.smoke(a, 3, {});
     scar(p, 13 * k, 2.5, C.fire);
+    addBloom(p, 'rail', C.rail, k); addTint(sid, p, 44 * k, 0.95, 0.5);
     fx.shakeIt(9 * k, 0.45); fx.whiteFlash(0.2);
   }
   function spillBlast(sid, cell, k) {
@@ -263,7 +276,7 @@ export function makeCloseup(canvas) {
     const from = shotFrom(v, s.x, s.y), cell = hitCell(ev, v, from), r = ray(sid, from, cell);
     bump(sid, ev.piece, 0.35); soot(sid, cell, 0.07);
     fx.sparks(A(r.c), 3, { dir: r.ang + Math.PI, spread: 1.6, speedMin: 50 * k, speedMax: 150 * k, lifeMin: 0.12, lifeMax: 0.3, size: 1.2, col: C.pdc });
-    scar(r.c, 5 * k, 0.5, C.fire);
+    scar(r.c, 5 * k, 0.5, C.fire); addTint(sid, r.c, 12 * k, 0.3, 0.15);
   }
   function onPieceDead(ev) {
     const bt = battle_(), v = bt.shipById(ev.ship), sid = ev.ship, k = scale();
@@ -316,14 +329,13 @@ export function makeCloseup(canvas) {
     }
     const mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
     fx.flash(A(mid), { r: 36 * k, grow: 40 * k, life: 0.5, col: C.white, col2: C.fire });
+    addBloom(mid, 'tear', C.fire, k);
     fx.debris(A(mid), 18, { dir: ang, spread: 1.6, speedMin: 30 * k, speedMax: 140 * k, lifeMin: 1.2, lifeMax: 2.6, sizeMin: 2 * k, sizeMax: 5 * k });
     fx.smoke(A(mid), 8, {});
     fx.shakeIt(10 * k, 0.55); fx.whiteFlash(0.15);
   }
 
   // --- drawing -----------------------------------------------------------------------
-  const stars = [];
-  for (let i = 0; i < 70; i++) stars.push({ x: hash01(i * 3 + 1), y: hash01(i * 3 + 2), b: 0.25 + 0.6 * hash01(i * 3 + 3), ph: hash01(i + 99) * 6.28 });
 
   function chevron(ax, ay, dx, dy, size) {
     const ang = Math.atan2(dy, dx);
@@ -411,15 +423,66 @@ export function makeCloseup(canvas) {
     if (!cs.length) return;
     const b = B[sid], minX = Math.min(...cs.map((c) => c.x)), y0 = Math.min(...cs.map((c) => c.y)), y1 = Math.max(...cs.map((c) => c.y)) + 1;
     const o = toPx(sid, minX, (y0 + y1) / 2), hw = Math.max(2, (y1 - y0) * b.cell * 0.4), away = -b.bow;
-    const flick = 0.78 + 0.22 * hash01(Math.floor(time * 30)), len = (b.cell * 1.2 + b.cell * 4 * thrust) * flick;
+    lookPlume(ctx, o.x, o.y, away, 0, b.cell * 1.2 + b.cell * 4 * thrust, hw, time, sid === 'me' ? 0 : 7);
+  }
+
+  // --- the key light on the cutaway (dock only): cell shading and rim, from the form ---------------
+  // One gradient along the key light over every standing cell, a bright rim on the cell edges that face
+  // the light with nothing beyond them, a dark line on the edges that face away. Screen space, so the
+  // mirrored hull is lit from the same side. Then the impact light of recent hits, clipped to the hull.
+  const shadeCache = {};
+  function hullPaths(ship, sid, stand, lx, stamp) {
+    const path = new Path2D(), lit = new Path2D(), dark = new Path2D();
+    for (let y = 0; y < ship.form.h; y++) for (let x = 0; x < ship.form.w; x++) {
+      if (!stand(x, y)) continue;
+      const p0 = toPx(sid, x, y), p1 = toPx(sid, x + 1, y + 1);
+      const rx = Math.min(p0.x, p1.x), ry = p0.y, rw = Math.abs(p1.x - p0.x), rh = p1.y - p0.y;
+      path.rect(rx, ry, rw, rh);
+      if (!stand(x, y - 1)) { lit.moveTo(rx, ry + 0.5); lit.lineTo(rx + rw, ry + 0.5); }
+      if (!stand(x + lx, y)) { lit.moveTo(rx + 0.5, ry); lit.lineTo(rx + 0.5, ry + rh); }
+      if (!stand(x, y + 1)) { dark.moveTo(rx, ry + rh - 0.5); dark.lineTo(rx + rw, ry + rh - 0.5); }
+      if (!stand(x - lx, y)) { dark.moveTo(rx + rw - 0.5, ry); dark.lineTo(rx + rw - 0.5, ry + rh); }
+    }
+    // the shading baked once into a bitmap of the hull box (blitted every frame until the hull changes)
+    const b = B[sid], K = LOOK.KEY, dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1, m = 2;
+    const bmp = document.createElement('canvas');
+    bmp.width = Math.ceil((b.w + 2 * m) * dpr); bmp.height = Math.ceil((b.h + 2 * m) * dpr);
+    const g = bmp.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, (m - b.x) * dpr, (m - b.y) * dpr);
+    const cx = b.x + b.w / 2, cy = b.y + b.h / 2, R = Math.max(b.w, b.h) / 2;
+    const gr = g.createLinearGradient(cx + K.x * R * 0.35, cy + K.y * b.h, cx - K.x * R * 0.35, cy - K.y * b.h);
+    gr.addColorStop(0, `rgba(255,240,220,${LOOK.SHADE_LIT * 0.8})`);
+    gr.addColorStop(0.5, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, `rgba(0,2,10,${LOOK.SHADE_DARK * 0.8})`);
+    g.fillStyle = gr; g.fill(path);
+    g.lineWidth = 1;
+    g.strokeStyle = `rgba(255,236,205,${LOOK.RIM * Math.max(-K.y, -K.x)})`; g.stroke(lit);
+    g.strokeStyle = 'rgba(0,0,6,0.55)'; g.stroke(dark);
+    return { path, bmp, x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m, stamp };
+  }
+  function shadeHull(ship, sid) {
+    const b = B[sid];
+    const stand = (x, y) => { const c = ship.cells[y] && ship.cells[y][x]; return !!c && !c.cut && !(ship.pieces[c.room] && ship.pieces[c.room].torn); };
+    const lx = b.mirror ? 1 : -1; // form x step that is screen left
+    // the paths change only when the box or the standing cells do: rebuilt then, kept otherwise
+    let n = '';
+    for (let y = 0; y < ship.form.h; y++) for (let x = 0; x < ship.form.w; x++) n += stand(x, y) ? '1' : '0';
+    const stamp = [b.x, b.y, b.cell, n, (typeof window !== 'undefined' && window.devicePixelRatio) || 1].join('|');
+    let P = shadeCache[sid];
+    if (!P || P.stamp !== stamp) P = shadeCache[sid] = hullPaths(ship, sid, stand, lx, stamp);
+    const { path } = P;
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createLinearGradient(o.x, 0, o.x + away * len, 0);
-    g.addColorStop(0, `rgba(170,210,255,${0.7 * flick})`); g.addColorStop(0.5, `rgba(110,160,255,${0.35 * flick})`); g.addColorStop(1, 'rgba(80,130,255,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.moveTo(o.x, o.y - hw); ctx.lineTo(o.x + away * len, o.y); ctx.lineTo(o.x, o.y + hw); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = `rgba(235,245,255,${0.75 * flick})`;
-    ctx.beginPath(); ctx.moveTo(o.x, o.y - hw * 0.4); ctx.lineTo(o.x + away * len * 0.6, o.y); ctx.lineTo(o.x, o.y + hw * 0.4); ctx.closePath(); ctx.fill();
+    ctx.drawImage(P.bmp, P.x, P.y, P.w, P.h);
+    const mine = tints.filter((t) => t.sid === sid);
+    if (mine.length) {
+      ctx.clip(path);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const t of mine) {
+        const k = t.ttl / t.life, a = t.a * k * k, tg = ctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, t.r);
+        tg.addColorStop(0, `rgba(255,150,70,${a})`); tg.addColorStop(1, 'rgba(255,90,30,0)');
+        ctx.fillStyle = tg; ctx.fillRect(t.x - t.r, t.y - t.r, 2 * t.r, 2 * t.r);
+      }
+    }
     ctx.restore();
   }
 
@@ -496,6 +559,8 @@ export function makeCloseup(canvas) {
     for (let i = scars.length - 1; i >= 0; i--) { scars[i].ttl -= dt; if (scars[i].ttl <= 0) scars.splice(i, 1); }
     for (let i = smoulder.length - 1; i >= 0; i--) { smoulder[i].ttl -= dt; if (smoulder[i].ttl <= 0) smoulder.splice(i, 1); }
     for (let i = breaks.length - 1; i >= 0; i--) { breaks[i].ttl -= dt; if (breaks[i].ttl <= 0) breaks.splice(i, 1); }
+    for (let i = blooms.length - 1; i >= 0; i--) { blooms[i].ttl -= dt; if (blooms[i].ttl <= 0) blooms.splice(i, 1); }
+    for (let i = tints.length - 1; i >= 0; i--) { tints[i].ttl -= dt; if (tints[i].ttl <= 0) tints.splice(i, 1); }
     if (pulse > 0) pulse = Math.max(0, pulse - dt);
     if (inspectTtl > 0) { inspectTtl -= dt; if (inspectTtl <= 0) inspect = null; }
     stepBolts(dt);
@@ -507,10 +572,7 @@ export function makeCloseup(canvas) {
     const hz = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.6);
     hz.addColorStop(0, 'rgba(60,90,130,0.13)'); hz.addColorStop(1, 'rgba(60,90,130,0)');
     ctx.fillStyle = hz; ctx.fillRect(0, 0, W, H);
-    for (const s of stars) {
-      ctx.fillStyle = `rgba(200,215,240,${s.b * (0.7 + 0.3 * Math.sin(time * 1.5 + s.ph))})`;
-      ctx.fillRect(Math.round(s.x * W), Math.round(s.y * H), 1, 1);
-    }
+    { const me = battle.shipById('me'); starfield(ctx, me.x * V.STAR_PX_PER_KM, me.y * V.STAR_PX_PER_KM, W, H, time); }
 
     const so = fx.shakeOffset(time);
     ctx.save();
@@ -524,6 +586,7 @@ export function makeCloseup(canvas) {
       if (b.mirror) { ctx.translate(b.x + b.w / 2, 0); ctx.scale(-1, 1); ctx.translate(-(b.x + b.w / 2), 0); }
       drawForm(ctx, ship, b, { flash: flash[sid], t: time, warn, exposure: false, driftScale: V.DRIFT });
       ctx.restore();
+      shadeHull(ship, sid);
       drawChevrons(sid, shotFrom(ship, foe.x, foe.y));
     }
     // soot on the hit cells
@@ -560,6 +623,7 @@ export function makeCloseup(canvas) {
     ctx.restore();
     fx.draw(ctx);
     drawBolts();
+    for (const e of blooms) bloom(ctx, e.x, e.y, e.kind, e.col, e.ttl / e.life, e.k);
     ctx.restore();
     const wa = fx.white();
     if (wa > 0) { ctx.fillStyle = `rgba(255,240,225,${wa})`; ctx.fillRect(0, 0, W, H); }
@@ -593,6 +657,7 @@ export function makeCloseup(canvas) {
       case 'pdcHit': onPdcHit(ev); break;
       case 'pieceDead': onPieceDead(ev); break;
       case 'tear': onTear(ev); break;
+      case 'burn': onBurn(ev); break;
       default: break; // railMiss, torpMiss, torpKilled: the world stage shows them
     }
   }
@@ -600,7 +665,7 @@ export function makeCloseup(canvas) {
   // Start fresh on a battle (a new battle, or switching to this view): drop every effect.
   function reset(battle) {
     battleRef = battle;
-    bolts = []; scars = []; smoulder = []; breaks = []; later = []; charMap = new Map();
+    bolts = []; scars = []; smoulder = []; breaks = []; later = []; charMap = new Map(); blooms = []; tints = [];
     flash.me = {}; flash.them = {};
     inspect = null; inspectTtl = 0; pulse = 0;
     lastTarget = battle && battle.shipById('me').target && alive(battle.shipById('them'), battle.shipById('me').target) ? battle.shipById('me').target : null;
