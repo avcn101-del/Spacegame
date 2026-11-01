@@ -340,6 +340,8 @@ Decoration only: never reads input, never writes battle; no `Math.random` (flick
 - Vignette and a cool grade toward the shadow corner, world canvases only, cached per size, blitted in the
   four edge bands only. Over the scene and the fx, before the drag ghost; these canvases have no text (HUD
   is DOM). Not in the dock (its labels and ticks are canvas text).
+- Pixel ratio (PR 50): `renderDpr()` in look.js = min(devicePixelRatio, `LOOK.MAX_DPR` 2) sizes the world stage, the dock
+  and every look.js / dock cache (`fit`, lit sprites, vignette, dock shading); `perf()` reports `dpr` and `renderDpr`.
 - `game.perf()`: frame interval and render work (ms, avg and p95) over the last 600 frames, `fps`,
   `dpr` (`view` removed in PR H); `?perf=1` draws it as one line over the header's CLOCK / RANGE corner, once a second, tap
   to reset (PR 49; no element without the flag); `game.perf.reset()`. Debug only.

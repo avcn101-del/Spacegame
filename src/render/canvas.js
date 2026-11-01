@@ -10,7 +10,7 @@ import { alive, pdcRooms, mountSide } from '../sim/ship.js';
 import { drawArcs, drawPdcCounts, railKm } from './arcs.js';
 import { drawShipMark, COLORS } from './silhouette.js';
 import { roomColor } from './form.js';
-import { BLOOM, bloom, drawPlume, makeLitSprites, makeVignette, makeStarfield } from './look.js';
+import { BLOOM, bloom, drawPlume, makeLitSprites, makeVignette, makeStarfield, renderDpr } from './look.js';
 
 // Visual-only knobs. Not game numbers, so they live here, not in numbers.js.
 const V = {
@@ -70,12 +70,12 @@ function noseAngle(ship, bearing) {
 
 // --- canvas sizing -----------------------------------------------------------
 
-// Size the backing store to clientWidth/Height * dpr. Called every frame:
+// Size the backing store to clientWidth/Height * dpr (renderDpr: capped at LOOK.MAX_DPR). Called every frame:
 // it re-reads the element size and devicePixelRatio each time, so a phone
 // rotation or a late layout is picked up on the next draw. Returns the CSS
 // px size, or null when the canvas has no size yet (callers skip the frame).
 export function fit(canvas, ctx) {
-  const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+  const dpr = renderDpr();
   const cw = canvas.clientWidth || 0, ch = canvas.clientHeight || 0;
   if (cw === 0 || ch === 0) return null;
   const bw = Math.round(cw * dpr), bh = Math.round(ch * dpr);

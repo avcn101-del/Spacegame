@@ -9,7 +9,7 @@ import { shotFrom, alive } from '../sim/ship.js';
 import { T, roomKey } from '../text.js';
 import { drawForm, roomAtPoint, roomBounds } from './form.js';
 import { makeFx, fit } from './canvas.js';
-import { LOOK, BLOOM, bloom, drawPlume as lookPlume, makeStarfield } from './look.js';
+import { LOOK, BLOOM, bloom, drawPlume as lookPlume, makeStarfield, renderDpr } from './look.js';
 
 // Visual-only knobs. Not game numbers.
 const V = {
@@ -446,7 +446,7 @@ export function makeCloseup(canvas) {
       if (!stand(x - lx, y)) { dark.moveTo(rx + rw - 0.5, ry); dark.lineTo(rx + rw - 0.5, ry + rh); }
     }
     // the shading baked once into a bitmap of the hull box (blitted every frame until the hull changes)
-    const b = B[sid], K = LOOK.KEY, dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1, m = 2;
+    const b = B[sid], K = LOOK.KEY, dpr = renderDpr(), m = 2;
     const bmp = document.createElement('canvas');
     bmp.width = Math.ceil((b.w + 2 * m) * dpr); bmp.height = Math.ceil((b.h + 2 * m) * dpr);
     const g = bmp.getContext('2d');
@@ -469,7 +469,7 @@ export function makeCloseup(canvas) {
     // the paths change only when the box or the standing cells do: rebuilt then, kept otherwise
     let n = '';
     for (let y = 0; y < ship.form.h; y++) for (let x = 0; x < ship.form.w; x++) n += stand(x, y) ? '1' : '0';
-    const stamp = [b.x, b.y, b.cell, n, (typeof window !== 'undefined' && window.devicePixelRatio) || 1].join('|');
+    const stamp = [b.x, b.y, b.cell, n, renderDpr()].join('|');
     let P = shadeCache[sid];
     if (!P || P.stamp !== stamp) P = shadeCache[sid] = hullPaths(ship, sid, stand, lx, stamp);
     const { path } = P;

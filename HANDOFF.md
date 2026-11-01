@@ -337,6 +337,11 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    Perf overlay (PR 49, debug): `?perf=1` shows `perf()` as one line over the CLOCK / RANGE corner (inside the 34 px
    header band), once a second; tap it to reset. No element without the flag; every #game rect identical with and without.
    For the phone run of H: open `?perf=1`, fight a knife fight, read work95 / frame95 at dpr 2.6.
+   H playtest (the owner, phone dpr 2.8): work95 12.5 ms, frame95 66.4 ms, 39 fps, stutter on the big beats: fill rate.
+   DPR cap (PR 50): every battle canvas and look.js cache drawn at `renderDpr()` = min(devicePixelRatio, `LOOK.MAX_DPR` 2);
+   the hangar keeps the device dpr. Pixels at 844 x 390 dpr 2.8: 1.73 M -> 0.88 M. Rects, roomAt scan, mark position
+   identical to main. The owner re-measures; still stutters mid-knife-fight -> the locked cut order (vignette, stars,
+   dock shading). Next: PR camera floor (engage min scale, bearing wedge), then G2 after the owner's go.
    Acceptance: phone 844 x 390 at dpr 1 and 2.6; desktop 1440 x 900 only a smoke test (BRIEF: no
    desktop layout). Parked in NOTES: CMD vector, threat ticks, close-up Burn burst, reduced motion,
    help responsive, hangar. FX groups offered before (wounds, big moments) wait behind this.
