@@ -263,6 +263,28 @@ kept only as history. After the form (30 seeds, win/lose/draw):
 
 ## Next, in this order, each only if the owner says a battle was boring without it
 
+0. HUD/FX plan (2026-11-01, the owner, from his playtest report and design blueprint; uploads are not
+   in the repo, the plan is here): the order is A → D → E → C, one PR each, the owner plays between.
+   A, planning pause: PAUSE only stops the clock, badge `PAUSED · ORDERS ON` in the title slot, no
+   overlay; HELP (header) opens the old pause menu and pauses; CLOSE keeps the pause, RESUME resumes.
+   D: split `#order` into a persistent order summary, an alert lane (enemy rail aim with countdown and
+   Burn availability; torpedoes inbound with count and distance), a room inspector, and a toast queue
+   (max 2, under the header); measure the real usable height after it, E has to fit in what is left.
+   E (mandatory, the owner's main point; B, the target bracket, is folded in): the close-up becomes a
+   world-space engagement stage (real positions and headings, no camera rotation, the same drag as
+   TAC through `readDrag`) plus a cutaway dock of both forms (`CUTAWAY · NOT TO SCALE`, mine left,
+   theirs mirrored right). One pointer router on the close-up canvas: the region is fixed at
+   pointerdown; world drags steer, dock taps target or inspect; one gesture, one order. The camera
+   fits both ships, every live projectile, the slug's `{tx, ty}` and recent hit/miss/intercept points
+   for about 0.6 to 0.9 s; zoom out at once, zoom in slowly; no min scale that breaks the fit. The dock
+   only plays local penetration entry → cell → exit and room consequence; remove the distance-share
+   torpedo mapping and the `W + 60` rail miss. `roomBracket` on the enemy target in the dock, with a
+   dark under-stroke. Do not hard-code the 130 px; world and dock split what D leaves; text >= 11 px.
+   C: every button says why it cannot act (`OUT 12/10`, `NEED BOW`, `12s`, `NO SENSORS`, `DRIVE GONE`,
+   `LOCKED: AIM`), not only opacity; `--dim` about #8ea1b5; hints >= 10.5 px; both views.
+   Acceptance: phone 844 x 390 at dpr 1 and 2.6; desktop 1440 x 900 only a smoke test (BRIEF: no
+   desktop layout). Parked in NOTES: CMD vector, threat ticks, close-up Burn burst, reduced motion,
+   help responsive, hangar. FX groups offered before (wounds, big moments) wait behind this.
 1. Done (PR 30): half the cells cut = beaten, the duplicate tear fixed. Next the owner plays
    PR 28 (Guard at 0.375) and PR 30 and says: can the grid be read, does cover make a
    decision, does one torpedo in a salvo landing feel right, does a split hull end right.

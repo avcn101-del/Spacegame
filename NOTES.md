@@ -49,3 +49,8 @@ Ideas go here. They are not built until the owner asks.
   order in the sim, a replay version, and the steering decision handed to the
   autopilot. Parked: first the firing arcs while dragging (PR 33); build only
   if steering still feels like work after that.
+- From the owner's HUD/FX playtest and blueprint (2026-11-01), parked, not in A, D, E or C:
+  a persistent CMD vector (dashed, `CMD`) apart from the actual velocity; threat direction
+  ticks and torpedo count/ETA; a dedicated Burn burst in the close-up world stage; reduced
+  motion (no shake, white flash, blink); help responsive (one column on the phone, groups);
+  hangar stats bigger. Build each only when the owner asks after a battle.

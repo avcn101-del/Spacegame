@@ -52,6 +52,7 @@ const hud = makeHud({
   },
   onView() { setView(view === 'tac' ? 'closeup' : 'tac'); },
   onPause() { paused = !paused; },
+  onHelp() { paused = true; },
   onResume() { paused = false; },
   onRestart() { start(); },
   onNew() { seed = (seed * 7919 + 13) % 100000; start(); },
