@@ -334,6 +334,9 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    identical; dock drag no order, dock taps target / inspect; a real AUTO fight per viewport with 0 required points
    outside the safe rect, result overlay, replay reproduces the result; bloom drawn-light order holds; selfplay
    deterministic, arena identical to main. Next: the owner plays H, then G2.
+   Perf overlay (PR 49, debug): `?perf=1` shows `perf()` as one line over the CLOCK / RANGE corner (inside the 34 px
+   header band), once a second; tap it to reset. No element without the flag; every #game rect identical with and without.
+   For the phone run of H: open `?perf=1`, fight a knife fight, read work95 / frame95 at dpr 2.6.
    Acceptance: phone 844 x 390 at dpr 1 and 2.6; desktop 1440 x 900 only a smoke test (BRIEF: no
    desktop layout). Parked in NOTES: CMD vector, threat ticks, close-up Burn burst, reduced motion,
    help responsive, hangar. FX groups offered before (wounds, big moments) wait behind this.

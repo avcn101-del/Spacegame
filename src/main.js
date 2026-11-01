@@ -127,6 +127,21 @@ function perf() {
 }
 perf.reset = () => { perfGap.length = 0; perfWork.length = 0; };
 const perfPush = (a, v) => { a.push(v); if (a.length > PERF_N) a.shift(); };
+// ?perf=1: perf() as one line over the CLOCK / RANGE corner of the header, once a second, so a phone
+// run gives the number. Tap it to reset the window. Debug only: no element, timer or style without the flag.
+// It sits inside the header band (display-only numbers), so it covers no button and no part of the stage.
+if (params.get('perf') === '1') {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:0;left:0;z-index:20;max-width:380px;height:14px;padding:0 6px;'
+    + 'font:10px/14px "SF Mono",Menlo,Consolas,monospace;color:#9fe0b0;background:rgba(5,7,12,0.7);'
+    + 'white-space:nowrap;overflow:hidden;cursor:pointer;';
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); perf.reset(); el.textContent = 'perf reset'; });
+  document.body.appendChild(el);
+  setInterval(() => {
+    const p = perf();
+    el.textContent = `dpr ${r1(p.dpr)} · work95 ${p.workP95} · frame95 ${p.frameP95} ms · ${p.fps} fps · ${p.frames} f`;
+  }, 1000);
+}
 
 let last = performance.now();
 function frame(now) {
