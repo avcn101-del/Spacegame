@@ -7,7 +7,7 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow: hidden; }
 #game { position: fixed; inset: 0; pointer-events: none; }
 #game > * { pointer-events: auto; }
-header { position: absolute; top: 0; left: 0; right: 0; height: var(--top); display: grid; grid-template-columns: 90px 130px 1fr 110px 84px 60px; align-items: center; gap: 8px; padding: 2px 8px; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); background: linear-gradient(rgba(5,7,12,0.85), rgba(5,7,12,0)); }
+header { position: absolute; top: 0; left: 0; right: 0; height: var(--top); display: grid; grid-template-columns: 90px 130px 1fr 110px 84px 84px 60px; align-items: center; gap: 8px; padding: 2px 8px; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); background: linear-gradient(rgba(5,7,12,0.85), rgba(5,7,12,0)); }
 #title { text-align: center; letter-spacing: 0.3em; color: var(--dim); font-size: 12px; }
 #phase { text-align: right; font-size: 11px; color: var(--dim); letter-spacing: 0.15em; }
 .num { display: flex; flex-direction: column; line-height: 1; }
@@ -57,7 +57,7 @@ nav button.progress::after { content: ""; position: absolute; left: 0; bottom: 0
 /* a weapon button wears its room's colour (form.js ROOM_COLORS), the same as its arc and its room in the dock */
 #btn-rail { --accent: rgb(143,208,255); } #btn-torps { --accent: rgb(255,84,110); } #btn-guard, #btn-rake { --accent: rgb(255,208,112); }
 #btn-rail .label, #btn-torps .label, #btn-guard .label, #btn-rake .label { color: var(--accent); }
-#pause, #help { height: 26px; font-size: 11px; letter-spacing: 0.15em; }
+#view, #pause, #help { height: 26px; font-size: 11px; letter-spacing: 0.15em; }
 #pause.on { border-color: var(--ok); color: var(--ok); }
 /* paused is a badge in the title slot, not a modal: the world stage, the dock and the buttons still take orders */
 #title.paused { color: var(--ok); letter-spacing: 0.15em; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -103,6 +103,10 @@ nav#orders.replay button { pointer-events: none; }
 
 /* The one view: the world stage on top (real positions, drag to steer), the cutaway dock below (tap rooms). */
 /* explicit height: a canvas with height auto takes its pixel buffer's height, which grows with devicePixelRatio on a phone */
+/* Two views (PR 55): TAC, the map over the whole screen (body.tac), and the close-up (stage and dock). */
+#tactical { position: fixed; inset: 0; width: 100vw; height: 100dvh; display: none; touch-action: none; }
+body.tac #tactical { display: block; }
+body.tac #closeup-wrap { display: none; }
 #closeup-wrap { display: flex; position: absolute; left: 0; right: 0; top: var(--top); height: calc(100dvh - var(--top) - var(--bottom) - var(--status)); flex-direction: column; }
 #cu-world { flex: 1 1 auto; min-height: 0; width: 100%; display: block; touch-action: none; }
 #closeup { flex: 0 0 auto; height: clamp(96px, 40%, 150px); width: 100%; display: block; touch-action: none; border-top: 1px solid var(--line); }

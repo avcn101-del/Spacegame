@@ -6,17 +6,17 @@ in Vietnamese mixed with English; answer short, verified facts only, say
 "I don't know" when you don't, raise problems before doing work. Before any
 work longer than about an hour, give the estimate and wait for go.
 
-## Now (handover, 2026-11-01, after PR 54)
+## Now (handover, 2026-11-01, after PR 55)
 
-- Merged and accepted before: H (PR 48, one view), `?perf=1` (PR 49), dpr cap 2 (PR 50), camera floor + wedge
-  (PR 51), docs (PR 52). The phone measurement passed (frame95 33.3 ms accepted); the vignette-off PR 53 was closed
-  and the FX cut order is dropped.
-- PR 54, the anchored stage (ARCHITECTURE "Anchored stage"): below 18 px/km (out at 22) my ship is pinned at 30 %
-  or 70 % of the stage width at 9 px/km, in every mode; ruler rings 1 / 2 / 4 / 8 km round my ship (my torpedo ring
-  gone, my PDC ring kept); their range always shown (label under their mark, or the wedge); one toast line.
-  Waiting on the owner's phone playtest. G2 (audio) stays frozen until then. Nothing else starts.
-- Old remote branches (14 `claude/*`, all closed PRs) could not be deleted from the session (the git proxy
-  refuses pushes to any branch but the session's own, 403); the owner deletes them on GitHub.
+- Merged and accepted before: H (48), `?perf=1` (49), dpr cap 2 (50), camera floor + wedge (51), docs (52); the
+  phone perf passed (frame95 33.3 ms), the FX cut order is dropped (PR 53 closed). PR 54, the anchored stage, merged.
+- The owner after playing 54: the stage strip cannot replace TAC at range (physics: 12 km vertical in ~108 px).
+  PR 55 brings TAC back as a second view (ARCHITECTURE "TAC back as a second view"): the map over the whole screen,
+  TAC on load, VIEW in the header, drag to steer, tap their mark to cycle the target; the close-up is PR 54's.
+  Also fixed: the wedge shows when their mark is cut by the stage edge (the owner's seed 85898 screenshot).
+- Waiting on the owner's phone playtest of both views. G2 (audio) stays frozen until then. Nothing else starts.
+- Old remote branches (14 `claude/*`, all closed PRs) could not be deleted from the session (the git proxy refuses
+  pushes to any branch but the session's own, 403); the owner deletes them on GitHub.
 - Checks that worked this session (scripts are ad hoc, not in the repo): serve the branch on :8123 and origin/main from
   a git worktree on :8124 (`python3 -m http.server`); compare rects with both pages PAUSED (running pages differ in
   clock/range text); compare drag orders by heading/speed within 1e-6, never by `t`, and keep test drags off the
@@ -49,10 +49,12 @@ work longer than about an hour, give the estimate and wait for go.
   for one fit, and Playwright at 844 x 390 with
   `/opt/node-tools/node_modules/playwright/index.js` (CommonJS default
   import, `hasTouch`, `isMobile`) against `python3 -m http.server 8123`;
-  `window.game` exposes `battle`, `cuWorld` (the world stage: `shipScreen`,
+  `window.game` exposes `battle`, `tactical` (TAC, same API as `cuWorld`), `setView('tac' | 'closeup')`, `view()`,
+  `cuWorld` (the world stage: `shipScreen`,
   `toScreen`, `requiredPoints`, `safeRect`, `cameraState`), `closeup` (the dock:
   `roomAt(x, y)` -> `{side, room}`, `threats()`), `exportReplay()`, `perf()`
-  (one view since PR H: no `tactical`, `panels` or `setView`). Force a tear in the browser with
+  (no `panels`: PR H removed them and PR 55 did not bring them back). Pages open in TAC: call
+  `game.setView('closeup')` before close-up probes. Force a tear in the browser with
   `b.pieceDied(ship, 'pdc2', 'torp')` after setting the room dead.
 - Parallel work (the owner asked, to save quota): the parent session writes the contract
   into ARCHITECTURE.md, then spawns an Opus agent for `src/sim` and a Sonnet agent for

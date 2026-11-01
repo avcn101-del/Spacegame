@@ -358,6 +358,7 @@ Decoration only: never reads input, never writes battle; no `Math.random` (flick
 
 ## One view (PR H, 2026-11-01, render and input only)
 
+(PR 55 brought TAC back as a second view, map only; see "TAC back as a second view".)
 The close-up was a superset of TAC (world stage = map, dock = silhouette panels), so it is the only view.
 The sections above that mention TAC, the side panels, `--side`, the VIEW button or `VIEWS` are history.
 - Deleted: the `#tactical` canvas and its `makeTactical` instance, the two side panels (`#panel-me`,
@@ -391,6 +392,35 @@ scale that breaks the fit".) Now:
   The owner decided (2026-11-01): one rule in every mode, the wedge shows whenever they are off the stage, not only at
   the floor; revisit only if it flickers on the phone when they hug the edge.
 - `railMiss` points are the slug's end, 0.6 km off the target (`weapons.js`), not far away; they did not cause this.
+
+## TAC back as a second view (PR 55, 2026-11-01, render and input only)
+
+The owner, after playing PR 54: the world stage is about 108 CSS px tall on the phone, so 12 km of vertical
+separation cannot fit at a readable scale; the floor, wedge, rings and labels treat symptoms. H is rolled back in
+part: TAC, the map over the whole screen, is back as a view. The close-up stays as PR 54 left it (the knife view).
+- `index.html`: `<canvas id="tactical">` before `#game`, `<button id="view">` in the header between PHASE and PAUSE
+  (where it was before H). `style.css`: `#tactical` fixed over the screen, shown only under `body.tac`, which hides
+  `#closeup-wrap`; the header grid gets its 84 px column back. Nothing else in the layout changed: against main
+  in the close-up view every rect is the same except the header (`#title` 92 px narrower, `#phase` 92 px left,
+  `#view` new). No panels: the dock covers what they showed.
+- `main.js`: a second `makeTactical` with the default camera (centre between the ships, fit at 78 % x 72 % of the
+  view, clamped to `V.MIN_SCALE` 9 and `V.MAX_SCALE` 55 px/km), small 14 px marks, not quiet (TAC has no dock to
+  carry the shake and flash). Its inset is the HUD: `--top` above, `--bottom` + `--status` below, 8 px at the sides.
+  `VIEWS = {tac: [tactical], closeup: [cuWorld, closeup]}`; events and draws go only to the view on show, and
+  `setView` resets the renderers of the view it shows, so nothing frozen while hidden replays. TAC on load, no
+  storage. Drag steers on both maps (`move()`, one dispatch; each drag acts only in its own view).
+  `window.game` adds `tactical`, `setView(v)` and `view()`; `perf()` reports `view`.
+- Targeting on TAC: a tap within `TAP_MARK_PX` (24) of their mark picks the next standing room of theirs, in
+  `roomOrder` (rail, sensors, pdc1 to pdc6, bridge, crew, tubes, drive), round again after the last; it goes through
+  `tapThem`, so the order, refusals, toasts and the `TARGET · THEIR X` line are the dock's. With one room left a
+  tap toggles it (the dock's rule). Clearing a target: tap it again in the dock.
+- Readouts on both views: `drawBearing` runs for TAC too (their range under their mark; the wedge only as insurance:
+  at 9 px/km the TAC stage holds about 22 km of vertical separation at 844 x 332, past `ESCAPE_RANGE` 20). The
+  stage for the wedge, the label and the ruler labels is the view rect (the canvas on the close-up, so nothing
+  moved there; on TAC the part the HUD does not cover). Ruler rings and my PDC ring are shared code.
+- Fix (close-up): the wedge now shows when their mark is not all on the stage, not only when its centre is off.
+  Anchored near the threshold (their separation a little past what the stage holds at 9 px/km) their mark sat half
+  cut by the edge with no wedge: a 16 to 6 km vertical sweep at 844 x 390 had 524 such frames on main, 0 now.
 
 ## Anchored stage (PR 54, 2026-11-01, render only)
 
@@ -433,7 +463,7 @@ target and edge indicators, mapped to our top-down stage. No sim, AI, RNG, `numb
 - `canvas.js`: `makeTactical(canvas, opts)` returns `{draw, onEvent, reset,
   toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect, cameraState, bearing, rangeLabel,
   rulerLabels}`
-  (one instance since PR H: the world stage). `closeup.js`: `makeCloseup(canvas)`
+  (two instances since PR 55: TAC and the close-up's world stage). `closeup.js`: `makeCloseup(canvas)`
   returns `{draw, onEvent, reset, roomAt, setInspect, threats}`. They own their
   own particles, shake and flashes. They never mutate battle.
 - Movement: one `move` order `{heading, speed}`: the hull swings to the
