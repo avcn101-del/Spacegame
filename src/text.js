@@ -6,7 +6,7 @@ const num = (v) => String(Math.round(v * 10) / 10); // plain: no decimals unless
 export const T = {
   title: 'ROCINANTE',
   ships: { me: 'Rocinante', them: 'Pella' },
-  numbers: { range: 'RANGE', torps: 'TORPS', burns: 'BURNS', clock: 'CLOCK' },
+  numbers: { range: 'RANGE', clock: 'CLOCK' },
   phase: { approach: 'APPROACH', knife: 'KNIFE FIGHT', break: 'BREAK' },
   buttons: {
     hold: 'HOLD',
@@ -41,7 +41,6 @@ export const T = {
     tear: 'A dead room is a hole. Rooms cut off from the bridge by it tear off and drift away. A dead PDC mount is one gun fewer, nothing tears. The bridge sits in the middle: crew dead loses the stern (tubes, their torpedoes, drive).',
     tap: 'TAP a room on their ship to go for it: torpedoes swing wide to reach a room that is not exposed (longer inside their PDCs), PDCs chew it only when they are broadside. Tap it again to clear. Tap a room on your ship to see what it does.',
   },
-  view: { closeup: 'CLOSE-UP', tac: 'TAC' },
   pause: 'PAUSE', resume: 'RESUME', restart: 'RESTART', newBattle: 'NEW BATTLE',
   pausedTitle: 'HELP. THE GAME IS PAUSED.',
   pausedBadge: 'PAUSED · ORDERS ON', pausedShort: 'PAUSED', help: 'HELP',

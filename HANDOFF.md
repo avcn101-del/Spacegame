@@ -29,8 +29,10 @@ work longer than about an hour, give the estimate and wait for go.
   for one fit, and Playwright at 844 x 390 with
   `/opt/node-tools/node_modules/playwright/index.js` (CommonJS default
   import, `hasTouch`, `isMobile`) against `python3 -m http.server 8123`;
-  `window.game` exposes `battle`, `tactical`, `panels.me/them` (with
-  `roomAt(x, y)`), `exportReplay()`. Force a tear in the browser with
+  `window.game` exposes `battle`, `cuWorld` (the world stage: `shipScreen`,
+  `toScreen`, `requiredPoints`, `safeRect`, `cameraState`), `closeup` (the dock:
+  `roomAt(x, y)` -> `{side, room}`, `threats()`), `exportReplay()`, `perf()`
+  (one view since PR H: no `tactical`, `panels` or `setView`). Force a tear in the browser with
   `b.pieceDied(ship, 'pdc2', 'torp')` after setting the room dead.
 - Parallel work (the owner asked, to save quota): the parent session writes the contract
   into ARCHITECTURE.md, then spawns an Opus agent for `src/sim` and a Sonnet agent for
@@ -321,10 +323,17 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    PR H (the owner, 2026-11-01): merge the two views. The close-up is a superset of TAC (world stage = map, dock =
    silhouette panels): delete the TAC view, the side silhouette panels and the VIEW toggle; the close-up layout is the
    only layout at every viewport. Audit before deleting: hangar / replay / result / auto flows, the `.panel.hit`
-   feedback (reduced-motion references it), range-ring and arc parity in the world stage, every test that references
+   feedback (no code references it besides `hud.hit`; reduced motion is only a parked item in NOTES), range-ring and arc parity in the world stage, every test that references
    TAC. Update ARCHITECTURE / HANDOFF / STATUS. Sim untouched, selfplay deterministic, A to F and G1 behaviours keep
    passing on the one view at 844 x 390 (dpr 1 and 2.6) and 1440 x 900. Over an hour: give the estimate and wait.
    G2 starts only after H is merged and played.
+   H done (PR 48): one view (ARCHITECTURE "One view"). Deleted TAC, the side panels, VIEW, `hud.hit`/`.panel.hit`;
+   the close-up layout everywhere (50 px buttons, no hint line). `start()` resets the world stage too. Measured against
+   main's close-up (844 x 390 dpr 2.6 and 1, 1440 x 900): every rect identical except `#title` (+92 px wide) and `#phase`
+   (+92 px right), the VIEW column gone; drag orders equal (heading and speed within 1e-6, stop drag); threat tick rects
+   identical; dock drag no order, dock taps target / inspect; a real AUTO fight per viewport with 0 required points
+   outside the safe rect, result overlay, replay reproduces the result; bloom drawn-light order holds; selfplay
+   deterministic, arena identical to main. Next: the owner plays H, then G2.
    Acceptance: phone 844 x 390 at dpr 1 and 2.6; desktop 1440 x 900 only a smoke test (BRIEF: no
    desktop layout). Parked in NOTES: CMD vector, threat ticks, close-up Burn burst, reduced motion,
    help responsive, hangar. FX groups offered before (wounds, big moments) wait behind this.

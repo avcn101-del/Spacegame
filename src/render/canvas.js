@@ -1,20 +1,20 @@
-// Tactical strip and silhouette panels: cameras, particles, shake and the
-// impact spectacle. Reads battle state and events, never writes battle.
+// The world stage (makeTactical) and the shared effects store (makeFx, also the dock's): camera,
+// particles, shake and the impact spectacle. Reads battle state and events, never writes battle.
 // Everything here advances on dtReal (real seconds): pause passes 0 and
 // freezes every effect, slow-mo stretches the sim while effects keep pace.
 // No Math.random: a counter fed through a small hash gives "random" numbers
 // that are the same sequence every run.
 
 import { N } from '../numbers.js';
-import { exposure, alive, pdcRooms, mountSide, shotFrom } from '../sim/ship.js';
+import { alive, pdcRooms, mountSide } from '../sim/ship.js';
 import { drawArcs, drawPdcCounts, railKm } from './arcs.js';
 import { drawShipMark, COLORS } from './silhouette.js';
-import { drawForm, roomPoint, roomBounds, roomAtPoint, roomBracket, roomColor } from './form.js';
+import { roomColor } from './form.js';
 import { BLOOM, bloom, drawPlume, makeLitSprites, makeVignette, makeStarfield } from './look.js';
 
 // Visual-only knobs. Not game numbers, so they live here, not in numbers.js.
 const V = {
-  PARTICLE_CAP: 400,   // per panel; keeps draw cost modest on a phone
+  PARTICLE_CAP: 400,   // per canvas; keeps draw cost modest on a phone
   MAX_DT: 0.1,         // clamp a long frame (tab switch) so effects do not jump
   TRACER_TTL: 0.12,    // matches the ttl weapons.js gives tracers; places the streak along the line
   MIN_SCALE: 9,        // px per km; ships never shrink to nothing
@@ -87,9 +87,9 @@ export function fit(canvas, ctx) {
 // --- the effects store: particles, rings, flashes, streaks, shake ------------
 //
 // Every effect has an anchor (ax, ay) in "anchor space" plus a pixel offset.
-// toScreen(ax, ay) maps the anchor to canvas px. The tactical view anchors in
-// world km so effects ride along with ships and camera; the silhouette panel
-// anchors in panel px (identity).
+// toScreen(ax, ay) maps the anchor to canvas px. The world stage anchors in
+// world km so effects ride along with ships and camera; the dock anchors in
+// canvas px (identity).
 
 export function makeFx(toScreen) {
   const parts = [], rings = [], flashes = [], streaks = [];
@@ -320,7 +320,7 @@ export function makeFx(toScreen) {
   };
 }
 
-// The big-hit recipe shared by both panels. k scales size; 1 = torpedo.
+// The big-hit recipe of the world stage. k scales size; 1 = torpedo.
 // a = anchor, dir = direction (radians) the hit came from, for the debris cone.
 function bigImpact(fx, a, k, o = {}) {
   fx.flash(a, { x: o.x, y: o.y, r: 22 * k, grow: 30 * k, life: 0.45, col: C.white, col2: C.fire });
@@ -1105,352 +1105,4 @@ export function makeTactical(canvas, opts = {}) {
   }
 
   return { draw, onEvent, reset, toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect, cameraState };
-}
-
-// --- silhouette panel --------------------------------------------------------------
-
-// One ship's form (its cell grid, form.js) filling the canvas, bow up, rooms lit or dark,
-// with the impact spectacle anchored in panel px. shipId is 'me' or 'them'. The panel is
-// always the tall thin one on the phone's short edge (opts.orientation is kept, ignored).
-const PANEL = {
-  PAD: 4,          // px around the grid, sides
-  SIDE_PAD: 9,     // px each side kept free for the side chevrons
-  FORE: 12,        // px above the bow for the bow chevron and the muzzle
-  AFT: 22,         // px below the stern for the tail chevron and the plume
-  CELL_ASPECT: 1.8, // widest a cell may be against its height: 1 is square cells; 130 px panels let it be about 10 x 5.4 px
-};
-export function makeSilhouettePanel(canvas, shipId, opts = {}) {
-  const ctx = canvas.getContext('2d');
-  let w = 0, h = 0, time = 0;
-  let box = null, facing = shipId === 'them' ? -1 : 1, layoutFacing = 0, layoutDesign = null;
-  const toScreen = (ax, ay) => ({ x: ax, y: ay });
-  const fx = makeFx(toScreen);
-  const flash = {};      // room -> 0..1, decays each frame; keys appear as rooms are hit
-  const embers = [];     // lingering glow on dead rooms: {piece, ttl, life}
-  const pending = [];    // delayed effects: {kind: 'death' | 'spill', piece, delay}
-  let ship = null;       // the ship from the last draw, read-only (exposure for effect directions)
-  const bump = (piece, v) => { flash[piece] = Math.max(flash[piece] || 0, v); };
-  const shortSide = () => Math.min(box.w, box.h); // the hull thickness in px, the effects' scale unit
-
-  // The grid box: cells fill the panel, rows bow to stern top to bottom, with room above for
-  // the bow chevron and below for the plume. Cell height is what the height allows; the width
-  // is what the panel allows, at most CELL_ASPECT times the height.
-  function layout() {
-    const form = ship ? ship.form : { w: 28, h: 9 };
-    const cols = form.h, rows = form.w;
-    const ch = Math.max(1, (h - 2 * PANEL.PAD - PANEL.FORE - PANEL.AFT) / rows);
-    const cw = Math.max(1, Math.min((w - 2 * PANEL.SIDE_PAD) / cols, ch * PANEL.CELL_ASPECT));
-    const bh = ch * rows, slack = (h - 2 * PANEL.PAD - PANEL.FORE - PANEL.AFT - bh) / 2;
-    box = { x: (w - cw * cols) / 2, y: PANEL.PAD + PANEL.FORE + Math.max(0, slack), w: cw * cols, h: bh };
-    layoutFacing = facing;
-    layoutDesign = ship ? ship.design : null;
-  }
-  // Events can arrive before the first draw: lay out from the element size.
-  function ensureBox() {
-    if (box) return;
-    w = canvas.clientWidth || canvas.width || 100;
-    h = canvas.clientHeight || canvas.height || 240;
-    layout();
-  }
-  // Effects anchor at the room's cells; before the first draw there is no ship, so the middle.
-  const at = (room) => {
-    ensureBox();
-    const p = ship ? roomPoint(ship, room, box) : { x: box.x + box.w / 2, y: box.y + box.h / 2 };
-    return { ax: p.x, ay: p.y };
-  };
-  // Named points around the grid for the effects that are not on a room: the bow, the nozzle,
-  // the attitude ports at the corners, the tube bays at the edges of the tube room.
-  const mark = (name) => {
-    ensureBox();
-    const L = box.x, R = box.x + box.w, T = box.y, B = box.y + box.h, cx = (L + R) / 2;
-    const underR = facing === 1; // the burn kick leans to the underside: the right edge for 'me', the left for 'them'
-    let x = cx, y = (T + B) / 2;
-    switch (name) {
-      case 'bow': case 'muzzle': y = T; break;
-      case 'nozzle': y = B; break;
-      case 'thrusterBowTop': x = L; y = T + box.h * 0.2; break;
-      case 'thrusterBowBottom': x = R; y = T + box.h * 0.2; break;
-      case 'thrusterSternTop': x = L; y = T + box.h * 0.8; break;
-      case 'thrusterSternBottom': x = R; y = T + box.h * 0.8; break;
-      case 'underside': x = underR ? R : L; break;
-      case 'topside': x = underR ? L : R; break;
-      case 'tubeTop': case 'tubeBottom': {
-        const tb = ship && roomBounds(ship, 'tubes', box);
-        if (tb) { x = name === 'tubeTop' ? tb.x : tb.x + tb.w; y = tb.y + tb.h / 2; }
-        break;
-      }
-      default: break;
-    }
-    return { ax: x, ay: y };
-  };
-  const fwd = () => -Math.PI / 2;     // bow direction on the canvas: up
-  const aft = () => fwd() + Math.PI;  // stern direction
-  // direction pointing out of the hull at a named point (thruster puffs)
-  const outward = (name) => {
-    const m = mark(name);
-    return Math.atan2(m.ay - (box.y + box.h / 2), m.ax - (box.x + box.w / 2));
-  };
-  // the side the broadside chevrons sit on, as a canvas direction: right for 'me', left for 'them'
-  let foe = null; // the other ship from the last draw: which broadside faces it
-  const sideDir = () => {
-    const f = ship && foe ? shotFrom(ship, foe.x, foe.y) : null, topLeft = facing === 1; // row 0 ('top') is the left column for facing +1
-    const left = f === 'top' ? topLeft : f === 'bottom' ? !topLeft : facing !== 1;
-    return left ? Math.PI : 0;
-  };
-  // Travel direction of enemy fire across this panel: down the hull from the
-  // bow when bow-on, up from the stern when tail-on, across it when broadside.
-  const incomingDir = () => {
-    const e = ship && ship.face ? exposure(ship) : 'bow';
-    return e === 'tail' ? fwd() : e === 'side' ? sideDir() + Math.PI : aft();
-  };
-
-  function draw(battle, dtReal) {
-    const dt = clamp(dtReal || 0, 0, V.MAX_DT);
-    time += dt;
-    const size = fit(canvas, ctx);
-    if (!size) return; // hidden or mid-rotation: skip; layout is redone when a size comes back
-    ship = battle.shipById ? battle.shipById(shipId) : battle.ships.find((s) => s.id === shipId);
-    const enemy = battle.enemyOf ? battle.enemyOf(ship) : battle.ships.find((s) => s !== ship);
-    foe = enemy;
-    facing = ship.facing === -1 ? -1 : 1;
-    if (size.w !== w || size.h !== h || !box || layoutFacing !== facing || layoutDesign !== ship.design) { w = size.w; h = size.h; layout(); }
-
-    // timers
-    for (const p in flash) if (flash[p] > 0) flash[p] = Math.max(0, flash[p] - dt * 3.5);
-    for (let i = pending.length - 1; i >= 0; i--) {
-      pending[i].delay -= dt;
-      if (pending[i].delay <= 0) {
-        const p = pending.splice(i, 1)[0];
-        if (p.kind === 'spill') spill(p.piece); else secondary(p.piece);
-      }
-    }
-    for (let i = embers.length - 1; i >= 0; i--) { embers[i].ttl -= dt; if (embers[i].ttl <= 0) embers.splice(i, 1); }
-    fx.step(dt);
-
-    // the one cue that matters: their railgun is aiming at this ship
-    const warnP = enemy && enemy.railAim >= 0 && enemy.pieces.rail.alive ? clamp01(enemy.railAim / N.RAIL_AIM_TIME) : 0;
-    const warn = warnP > 0 ? (0.35 + 0.65 * warnP) * (0.6 + 0.4 * Math.sin(time * (6 + 14 * warnP))) : 0;
-
-    ctx.fillStyle = COLORS.bg;
-    ctx.fillRect(0, 0, w, h);
-    // a faint cool haze behind the ship so the steel separates from the black
-    const hz = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.55);
-    hz.addColorStop(0, 'rgba(60,90,130,0.10)');
-    hz.addColorStop(1, 'rgba(60,90,130,0)');
-    ctx.fillStyle = hz;
-    ctx.fillRect(0, 0, w, h);
-
-    const so = fx.shakeOffset(time);
-    ctx.save();
-    ctx.translate(so.x, so.y);
-    // which side faces them: the broadside chevrons go on that side (top or bottom of the form)
-    const from = enemy ? shotFrom(ship, enemy.x, enemy.y) : null;
-    drawForm(ctx, ship, box, { flash, t: time, warn, from });
-    // the room the other side's weapons are going for, in that side's color
-    const aimed = enemy && enemy.target && ship.pieces[enemy.target] && ship.pieces[enemy.target].alive ? enemy.target : null;
-    if (aimed) roomBracket(ctx, ship, aimed, box, shipId === 'them' ? COLORS.me : COLORS.them, time);
-    // lingering embers on freshly dead pieces
-    if (embers.length) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      for (const e of embers) {
-        const p = roomPoint(ship, e.piece, box);
-        const k = e.ttl / e.life;
-        const r = shortSide() * 0.16;
-        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-        const pulse = 0.7 + 0.3 * Math.sin(time * 5 + e.ph);
-        g.addColorStop(0, `rgba(255,150,60,${0.55 * k * pulse})`);
-        g.addColorStop(0.5, `rgba(255,90,20,${0.2 * k * pulse})`);
-        g.addColorStop(1, 'rgba(255,60,0,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.2832); ctx.fill();
-      }
-      ctx.restore();
-    }
-    fx.draw(ctx);
-    ctx.restore();
-
-    // red warning vignette around the panel edge
-    if (warn > 0.01) {
-      ctx.save();
-      ctx.strokeStyle = rgba(C.warn, warn * 0.8);
-      ctx.lineWidth = 3;
-      ctx.shadowBlur = 14;
-      ctx.shadowColor = COLORS.warn;
-      ctx.strokeRect(1.5, 1.5, w - 3, h - 3);
-      ctx.restore();
-    }
-    const wa = fx.white();
-    if (wa > 0) { ctx.fillStyle = `rgba(255,240,225,${wa})`; ctx.fillRect(0, 0, w, h); }
-  }
-
-  // the room behind the one hit took half the blow: a smaller flash a beat later
-  function spill(piece) {
-    const a = at(piece);
-    const k = shortSide() / 90;
-    bump(piece, 0.5);
-    fx.flash(a, { r: 11 * k, grow: 14 * k, life: 0.3, col: C.hot, col2: C.fire });
-    fx.sparks(a, 6, { speedMin: 50 * k, speedMax: 140 * k, lifeMin: 0.15, lifeMax: 0.35, size: 1.2, col: C.fire });
-    fx.smoke(a, 2, {});
-  }
-
-  // second blast 0.15 s after a piece dies, then the ember lingers
-  function secondary(piece) {
-    const a = at(piece);
-    const k = shortSide() / 90; // scale effects with panel size
-    bump(piece, 0.7);
-    fx.flash(a, { r: 18 * k, grow: 30 * k, life: 0.4, col: C.hot, col2: C.fire });
-    fx.ring(a, { r0: 2, vr: 140 * k, life: 0.5, width: 2, col: C.fire });
-    fx.debris(a, 14, { speedMin: 40 * k, speedMax: 170 * k });
-    fx.sparks(a, 14, { speedMin: 80 * k, speedMax: 220 * k, col: C.fire });
-    fx.embers(a, 10, {});
-    fx.smoke(a, 5, {});
-    fx.shakeIt(4 * k, 0.3);
-    fx.whiteFlash(0.18);
-    embers.push({ piece, ttl: 4, life: 4, ph: fx.rnd() * 6.28 });
-  }
-
-  function onEvent(ev) {
-    const mine = ev.ship === shipId;   // this ship took the hit
-    const byMe = ev.by === shipId;     // this ship fired
-    if (!mine && !byMe) return;
-    ensureBox();
-    const k = shortSide() / 90;
-    switch (ev.type) {
-      case 'pdcHit': {
-        if (!mine) break;
-        const a = at(ev.piece);
-        bump(ev.piece, 0.35);
-        fx.sparks(a, 4, { speedMin: 60 * k, speedMax: 150 * k, lifeMin: 0.15, lifeMax: 0.35, size: 1.2 });
-        fx.flash(a, { r: 5 * k, life: 0.08, col: C.hot, col2: C.spark });
-        break;
-      }
-      case 'torpHit': {
-        if (!mine) break;
-        const a = at(ev.piece);
-        bump(ev.piece, 1);
-        bigImpact(fx, a, 1.0 * k, { away: incomingDir() });
-        if (ev.spill) pending.push({ kind: 'spill', piece: ev.spill, delay: 0.1 });
-        break;
-      }
-      case 'railHit': {
-        if (!mine) break;
-        const a = at(ev.piece);
-        bump(ev.piece, 1);
-        const ang = incomingDir();
-        bigImpact(fx, a, 1.3 * k, { away: ang });
-        // the slug's path straight through the ship, from the exposed end
-        const tilt = (fx.rnd() - 0.5) * 0.3;
-        fx.streak(a, { dx: Math.cos(ang + tilt), dy: Math.sin(ang + tilt), len: Math.max(box.w, box.h) * 1.8, life: 0.35, width: 3 * k });
-        fx.ring(a, { r0: 2, vr: 360 * k, life: 0.3, width: 1.5, col: C.white });
-        fx.shakeIt(9 * k, 0.45);
-        if (ev.spill) pending.push({ kind: 'spill', piece: ev.spill, delay: 0.1 });
-        break;
-      }
-      case 'pieceDead': {
-        if (!mine) break;
-        bump(ev.piece, 0.8);
-        const a = at(ev.piece);
-        // a frame room dies often and quietly: its cells flash and a few chips fly, no blast, no ember
-        if (ev.piece.startsWith('frame:')) {
-          fx.debris(a, 4, { speedMin: 30 * k, speedMax: 90 * k });
-          fx.smoke(a, 2, {});
-          break;
-        }
-        fx.debris(a, 8, { speedMin: 30 * k, speedMax: 110 * k });
-        fx.smoke(a, 4, {});
-        pending.push({ kind: 'death', piece: ev.piece, delay: 0.15 });
-        break;
-      }
-      case 'tear': {
-        if (!mine) break;
-        // the section parts from the hull: a flash along the tear and heavy debris flying out the end
-        const endName = ev.end === 'bow' ? 'bow' : 'nozzle';
-        const a = mark(endName);
-        const dir = ev.end === 'bow' ? fwd() : aft();
-        fx.flash(a, { r: 24 * k, grow: 30 * k, life: 0.5, col: C.white, col2: C.fire });
-        fx.debris(a, 18, { dir, spread: 1.2, speedMin: 40 * k, speedMax: 160 * k, lifeMin: 1.5, lifeMax: 3, sizeMin: 2.5 * k, sizeMax: 6 * k });
-        fx.smoke(a, 10, {});
-        fx.shakeIt(12 * k, 0.6);
-        break;
-      }
-      case 'railMiss':
-      case 'torpMiss': {
-        if (!mine) break;
-        // the shot streaks past, just off the hull, no flash: alongside when
-        // end-on, past the bow or the stern when broadside
-        const torp = ev.type === 'torpMiss';
-        const side = fx.rnd() < 0.5 ? -1 : 1;
-        const ang = incomingDir() + side * 0.05;
-        const across = ship && ship.face && exposure(ship) === 'side';
-        const p = across
-          ? { x: box.x + box.w / 2, y: side > 0 ? box.y - 6 : box.y + box.h + 6 }
-          : { x: box.x + box.w * (0.5 + side * 0.525), y: box.y + box.h / 2 };
-        const a = { ax: clamp(p.x, 4, w - 4), ay: clamp(p.y, 4, h - 4) };
-        if (torp) {
-          const col = shipId === 'me' ? C.them : C.me;
-          fx.streak(a, { dx: Math.cos(ang), dy: Math.sin(ang), len: 30 * k, speed: 260 * k, life: 0.6, width: 2.5 * k, col });
-          fx.sparks(a, 4, { dir: ang + Math.PI, spread: 0.4, speedMin: 20 * k, speedMax: 60 * k, lifeMin: 0.2, lifeMax: 0.4, size: 1, col: C.fire });
-        } else {
-          fx.streak(a, { dx: Math.cos(ang), dy: Math.sin(ang), len: Math.max(w, h) * 1.4, speed: 900, life: 0.3, width: 2 });
-        }
-        break;
-      }
-      case 'turn': {
-        if (!byMe) break;
-        // thruster puffs at the four attitude ports: short, pale blue
-        for (const name of ['thrusterBowTop', 'thrusterBowBottom', 'thrusterSternTop', 'thrusterSternBottom']) {
-          const a = mark(name);
-          fx.flash(a, { r: 6 * k, life: 0.18, col: C.drive, col2: C.drive, core: 0 });
-          fx.sparks(a, 5, { dir: outward(name), spread: 0.5, speedMin: 50 * k, speedMax: 130 * k, lifeMin: 0.12, lifeMax: 0.3, size: 1.2, col: C.drive });
-        }
-        fx.shakeIt(1 * k, 0.2);
-        break;
-      }
-      case 'railFire': {
-        if (!byMe) break;
-        const a = mark('muzzle');
-        bump('rail', 0.6);
-        fx.flash(a, { r: 20 * k, grow: 30 * k, life: 0.25, col: C.white, col2: C.drive });
-        fx.sparks(a, 12, { dir: fwd(), spread: 0.5, speedMin: 200 * k, speedMax: 450 * k, lifeMin: 0.1, lifeMax: 0.25, col: C.drive });
-        fx.streak(a, { x: Math.cos(fwd()) * 30 * k, dx: Math.cos(fwd()), dy: Math.sin(fwd()), len: 60 * k, life: 0.2, width: 2 });
-        fx.shakeIt(2.5 * k, 0.15);
-        break;
-      }
-      case 'burn': {
-        if (!byMe) break;
-        // main drive flare out the back, plus a thruster puff on the side the kick leans to
-        const n = mark('nozzle');
-        bump('drive', 0.6);
-        fx.flash(n, { r: 26 * k, grow: 20 * k, life: 0.5, col: C.white, col2: C.drive, core: 1 });
-        fx.sparks(n, 26, { dir: aft(), spread: 0.6, speedMin: 150 * k, speedMax: 420 * k, lifeMin: 0.3, lifeMax: 0.7, size: 2, col: C.drive });
-        fx.sparks(n, 10, { dir: aft(), spread: 0.3, speedMin: 80 * k, speedMax: 200 * k, lifeMin: 0.2, lifeMax: 0.5, size: 1.2, col: C.white });
-        const sideName = ev.dir > 0 ? 'underside' : 'topside';
-        const side = mark(sideName);
-        fx.flash(side, { r: 10 * k, life: 0.3, col: C.white, col2: C.drive });
-        fx.sparks(side, 8, { dir: outward(sideName), spread: 0.6, speedMin: 80 * k, speedMax: 180 * k, lifeMin: 0.15, lifeMax: 0.35, col: C.white });
-        fx.shakeIt(1.5 * k, 0.3);
-        break;
-      }
-      case 'torpLaunch': {
-        if (!byMe) break;
-        bump('tubes', 0.5);
-        for (const name of ['tubeTop', 'tubeBottom']) {
-          const a = mark(name);
-          fx.flash(a, { r: 10 * k, grow: 14 * k, life: 0.28, col: C.white, col2: C.fire });
-          fx.sparks(a, 6, { dir: fwd(), spread: 0.7, speedMin: 60 * k, speedMax: 160 * k, lifeMin: 0.15, lifeMax: 0.35 });
-          fx.smoke(a, 3, {});
-        }
-        break;
-      }
-      case 'end':
-      default:
-        break;
-    }
-  }
-
-  // The room under a canvas point (CSS px, relative to the canvas), or null. For tap-a-room.
-  const roomAt = (x, y) => { ensureBox(); return ship ? roomAtPoint(ship, x, y, box) : null; };
-
-  return { draw, onEvent, roomAt };
 }

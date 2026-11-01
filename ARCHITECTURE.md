@@ -19,7 +19,7 @@ src/ships/catalog.js  the hangar's catalog: two variants per slot kind (launcher
 src/sim/ship.js       rooms, the form as cells, facing, rays (shotFrom, lineOfFire), damage, the tear rule (cutOff), "is beaten" (no bridge, half the cells cut, or no weapon)
 src/sim/orders.js     the orders: refusal() and apply(); 'move' carries {heading, speed}
 src/input/drag.js     drag on the map -> move order; input only
-src/input/tap.js      tap on a silhouette panel -> target order or room info; input only
+src/input/tap.js      tap on the dock -> target order or room info; input only
 src/sim/weapons.js    pdc, torpedo, railgun
 src/sim/battle.js     makeBattle(seed): state, step(dt), phases, result
 src/sim/stats.js      per-side counters fed by battle.emit()
@@ -29,10 +29,12 @@ src/ai/enemy.js       makeEnemy(shipId, preset): decide/apply/step, same orders
 tools/selfplay.mjs    20 seeds AI vs AI, determinism check
 tools/arena.mjs       preset vs preset over many seeds: the balance tool
 tools/replay.mjs      replay a battle JSON headless, print stats and orders
-src/render/form.js    the form drawn as a grid (vertical in a panel, horizontal in the hangar): cells lit, dark, adrift; roomAtPoint for the tap
+src/render/form.js    the form drawn as a grid (horizontal in the dock and the hangar): cells lit, dark, adrift; roomAtPoint for the tap
 src/render/hangar.js  the hangar drawing: hardpoints with their picks over the form, slotAt for the tap
-src/render/silhouette.js  Roci outline (the tactical mark and the art tables)
-src/render/canvas.js  tactical strip, tracers, impacts, debris, shake
+src/render/silhouette.js  drawShipMark (the drag ghost, the small mark) and COLORS; the art tables are dead code (cleanup PR later)
+src/render/canvas.js  the world stage (makeTactical: engage camera, marks, tracers, impacts) and makeFx (shared with the dock)
+src/render/closeup.js the cutaway dock: both forms, local hits, threat ticks, brackets, roomAt for the tap
+src/render/look.js    key light, bloom, plume, stars, vignette (G1)
 src/render/hud.js     four numbers, status deck (alerts, order summary, room inspector), toasts, buttons, mode badges, help menu (HELP opens it, pause does not), result, the hangar overlay (onFit hands the fit back; main.js keeps it in the URL `?fit=` and localStorage)
 ```
 
@@ -338,8 +340,8 @@ Decoration only: never reads input, never writes battle; no `Math.random` (flick
 - Vignette and a cool grade toward the shadow corner, world canvases only, cached per size, blitted in the
   four edge bands only. Over the scene and the fx, before the drag ghost; these canvases have no text (HUD
   is DOM). Not in the dock (its labels and ticks are canvas text).
-- `game.perf()`: frame interval and render work (ms, avg and p95) over the last 600 frames, `fps`, `view`,
-  `dpr`; `game.perf.reset()`. Debug only.
+- `game.perf()`: frame interval and render work (ms, avg and p95) over the last 600 frames, `fps`,
+  `dpr` (`view` removed in PR H); `game.perf.reset()`. Debug only.
 - Unchanged by rule: layout, hit areas, DOM geometry (Playwright: every element's rect identical to main in
   both views at 844 x 390 dpr 2.6 and 1, 1440 x 900), drag orders (same as main), no CSS transform anywhere.
 
@@ -350,20 +352,35 @@ Decoration only: never reads input, never writes battle; no `Math.random` (flick
 - Dock `boxes()`: canvas width >= `V.WIDE` (1024 px): my hull at `V.MARGIN` from the left, theirs at `V.MARGIN` from
   the right, the middle for threat ticks and labels. Below: the centred pair with `V.GAP` 40 (844 x 390 unchanged).
 
+## One view (PR H, 2026-11-01, render and input only)
+
+The close-up was a superset of TAC (world stage = map, dock = silhouette panels), so it is the only view.
+The sections above that mention TAC, the side panels, `--side`, the VIEW button or `VIEWS` are history.
+- Deleted: the `#tactical` canvas and its `makeTactical` instance, the two side panels (`#panel-me`,
+  `#panel-them`, `makeSilhouettePanel`), the VIEW button and `T.view`, `setView` / `onView` / `VIEWS`,
+  `hud.hit` and `.panel.hit` (the dock's shake and white flash carry the big hits), `--side`, `--panel`,
+  the panel's TORPS / BURNS numbers (the TORPS and BURN buttons show both in their corner).
+- Layout: the old `body.closeup` rules are the defaults at every viewport: `--bottom` 50 px, buttons with
+  no hint line (a reason line stays), `#status` and `#toasts` 10 px from the edges, `#closeup-wrap` shown.
+  The header loses the VIEW column: PAUSE and HELP keep their place, `#title` is 92 px wider and `#phase`
+  sits 92 px further right. Every other rect equals main's close-up (844 x 390 dpr 1 and 2.6, 1440 x 900).
+- `main.js`: `VIEW = [cuWorld, closeup]` gets every event and draw; one `attachDrag` on `#cu-world`, one
+  `attachTap` on `#closeup`. `start()` resets both (before H only the dock was reset, so a restart from the
+  close-up kept the old camera and fx). `window.game` = `{battle, closeup, cuWorld, exportReplay, perf}`.
+- Range rings, ghost arcs, PDC arc counts and aim lines were already the same code in both views
+  (`drawRangeRings`, `drawGhost`, `drawArcs`, `drawPdcCounts` at `cam.scale`); nothing moved.
+- `makeTactical` keeps its default camera and small-mark branches (no caller now; harmless, small).
+
 ## Render module contract
 
-- `silhouette.js`: one art table per design (profile, rooms as shapes,
-  draw order, landmarks, details), picked from `ship.design`.
-  `drawSilhouette(ctx, ship, box, fx)` where `box` is
-  `{x, y, w, h}` on the canvas and `fx` is `{flash: {piece: 0..1}}`;
-  `piecePoint(piece, box, facing, orientation, design)` returns the canvas
-  point of a piece; `landmark(name, design)` a named point.
-- `canvas.js`: `makeTactical(canvas, {inset})` returns `{draw, onEvent,
-  toScreen, toWorld, shipScreen, setGhost}`; `makeSilhouettePanel(canvas,
-  shipId, {orientation})` returns `{draw, onEvent, roomAt(x, y)}`. The panel
-  draws a bracket around the room the other side is going for, in that
-  side's color. They own their own particles, shake and flashes. They never
-  mutate battle.
+- `silhouette.js`: `drawShipMark` and `COLORS` are used; the art tables
+  (`drawSilhouette`, `shipPoint`, `piecePoint`, `landmark`, `SHIP_ASPECT`, ...)
+  have had no caller since the panels drew the form; cleanup PR later.
+- `canvas.js`: `makeTactical(canvas, opts)` returns `{draw, onEvent, reset,
+  toScreen, toWorld, shipScreen, setGhost, requiredPoints, safeRect, cameraState}`
+  (one instance since PR H: the world stage). `closeup.js`: `makeCloseup(canvas)`
+  returns `{draw, onEvent, reset, roomAt, setInspect, threats}`. They own their
+  own particles, shake and flashes. They never mutate battle.
 - Movement: one `move` order `{heading, speed}`: the hull swings to the
   heading (90 degrees per `FACE_TURN_TIME`, the railgun aim is lost) and the
   autopilot flies along it at `speed` relative to the enemy, matching their
