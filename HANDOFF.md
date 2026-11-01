@@ -280,6 +280,14 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    only plays local penetration entry → cell → exit and room consequence; remove the distance-share
    torpedo mapping and the `W + 60` rail miss. `roomBracket` on the enemy target in the dock, with a
    dark under-stroke. Do not hard-code the 130 px; world and dock split what D leaves; text >= 11 px.
+   D done (PR 41): `#status` deck (`--status` 44 px) between the panels above the buttons: `#alerts`
+   (20 px: `RAIL LOCK · 2.0s · BURN TO EVADE (3)` from `refusal(me, 'burn')`, `TORPS INBOUND ×4 · 6.0
+   km`, a chip when both; pulses twice, no infinite blink), then `#order` (summary: `TURNING → BOW ·
+   CMD 0.17 · GUARD · RAIL AIM 1.4s`) left and `#inspector` right (my tapped room 5.5 s, else `TARGET ·
+   THEIR DRIVE 10/10`, else the dead target 4 s, else `NO TARGET · EXPOSED END`); `#toasts` under the
+   header, two at most, kinds ok / no / event. Modes REPLAY / AUTO / PAUSED in the title slot. The deck
+   and toasts take no pointers. Measured usable height on the phone (844 x 390): close-up canvas 262 px
+   (was 280; 390 - 34 - 50 - 44); TAC map between header and deck 240 px.
    C: every button says why it cannot act (`OUT 12/10`, `NEED BOW`, `12s`, `NO SENSORS`, `DRIVE GONE`,
    `LOCKED: AIM`), not only opacity; `--dim` about #8ea1b5; hints >= 10.5 px; both views.
    Acceptance: phone 844 x 390 at dpr 1 and 2.6; desktop 1440 x 900 only a smoke test (BRIEF: no

@@ -37,13 +37,13 @@ export const T = {
   view: { closeup: 'CLOSE-UP', tac: 'TAC' },
   pause: 'PAUSE', resume: 'RESUME', restart: 'RESTART', newBattle: 'NEW BATTLE',
   pausedTitle: 'HELP. THE GAME IS PAUSED.',
-  pausedBadge: 'PAUSED · ORDERS ON', help: 'HELP',
+  pausedBadge: 'PAUSED · ORDERS ON', pausedShort: 'PAUSED', help: 'HELP',
   rotate: 'ROTATE YOUR PHONE TO LANDSCAPE',
   export: 'EXPORT', import: 'IMPORT', copied: 'Copied.', copyFailed: 'Could not copy. Select the text and copy it yourself.',
   exportTitle: 'REPLAY JSON. Copy it and paste it in chat.', copy: 'COPY', download: 'DOWNLOAD', close: 'CLOSE',
   importPrompt: 'Paste a replay JSON:', importBad: 'That is not a replay.',
-  auto: 'AUTO', autoOff: 'MANUAL', autoLine: 'AUTO. The ship flies itself.',
-  replaying: 'REPLAY', replayLine: 'REPLAY. Watching a recorded battle.',
+  auto: 'AUTO', autoOff: 'MANUAL',
+  replaying: 'REPLAY',
   enemyLabel: 'enemy',
   stats: {
     title: 'STATS', torps: 'Torpedoes fired / shot down / missed / landed', rail: 'Railgun fired / landed / dodged',
@@ -78,7 +78,19 @@ export const T = {
     over: 'The battle is over.',
     badTarget: 'No such room.', roomDead: 'That room is already gone.', sameTarget: 'Already going for it.', noTarget: 'No room targeted.',
   },
-  warn: { railAimingAtUs: 'ENEMY RAILGUN AIMING. BURN?' , torpsIncoming: 'TORPEDOES INCOMING' },
+  // The status deck (hud.js): alerts, the order summary, the room inspector.
+  alert: {
+    rail: (s, burn) => `RAIL LOCK · ${s}s · ${burn}`, burnOk: (n) => `BURN TO EVADE (${n})`,
+    burnNo: { noDrive: 'DRIVE GONE', noBurns: 'NO BURNS', aimingNoBurn: 'BURN LOCKED: RAIL AIM' },
+    torps: (n, km) => `TORPS INBOUND ×${n} · ${km} km`, torpsChip: (n, km) => `TORPS ×${n} · ${km}`,
+  },
+  summary: {
+    face: { bow: 'BOW', side: 'BROADSIDE', tail: 'STERN' }, turning: (f) => `TURNING → ${f}`,
+    run: 'RUNNING', coast: 'COAST', cmd: 'CMD', guard: 'GUARD', rake: 'RAKE', aim: (s) => `RAIL AIM ${s}s`,
+  },
+  inspect: {
+    target: 'TARGET', none: 'NO TARGET · EXPOSED END', destroyed: 'DESTROYED', our: 'OUR', their: 'THEIR', pdc: (n) => `PDC ${n}`,
+  },
   pieces: { rail: 'Railgun', sensors: 'Sensors', bridge: 'Bridge', pdc: 'PDC mount', crew: 'Crew', tubes: 'Tubes', drive: 'Drive', frame: 'Frame' },
   // One line when a room dies: whose, which, and what it costs them from now on.
   roomDead: {

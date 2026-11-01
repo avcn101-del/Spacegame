@@ -2,7 +2,8 @@
 // pause menu with legend, result. Reads battle state; sends orders through callbacks.
 import { N } from '../numbers.js';
 import { T, roomKey } from '../text.js';
-import { alive, exposure, canFireTubes, canAimRail, pdcAlive } from '../sim/ship.js';
+import { alive, exposure, canFireTubes, canAimRail, pdcAlive, faceFor, angleDiff, isPdc } from '../sim/ship.js';
+import { refusal } from '../sim/orders.js';
 import { CATALOG } from '../ships/catalog.js';
 import { ROOM_COLORS } from './form.js';
 import { railKm } from './arcs.js';
@@ -19,6 +20,7 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
   const el = {
     clock: $('#n-clock'), range: $('#n-range'), rate: $('#n-rate'), torps: $('#n-torps'), burns: $('#n-burns'),
     phase: $('#phase'), order: $('#order'), pause: $('#pause'), title: $('#title'),
+    toasts: $('#toasts'), alerts: $('#alerts'), alertMain: $('#alert-main'), alertSub: $('#alert-sub'), inspector: $('#inspector'),
     pausemenu: $('#pausemenu'), result: $('#result'), resultText: $('#result-text'), resultSeed: $('#result-seed'),
     panels: { me: $('#panel-me'), them: $('#panel-them') },
     buttons: {},
@@ -152,7 +154,15 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
   $('#legend').innerHTML = Object.keys(T.legend)
     .map((o) => `<li><b>${T.buttons[o] || o.toUpperCase()}</b> <span>${T.legend[o]}</span></li>`).join('');
 
-  let toast = null; // {text, ttl}
+  // Toasts: a queue of two at most, under the header; the same text again only refreshes its time.
+  // kind: 'ok' (accepted), 'no' (refused), 'event' (what just happened). Alerts never go here.
+  const toasts = [];
+  let toastKey = '', alertKey = '';
+  let inspect = null; // {room, ttl}: my own room, tapped to see it; the enemy target lives on the battle
+  let lost = null, lastTarget = null; // {room, ttl}: the target room that just died
+  const setText = (e, t) => { if (e.textContent !== t) e.textContent = t; };
+  const setClass = (e, c) => { if (e.className !== c) e.className = c; };
+  const roomName = (room) => (isPdc(room) ? T.inspect.pdc(room.slice(3)) : T.pieces[roomKey(room)].toUpperCase());
   const hitTimers = { me: 0, them: 0 };
   let replay = false, auto = false;
 
@@ -162,7 +172,14 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
     setEnemy(key) { foe = key; },
     setFit(f) { fit = { ...f }; },
     setAuto(on) { auto = on; $('#pm-auto').textContent = on ? T.autoOff : T.auto; document.getElementById('orders').classList.toggle('replay', on || replay); },
-    toast(text, ttl = 2.0) { toast = { text, ttl }; },
+    toast(text, ttl = 2.0, kind = 'ok') {
+      const same = toasts.find((t) => t.text === text);
+      if (same) { same.ttl = Math.max(same.ttl, ttl); return; }
+      toasts.push({ text, ttl, kind });
+      while (toasts.length > 2) toasts.shift();
+    },
+    // Tap on one of my rooms: the inspector shows it for a while; the enemy target stays underneath.
+    inspect(room) { inspect = room ? { room, ttl: 5.5 } : null; },
     // Pop the silhouette panel of a ship that just took a big hit.
     hit(shipId) { hitTimers[shipId] = 0.8; },
     setView(v) { $('#view').textContent = v === 'closeup' ? T.view.tac : T.view.closeup; },
@@ -182,40 +199,74 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
       el.pause.classList.toggle('on', paused);
       if (battle.result || hangarOpen) helpOpen = false;
       el.pausemenu.classList.toggle('show', helpOpen);
-      const badge = paused && !battle.result;
-      const title = badge ? T.pausedBadge : T.title;
-      if (el.title.textContent !== title) el.title.textContent = title;
-      el.title.classList.toggle('paused', badge);
+      // Mode badge in the title slot: replay, auto, paused. Never in the order line or a toast.
+      const locked = replay || auto;
+      const modes = [replay && T.replaying, auto && T.auto, paused && !battle.result && (locked ? T.pausedShort : T.pausedBadge)].filter(Boolean);
+      setText(el.title, modes.length ? modes.join(' · ') : T.title);
+      el.title.classList.toggle('paused', modes.length > 0);
 
       for (const id of ['me', 'them']) {
         if (hitTimers[id] > 0) hitTimers[id] -= dtReal;
         el.panels[id].classList.toggle('hit', hitTimers[id] > 0);
       }
 
-      // Order line: toast > warning > replay > current orders (paused is the badge in the title slot)
-      if (toast) { toast.ttl -= dtReal; if (toast.ttl <= 0) toast = null; }
-      let line, cls = '';
-      if (toast) { line = toast.text; cls = 'toast'; }
-      else if (them.railAim >= 0 && alive(them, 'rail')) { line = T.warn.railAimingAtUs; cls = 'warn'; }
-      else if (battle.projectiles.some((p) => p.kind === 'torp' && p.target === 'me')) { line = T.warn.torpsIncoming; cls = 'warn'; }
-      else if (replay) { line = T.replayLine; cls = 'paused'; }
-      else {
-        const parts = [];
-        parts.push(me.turnLeft > 0 ? T.order.turning : T.order[me.face]);
-        if (me.orders.run) parts.push(T.order.run);
-        else if (me.move.coast) parts.push(`${T.order.hold} ${Math.hypot(me.vx, me.vy).toFixed(2)}`);
-        else parts.push(`${T.order[me.move.speed > 0 ? 'flying' : 'stopping']} ${me.move.speed.toFixed(2)}`);
-        if (auto) parts.unshift(T.auto);
-        parts.push(T.order[me.orders.pdc]);
-        if (me.target && alive(them, me.target)) parts.push(`${T.order.target} ${T.pieces[roomKey(me.target)].toLowerCase()}`);
-        if (me.railAim >= 0) parts.push(T.order.aiming);
-        line = parts.join(' · ');
+      // Toasts
+      for (let i = toasts.length - 1; i >= 0; i--) { toasts[i].ttl -= dtReal; if (toasts[i].ttl <= 0) toasts.splice(i, 1); }
+      const tk = toasts.map((t) => t.kind + t.text).join('|');
+      if (tk !== toastKey) {
+        toastKey = tk;
+        el.toasts.replaceChildren(...toasts.map((t) => { const d = document.createElement('div'); d.className = t.kind; d.textContent = t.text; return d; }));
       }
-      el.order.textContent = line; el.order.className = cls;
+
+      // Alert lane: their rail on us first (3 s to answer), torpedoes inbound second (a chip if both).
+      const range = battle.range();
+      const railLock = them.railAim >= 0 && alive(them, 'rail');
+      const inbound = battle.projectiles.filter((p) => p.kind === 'torp' && p.target === 'me' && !p.dead);
+      let main = '', sub = '';
+      if (railLock) {
+        const why = refusal(me, 'burn', { range, enemy: them });
+        main = T.alert.rail(Math.max(0, N.RAIL_AIM_TIME - them.railAim).toFixed(1), why ? (T.alert.burnNo[why] || T.refusal[why]) : T.alert.burnOk(me.burns));
+      }
+      if (inbound.length) {
+        const km = Math.min(...inbound.map((p) => Math.hypot(p.x - me.x, p.y - me.y))).toFixed(1);
+        if (railLock) sub = T.alert.torpsChip(inbound.length, km); else main = T.alert.torps(inbound.length, km);
+      }
+      setText(el.alertMain, main); setText(el.alertSub, sub);
+      const ak = (railLock ? 'r' : '') + (inbound.length ? 't' : '');
+      if (ak !== alertKey) { // a new threat pulses twice, then stays solid
+        if (ak) { el.alerts.classList.remove('intro'); void el.alerts.offsetWidth; el.alerts.classList.add('intro'); }
+        alertKey = ak;
+      }
+
+      // Order summary: what my ship is doing and was told to do. Nothing else writes here.
+      const S = T.summary, parts = [];
+      if (me.turnLeft > 0) {
+        const bearing = Math.atan2(them.y - me.y, them.x - me.x);
+        parts.push(S.turning(S.face[faceFor(angleDiff(me.headingTarget, bearing))]));
+      } else parts.push(S.face[me.face]);
+      if (me.orders.run) parts.push(S.run);
+      else if (me.move.coast) parts.push(`${S.coast} ${Math.hypot(me.vx, me.vy).toFixed(2)}`);
+      else parts.push(`${S.cmd} ${me.move.speed.toFixed(2)}`);
+      if (pdcAlive(me)) parts.push(S[me.orders.pdc]);
+      if (me.railAim >= 0) parts.push(S.aim(Math.max(0, N.RAIL_AIM_TIME - me.railAim).toFixed(1)));
+      setText(el.order, parts.join(' · '));
+
+      // Room inspector: my tapped room for a few seconds, else the enemy target, else the exposed end.
+      if (inspect) { inspect.ttl -= dtReal; if (inspect.ttl <= 0) inspect = null; }
+      if (lost) { lost.ttl -= dtReal; if (lost.ttl <= 0) lost = null; }
+      if (lastTarget && !me.target && !alive(them, lastTarget)) lost = { room: lastTarget, ttl: 4 };
+      if (me.target) lost = null;
+      lastTarget = me.target;
+      const I = T.inspect, hp = (ship, room) => { const pc = ship.pieces[room]; return pc.hp > 0 ? `${Math.ceil(pc.hp)}/${pc.maxHp}` : I.destroyed; };
+      let ins, ic;
+      if (inspect) { ins = `${I.our} ${roomName(inspect.room)} ${hp(me, inspect.room)}`; ic = 'me'; }
+      else if (me.target) { ins = `${I.target} · ${I.their} ${roomName(me.target)} ${hp(them, me.target)}`; ic = 'them'; }
+      else if (lost) { ins = `${I.their} ${roomName(lost.room)} · ${I.destroyed}`; ic = 'lost'; }
+      else { ins = I.none; ic = ''; }
+      setText(el.inspector, ins); setClass(el.inspector, ic);
 
       // Buttons: state, availability, progress
       const B = el.buttons;
-      const range = battle.range();
       for (const o of Object.keys(B)) {
         const active = (o === 'hold' && me.move.coast && !me.orders.run) || o === me.orders.pdc || (o === 'run' && me.orders.run);
         B[o].classList.toggle('active', active);
