@@ -341,7 +341,8 @@ Decoration only: never reads input, never writes battle; no `Math.random` (flick
   four edge bands only. Over the scene and the fx, before the drag ghost; these canvases have no text (HUD
   is DOM). Not in the dock (its labels and ticks are canvas text).
 - `game.perf()`: frame interval and render work (ms, avg and p95) over the last 600 frames, `fps`,
-  `dpr` (`view` removed in PR H); `game.perf.reset()`. Debug only.
+  `dpr` (`view` removed in PR H); `?perf=1` draws it as one line over the header's CLOCK / RANGE corner, once a second, tap
+  to reset (PR 49; no element without the flag); `game.perf.reset()`. Debug only.
 - Unchanged by rule: layout, hit areas, DOM geometry (Playwright: every element's rect identical to main in
   both views at 844 x 390 dpr 2.6 and 1, 1440 x 900), drag orders (same as main), no CSS transform anywhere.
 
