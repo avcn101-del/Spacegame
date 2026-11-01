@@ -30,14 +30,23 @@ let autoPreset = PRESETS[params.get('auto')] ? params.get('auto') : null; // ?au
 let autoPilot = null;
 
 let battle, enemy, paused = false, slowmo = 0, acc = 0;
-// One view: the world stage on top (the map: real positions, drag to steer, a camera that keeps every
-// projectile in frame) and the cutaway dock below (both hulls, tap a room).
+// Two views, one at a time (the VIEW button). TAC: the map over the whole screen, a camera that fits both ships
+// (drag to steer, tap their mark to pick a target). CLOSE-UP: the world stage on top (the anchored camera that keeps
+// every projectile in frame) and the cutaway dock below (both hulls, tap a room). PR 55 brought TAC back: a strip
+// a hundred-odd px tall cannot show 12 km of vertical separation at a readable scale.
+const cssPx = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
+const tactical = makeTactical(document.getElementById('tactical'), {
+  // the part of the screen not covered by HUD; the camera fits the ships in here
+  inset: () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status'), left: 8, right: 8 }),
+});
 const closeup = makeCloseup(document.getElementById('closeup'));
 const cuWorld = makeTactical(document.getElementById('cu-world'), {
   inset: () => ({ top: 0, bottom: 0, left: 0, right: 0 }), camera: 'engage', quiet: true,
   maxScale: 90, markPx: [36, 48], // knife range reads closer; big top-down hull marks
 });
-const VIEW = [cuWorld, closeup]; // every renderer: events and draws go to both
+// Events and draws go only to the view on show, so a hidden view never replays old effects.
+const VIEWS = { tac: [tactical], closeup: [cuWorld, closeup] };
+let view = 'tac'; // the opening view: battles start at long range
 
 const hud = makeHud({
   onOrder(o, arg) {
@@ -47,6 +56,7 @@ const hud = makeHud({
     else if (o === 'torps') hud.toast(T.order.torpsAway);
     else if (o === 'burn') hud.toast(T.order.burn);
   },
+  onView() { setView(view === 'tac' ? 'closeup' : 'tac'); },
   onPause() { paused = !paused; },
   onHelp() { paused = true; },
   onResume() { paused = false; },
@@ -86,6 +96,13 @@ const hud = makeHud({
   },
 });
 
+function setView(v) {
+  view = v;
+  document.body.classList.toggle('tac', v === 'tac');
+  hud.setView(v);
+  if (battle) for (const r of VIEWS[v]) r.reset(battle); // nothing frozen while hidden replays
+}
+
 // start() begins a fresh battle; start(replay) watches a recorded one.
 function start(replay = null) {
   if (replay) seed = replay.seed;
@@ -101,8 +118,8 @@ function start(replay = null) {
   paused = false; slowmo = 0; acc = 0;
   const fitQ = fitString(battle.designs.me.fit);
   history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}`);
-  for (const r of VIEW) r.reset(battle); // nothing from the last battle carries over (camera, fx)
-  window.game = { battle, closeup, cuWorld, exportReplay: () => exportReplay(battle), perf }; // for debugging and tests
+  for (const r of [tactical, cuWorld, closeup]) r.reset(battle); // nothing from the last battle carries over (camera, fx)
+  window.game = { battle, tactical, closeup, cuWorld, setView, view: () => view, exportReplay: () => exportReplay(battle), perf }; // for debugging and tests
 }
 
 // Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
@@ -124,7 +141,7 @@ const pct = (a, q) => { if (!a.length) return 0; const s = [...a].sort((x, y) =>
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const r1 = (v) => Math.round(v * 10) / 10;
 function perf() {
-  return { frames: perfGap.length, dpr: window.devicePixelRatio || 1, renderDpr: renderDpr(), frameAvg: r1(avg(perfGap)), frameP95: r1(pct(perfGap, 0.95)), fps: r1(1000 / (avg(perfGap) || 1)), workAvg: r1(avg(perfWork)), workP95: r1(pct(perfWork, 0.95)) };
+  return { frames: perfGap.length, view, dpr: window.devicePixelRatio || 1, renderDpr: renderDpr(), frameAvg: r1(avg(perfGap)), frameP95: r1(pct(perfGap, 0.95)), fps: r1(1000 / (avg(perfGap) || 1)), workAvg: r1(avg(perfWork)), workP95: r1(pct(perfWork, 0.95)) };
 }
 perf.reset = () => { perfGap.length = 0; perfWork.length = 0; };
 const perfPush = (a, v) => { a.push(v); if (a.length > PERF_N) a.shift(); };
@@ -178,21 +195,24 @@ function frame(now) {
         ? `${T.lost[ev.ship]} ${T.frameAdrift}.`
         : `${T.lost[ev.ship]} ${T.tear[ev.end]}: ${names.join(', ')} ${T.adrift}.`, 4, 'event');
     }
-    for (const r of VIEW) r.onEvent(ev);
+    for (const r of VIEWS[view]) r.onEvent(ev);
   }
   battle.events.length = 0;
-  for (const r of VIEW) r.draw(battle, dtGame);
+  for (const r of VIEWS[view]) r.draw(battle, dtGame);
   hud.draw(battle, paused, dtReal);
   perfPush(perfWork, performance.now() - t0);
   requestAnimationFrame(frame);
 }
 
 // Drag on the world stage: a move order.
-attachDrag(document.getElementById('cu-world'), cuWorld, () => battle, (arg) => {
+// One move dispatch for both maps: TAC and the close-up's world stage (same drag, same rules).
+function move(arg) {
   if (replayer || autoPilot) return;
   const why = battle.order('me', 'move', arg);
   if (why) hud.toast(T.refusal[why], 2.2, 'no');
-});
+}
+attachDrag(document.getElementById('tactical'), tactical, () => battle, (arg) => { if (view === 'tac') move(arg); });
+attachDrag(document.getElementById('cu-world'), cuWorld, () => battle, (arg) => { if (view === 'closeup') move(arg); });
 
 // What a room does, in one line; every PDC mount shares the one line.
 const roomInfo = (room) => T.roomInfo[roomKey(room)];
@@ -212,6 +232,18 @@ function tapMine(room) {
   hud.inspect(room); closeup.setInspect(room);
   hud.toast(`${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`, 3, 'event');
 }
+// TAC has no dock: a tap on their mark picks the next standing room of theirs as the target, in their room order
+// (rail, sensors, the PDC mounts, bridge, crew, tubes, drive), round again after the last. Same order and toasts as
+// a dock tap. A tap anywhere else on the map does nothing; a drag still steers.
+const TAP_MARK_PX = 24; // px round their mark that counts as a tap on it: a fingertip on a 14 px mark
+attachTap(document.getElementById('tactical'), (x, y) => {
+  if (view !== 'tac') return;
+  const q = tactical.shipScreen('them');
+  if (!q || Math.hypot(x - q.x, y - q.y) > TAP_MARK_PX) return;
+  const me = battle.ships[0], them = battle.ships[1];
+  const rooms = them.roomOrder.filter((r) => them.pieces[r].alive);
+  if (rooms.length) tapThem(rooms[(rooms.indexOf(me.target) + 1) % rooms.length]);
+});
 // The dock: taps only (a drag that starts here never steers).
 attachTap(document.getElementById('closeup'), (x, y) => {
   const hit = closeup.roomAt(x, y);
@@ -219,5 +251,6 @@ attachTap(document.getElementById('closeup'), (x, y) => {
   if (hit.side === 'them') tapThem(hit.room); else tapMine(hit.room);
 });
 
+setView(view);
 start();
 requestAnimationFrame(frame);

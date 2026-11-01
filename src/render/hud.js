@@ -16,7 +16,7 @@ const ROOM_OF = { gun: 'rail', launcher: 'tubes', drive: 'drive', rounds: 'pdc1'
 const hasPick = (room) => !!SLOTS_OF[room] || /^pdc\d+$/.test(room); // the PDC mounts pick the rounds
 const tap = (sel, fn) => $(sel).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
 
-export function makeHud({ onOrder, onPause, onHelp, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview, presets }) {
+export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart, onNew, onExport, onImport, onAuto, onDownload, onFit, preview, presets }) {
   const el = {
     clock: $('#n-clock'), range: $('#n-range'), rate: $('#n-rate'),
     phase: $('#phase'), order: $('#order'), pause: $('#pause'), title: $('#title'),
@@ -36,6 +36,7 @@ export function makeHud({ onOrder, onPause, onHelp, onResume, onRestart, onNew, 
   tap('#pause', onPause);
   tap('#help', () => { helpOpen = true; onHelp(); });
   $('#help').textContent = T.help;
+  tap('#view', onView);
   tap('#pm-close', () => { helpOpen = false; });
   $('#pm-close').textContent = T.close;
   tap('#pm-resume', () => { helpOpen = false; onResume(); }); tap('#pm-restart', () => { helpOpen = false; onRestart(); }); tap('#pm-new', () => { helpOpen = false; onNew(); });
@@ -177,6 +178,7 @@ export function makeHud({ onOrder, onPause, onHelp, onResume, onRestart, onNew, 
     },
     // Tap on one of my rooms: the inspector shows it for a while; the enemy target stays underneath.
     inspect(room) { inspect = room ? { room, ttl: 5.5 } : null; },
+    setView(v) { $('#view').textContent = v === 'closeup' ? T.view.tac : T.view.closeup; },
     setReplay(on) { replay = on; document.getElementById('orders').classList.toggle('replay', on || auto); },
     draw(battle, paused, dtReal) {
       const me = battle.ships[0], them = battle.ships[1];

@@ -475,7 +475,7 @@ export function makeTactical(canvas, opts = {}) {
     drawBlooms();
     ctx.restore();
     vignette(ctx, w, h, rect); // decoration over the scene; no text on this canvas, the HUD is DOM above it
-    wedge = engage ? drawBearing(battle) : (rangeLab = null); // over the vignette: it is a readout, like the ghost
+    wedge = drawBearing(battle); // over the vignette: it is a readout, like the ghost (both views since PR 55)
     if (ghost) drawGhost(battle); // input overlay: outside the shake, so the finger point stays put
     const wa = fx.white();
     if (wa > 0) { ctx.fillStyle = `rgba(255,240,225,${wa})`; ctx.fillRect(0, 0, w, h); }
@@ -769,22 +769,26 @@ export function makeTactical(canvas, opts = {}) {
     ctx.restore();
   }
 
-  // Their ship off the stage (the camera floor, or a mode that does not need them): a wedge on the stage
-  // edge on the line from my mark toward them, pointing at them, and the range in km beside it.
+  // Their ship off the stage (the camera floor, the anchored stage, or a mode that does not need them): a wedge on
+  // the stage edge on the line from my mark toward them, pointing at them, and the range in km beside it. "Off"
+  // means their mark is not all on the stage (PR 55: before, only its centre counted, so near the anchor threshold a
+  // mark half cut by the edge had no wedge). On the stage: their range under their mark instead. The stage is the
+  // view rect (the canvas on the close-up; on TAC the part the HUD does not cover).
   function drawBearing(battle) {
     const me = battle.ships[0], them = battle.ships[1];
     const q = toScreen(them.x, them.y), p = toScreen(me.x, me.y);
+    const X0 = rect.x, Y0 = rect.y, X1 = rect.x + rect.w, Y1 = rect.y + rect.h, e = markL * 0.5;
     rangeLab = null;
-    if (q.x >= 0 && q.x <= w && q.y >= 0 && q.y <= h) { rangeLab = drawRangeLabel(battle, q); return null; }
+    if (q.x >= X0 + e && q.x <= X1 - e && q.y >= Y0 + e && q.y <= Y1 - e) { rangeLab = drawRangeLabel(battle, q); return null; }
     const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
     if (!(d > 0)) return null;
     const ux = dx / d, uy = dy / d, m = V.WEDGE_INSET;
-    // where the ray from my mark leaves the canvas less the inset
+    // where the ray from my mark leaves the stage less the inset
     let t = Infinity;
-    if (ux > 0) t = Math.min(t, (w - m - p.x) / ux); else if (ux < 0) t = Math.min(t, (m - p.x) / ux);
-    if (uy > 0) t = Math.min(t, (h - m - p.y) / uy); else if (uy < 0) t = Math.min(t, (m - p.y) / uy);
+    if (ux > 0) t = Math.min(t, (X1 - m - p.x) / ux); else if (ux < 0) t = Math.min(t, (X0 + m - p.x) / ux);
+    if (uy > 0) t = Math.min(t, (Y1 - m - p.y) / uy); else if (uy < 0) t = Math.min(t, (Y0 + m - p.y) / uy);
     t = Math.max(0, t);
-    const tx = clamp(p.x + ux * t, m, w - m), ty = clamp(p.y + uy * t, m, h - m), s = V.WEDGE_PX;
+    const tx = clamp(p.x + ux * t, X0 + m, X1 - m), ty = clamp(p.y + uy * t, Y0 + m, Y1 - m), s = V.WEDGE_PX;
     const nx = -uy, ny = ux, bx = tx - ux * s * 1.6, by = ty - uy * s * 1.6;
     ctx.save();
     ctx.fillStyle = rgba(C.them, 0.9);
@@ -794,25 +798,26 @@ export function makeTactical(canvas, opts = {}) {
     const text = T.bearing(T.ships.them, battle.range().toFixed(1));
     ctx.font = '11px "SF Mono", Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const lw = ctx.measureText(text).width + 8, lh = 15;
-    // the label sits behind the wedge (toward my mark), kept inside the canvas
-    const lx = clamp(tx - ux * (s * 1.6 + 6 + lw / 2), lw / 2 + 2, w - lw / 2 - 2), ly = clamp(ty - uy * (s * 1.6 + 6 + lh / 2), lh / 2 + 2, h - lh / 2 - 2);
+    // the label sits behind the wedge (toward my mark), kept inside the stage
+    const lx = clamp(tx - ux * (s * 1.6 + 6 + lw / 2), X0 + lw / 2 + 2, X1 - lw / 2 - 2), ly = clamp(ty - uy * (s * 1.6 + 6 + lh / 2), Y0 + lh / 2 + 2, Y1 - lh / 2 - 2);
     ctx.fillStyle = 'rgba(5,7,12,0.85)'; ctx.fillRect(lx - lw / 2, ly - lh / 2, lw, lh);
     ctx.fillStyle = rgba(C.them, 1); ctx.fillText(text, lx, ly + 0.5);
     ctx.restore();
-    return { tip: { x: tx, y: ty }, dir: { x: ux, y: uy }, label: { x: lx - lw / 2, y: ly - lh / 2, w: lw, h: lh }, text, canvas: { w, h } };
+    return { tip: { x: tx, y: ty }, dir: { x: ux, y: uy }, label: { x: lx - lw / 2, y: ly - lh / 2, w: lw, h: lh }, text, canvas: { w, h }, stage: { x: X0, y: Y0, w: rect.w, h: rect.h } };
   }
 
   // Their ship on the stage: the same text as the wedge (T.bearing) under their mark, or over it when there is
-  // no room below, kept inside the canvas.
+  // no room below, kept inside the stage.
   function drawRangeLabel(battle, q) {
     const text = T.bearing(T.ships.them, battle.range().toFixed(1));
     ctx.save();
     ctx.font = '11px "SF Mono", Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const lw = ctx.measureText(text).width + 8, lh = 15, off = markL * 0.5 + 4 + lh / 2;
+    const X0 = rect.x, Y0 = rect.y, X1 = rect.x + rect.w, Y1 = rect.y + rect.h;
     let ly = q.y + off;
-    if (ly + lh / 2 > h - 2) ly = q.y - off;
-    const lx = clamp(q.x, lw / 2 + 2, w - lw / 2 - 2);
-    ly = clamp(ly, lh / 2 + 2, h - lh / 2 - 2);
+    if (ly + lh / 2 > Y1 - 2) ly = q.y - off;
+    const lx = clamp(q.x, X0 + lw / 2 + 2, X1 - lw / 2 - 2);
+    ly = clamp(ly, Y0 + lh / 2 + 2, Y1 - lh / 2 - 2);
     ctx.fillStyle = 'rgba(5,7,12,0.7)'; ctx.fillRect(lx - lw / 2, ly - lh / 2, lw, lh);
     ctx.fillStyle = rgba(C.them, 0.9); ctx.fillText(text, lx, ly + 0.5);
     ctx.restore();
@@ -862,6 +867,7 @@ export function makeTactical(canvas, opts = {}) {
     ctx.setLineDash([]);
     ctx.font = '11px "SF Mono", Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(170,185,200,0.36)';
+    const X0 = rect.x, Y0 = rect.y, X1 = rect.x + rect.w, Y1 = rect.y + rect.h; // labels stay off the HUD (TAC)
     const lh = 13, hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
     for (const { km, r } of shown) {
       const text = T.ruler(km), lw = ctx.measureText(text).width + 4;
@@ -872,9 +878,9 @@ export function makeTactical(canvas, opts = {}) {
       for (const deg of V.RULER_ANGLES) {
         const a = deg * Math.PI / 180;
         ax = p.x + Math.cos(a) * r; ay = p.y + Math.sin(a) * r;
-        if (ax >= lw / 2 + 2 && ax <= w - lw / 2 - 2 && ay >= lh / 2 + 2 && ay <= h - lh / 2 - 2) break;
+        if (ax >= X0 + lw / 2 + 2 && ax <= X1 - lw / 2 - 2 && ay >= Y0 + lh / 2 + 2 && ay <= Y1 - lh / 2 - 2) break;
       }
-      const x = clamp(ax, lw / 2 + 2, w - lw / 2 - 2), y = clamp(ay, lh / 2 + 2, h - lh / 2 - 2);
+      const x = clamp(ax, X0 + lw / 2 + 2, X1 - lw / 2 - 2), y = clamp(ay, Y0 + lh / 2 + 2, Y1 - lh / 2 - 2);
       const box = { km, r, x: x - lw / 2, y: y - lh / 2, w: lw, h: lh };
       if (rulerLabs.some((l) => hit(l, box))) continue;
       ctx.fillText(text, x, y + 0.5);
