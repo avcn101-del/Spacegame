@@ -410,10 +410,14 @@ part: TAC, the map over the whole screen, is back as a view. The close-up stays 
   `setView` resets the renderers of the view it shows, so nothing frozen while hidden replays. TAC on load, no
   storage. Drag steers on both maps (`move()`, one dispatch; each drag acts only in its own view).
   `window.game` adds `tactical`, `setView(v)` and `view()`; `perf()` reports `view`.
-- Targeting on TAC: a tap within `TAP_MARK_PX` (24) of their mark picks the next standing room of theirs, in
-  `roomOrder` (rail, sensors, pdc1 to pdc6, bridge, crew, tubes, drive), round again after the last; it goes through
-  `tapThem`, so the order, refusals, toasts and the `TARGET · THEIR X` line are the dock's. With one room left a
-  tap toggles it (the dock's rule). Clearing a target: tap it again in the dock.
+- Targeting on TAC (PR 56; PR 55's tap-to-cycle took up to 11 taps and was dropped): a tap within `TAP_MARK_PX`
+  (24) of their mark opens their layout (`src/render/picker.js`, its own `#picker` canvas over the map, centred in
+  the TAC stage): their cutaway grid drawn by the dock's `drawForm` (same colours, dead rooms dark, bow left as in
+  the dock), cells up to 17 px (shrunk to fit a short screen, at least 9), the current target bracketed
+  (`roomBracket`), title `T.picker.title`. A tap on a standing room sends it through `tapThem` (the dock's order
+  path, refusals and toasts; tapping the current target clears it, the dock's rule), then the panel closes. A tap
+  on the panel off a room keeps it open; a tap elsewhere on the map, a view switch, a new battle or 6 s of real
+  time (paused too) close it with no change. A drag still steers. Not in a replay or AUTO.
 - Readouts on both views: `drawBearing` runs for TAC too (their range under their mark; the wedge only as insurance:
   at 9 px/km the TAC stage holds about 22 km of vertical separation at 844 x 332, past `ESCAPE_RANGE` 20). The
   stage for the wedge, the label and the ruler labels is the view rect (the canvas on the close-up, so nothing

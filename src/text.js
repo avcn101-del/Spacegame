@@ -46,7 +46,8 @@ export const T = {
   pause: 'PAUSE', resume: 'RESUME', restart: 'RESTART', newBattle: 'NEW BATTLE',
   pausedTitle: 'HELP. THE GAME IS PAUSED.',
   pausedBadge: 'PAUSED · ORDERS ON', pausedShort: 'PAUSED', help: 'HELP',
-  view: { closeup: 'CLOSE-UP', tac: 'TAC' }, // the header button names the view it switches to
+  view: { closeup: 'CLOSE-UP', tac: 'TAC' },
+  picker: { title: 'THEIR LAYOUT · TAP A ROOM TO TARGET' }, // TAC: the panel a tap on their mark opens // the header button names the view it switches to
   rotate: 'ROTATE YOUR PHONE TO LANDSCAPE',
   export: 'EXPORT', import: 'IMPORT', copied: 'Copied.', copyFailed: 'Could not copy. Select the text and copy it yourself.',
   exportTitle: 'REPLAY JSON. Copy it and paste it in chat.', copy: 'COPY', download: 'DOWNLOAD', close: 'CLOSE',

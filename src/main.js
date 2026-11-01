@@ -7,6 +7,7 @@ import { makeEnemy } from './ai/enemy.js';
 import { makeTactical } from './render/canvas.js';
 import { makeCloseup } from './render/closeup.js';
 import { makeHud } from './render/hud.js';
+import { makePicker } from './render/picker.js';
 import { renderDpr } from './render/look.js';
 import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
 import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
@@ -40,6 +41,7 @@ const tactical = makeTactical(document.getElementById('tactical'), {
   inset: () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status'), left: 8, right: 8 }),
 });
 const closeup = makeCloseup(document.getElementById('closeup'));
+const picker = makePicker(document.getElementById('picker')); // TAC: their layout, to pick a target room
 const cuWorld = makeTactical(document.getElementById('cu-world'), {
   inset: () => ({ top: 0, bottom: 0, left: 0, right: 0 }), camera: 'engage', quiet: true,
   maxScale: 90, markPx: [36, 48], // knife range reads closer; big top-down hull marks
@@ -98,6 +100,7 @@ const hud = makeHud({
 
 function setView(v) {
   view = v;
+  picker.hide();
   document.body.classList.toggle('tac', v === 'tac');
   hud.setView(v);
   if (battle) for (const r of VIEWS[v]) r.reset(battle); // nothing frozen while hidden replays
@@ -118,8 +121,9 @@ function start(replay = null) {
   paused = false; slowmo = 0; acc = 0;
   const fitQ = fitString(battle.designs.me.fit);
   history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}`);
+  picker.hide();
   for (const r of [tactical, cuWorld, closeup]) r.reset(battle); // nothing from the last battle carries over (camera, fx)
-  window.game = { battle, tactical, closeup, cuWorld, setView, view: () => view, exportReplay: () => exportReplay(battle), perf }; // for debugging and tests
+  window.game = { battle, tactical, closeup, cuWorld, picker, setView, view: () => view, exportReplay: () => exportReplay(battle), perf }; // for debugging and tests
 }
 
 // Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
@@ -199,6 +203,7 @@ function frame(now) {
   }
   battle.events.length = 0;
   for (const r of VIEWS[view]) r.draw(battle, dtGame);
+  if (view === 'tac') picker.draw(battle, dtReal);
   hud.draw(battle, paused, dtReal);
   perfPush(perfWork, performance.now() - t0);
   requestAnimationFrame(frame);
@@ -232,17 +237,26 @@ function tapMine(room) {
   hud.inspect(room); closeup.setInspect(room);
   hud.toast(`${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`, 3, 'event');
 }
-// TAC has no dock: a tap on their mark picks the next standing room of theirs as the target, in their room order
-// (rail, sensors, the PDC mounts, bridge, crew, tubes, drive), round again after the last. Same order and toasts as
-// a dock tap. A tap anywhere else on the map does nothing; a drag still steers.
+// TAC has no dock: a tap on their mark opens their layout (picker.js), a tap on one of its standing rooms targets it
+// through tapThem (the dock's order path, refusals and toasts), then it closes. A tap elsewhere on the map closes it
+// with no change; a drag still steers. Not in a replay or AUTO (the dock's taps do nothing there either).
 const TAP_MARK_PX = 24; // px round their mark that counts as a tap on it: a fingertip on a 14 px mark
+const tacStage = () => {
+  const cv = document.getElementById('tactical'), top = cssPx('--top');
+  return { x: 8, y: top, w: cv.clientWidth - 16, h: cv.clientHeight - top - cssPx('--bottom') - cssPx('--status') };
+};
 attachTap(document.getElementById('tactical'), (x, y) => {
   if (view !== 'tac') return;
+  if (picker.isOpen()) { picker.hide(); return; }
   const q = tactical.shipScreen('them');
-  if (!q || Math.hypot(x - q.x, y - q.y) > TAP_MARK_PX) return;
-  const me = battle.ships[0], them = battle.ships[1];
-  const rooms = them.roomOrder.filter((r) => them.pieces[r].alive);
-  if (rooms.length) tapThem(rooms[(rooms.indexOf(me.target) + 1) % rooms.length]);
+  if (!q || Math.hypot(x - q.x, y - q.y) > TAP_MARK_PX || replayer || autoPilot) return;
+  picker.show(tacStage(), battle.ships[1]);
+});
+attachTap(document.getElementById('picker'), (x, y) => {
+  const room = picker.roomAt(battle, x, y);
+  if (!room) return; // frame, void, a dead room or the edge: the panel stays
+  picker.hide();
+  tapThem(room);
 });
 // The dock: taps only (a drag that starts here never steers).
 attachTap(document.getElementById('closeup'), (x, y) => {
