@@ -296,6 +296,12 @@ kept only as history. After the form (30 seeds, win/lose/draw):
    and 1.2 km (844 x 390 dpr 1 and 2.6, 1440 x 900).
    C: every button says why it cannot act (`OUT 12/10`, `NEED BOW`, `12s`, `NO SENSORS`, `DRIVE GONE`,
    `LOCKED: AIM`), not only opacity; `--dim` about #8ea1b5; hints >= 10.5 px; both views.
+   C done (PR 43): each button's second line is its state or the reason it cannot act, from the sim's
+   `refusal()` (READY, 8s, OUT 12.0/10, TAIL, NEED BOW, TURNING, AIM 2.0s, NO SENSORS, DESTROYED,
+   NO AMMO, NO BURNS, LOCKED: AIM, DRIVE GONE, PDC GONE, ON, RUNNING, AUTO LOCK / REPLAY LOCK); else the
+   hint. Unavailable = dashed dark frame, the label and reason stay bright (no opacity). The close-up
+   hides hints but keeps reasons. `--dim` #8ea1b5; reasons 11 px, hints 10.5, labels 10.5 to 11, canvas
+   labels 11. The plan A, D, E, C is done; the owner plays.
    Acceptance: phone 844 x 390 at dpr 1 and 2.6; desktop 1440 x 900 only a smoke test (BRIEF: no
    desktop layout). Parked in NOTES: CMD vector, threat ticks, close-up Burn burst, reduced motion,
    help responsive, hangar. FX groups offered before (wounds, big moments) wait behind this.
