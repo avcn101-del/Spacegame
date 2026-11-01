@@ -13,6 +13,13 @@ export const T = {
     guard: 'GUARD', rake: 'RAKE',
     torps: 'TORPS', rail: 'RAIL', burn: 'BURN', run: 'RUN',
   },
+  // What a button says when it cannot act now, or its state (hud.js, from the sim's own refusal()).
+  why: {
+    ready: 'READY', on: 'ON', destroyed: 'DESTROYED', noAmmo: 'NO AMMO', tail: 'TAIL', needBow: 'NEED BOW',
+    turning: 'TURNING', noSensors: 'NO SENSORS', driveGone: 'DRIVE GONE', noBurns: 'NO BURNS', lockedAim: 'LOCKED: AIM',
+    pdcGone: 'PDC GONE', running: 'RUNNING', replay: 'REPLAY LOCK', auto: 'AUTO LOCK',
+    secs: (s) => `${s}s`, out: (r, max) => `OUT ${r}/${max}`, aim: (s) => `AIM ${s}s`,
+  },
   hints: {
     hold: 'cut thrust',
     guard: 'vs torpedoes', rake: 'rake hull',

@@ -564,7 +564,7 @@ export function makeTactical(canvas, opts = {}) {
     if (face !== 'tail' && range <= N.TORP_RANGE && alive(me, 'tubes') && me.torps > 0) bears.push('TUBES');
     if (mounts > 0) bears.push(range <= N.PDC_RANGE ? `PDC ${mounts}` : `PDC ${mounts} (far)`);
     const word = [face.toUpperCase(), ...bears].join(' \u00b7 ');
-    ctx.font = '10px "SF Mono", Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '11px "SF Mono", Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const tw = ctx.measureText(word).width + 10, ty = clamp(gy - 22, 10, h - 10), tx = clamp(gx, tw / 2 + 2, w - tw / 2 - 2);
     ctx.fillStyle = 'rgba(6,8,15,0.8)'; ctx.fillRect(tx - tw / 2, ty - 8, tw, 16);
     ctx.fillStyle = rgba(col, 1); ctx.fillText(word, tx, ty + 0.5);

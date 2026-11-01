@@ -2,7 +2,7 @@
 // pause menu with legend, result. Reads battle state; sends orders through callbacks.
 import { N } from '../numbers.js';
 import { T, roomKey } from '../text.js';
-import { alive, exposure, canFireTubes, canAimRail, pdcAlive, faceFor, angleDiff, isPdc } from '../sim/ship.js';
+import { alive, pdcAlive, faceFor, angleDiff, isPdc } from '../sim/ship.js';
 import { refusal } from '../sim/orders.js';
 import { CATALOG } from '../ships/catalog.js';
 import { ROOM_COLORS } from './form.js';
@@ -265,23 +265,44 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
       else { ins = I.none; ic = ''; }
       setText(el.inspector, ins); setClass(el.inspector, ic);
 
-      // Buttons: state, availability, progress
-      const B = el.buttons;
+      // Buttons: state, availability, progress, and a reason line that says why one cannot act now.
+      // The reasons come from the sim's refusal(), so the button and the order never disagree.
+      const B = el.buttons, Y = T.why, ctxO = { range, enemy: them };
+      const lockWhy = replay ? Y.replay : auto ? Y.auto : null;
+      const km = range.toFixed(1);
+      const reasonOf = (o) => {
+        if (lockWhy) return [lockWhy, 'off'];
+        const why = refusal(me, o, ctxO);
+        switch (why) {
+          case null: return o === 'torps' || o === 'rail' ? [Y.ready, 'ready'] : [null, ''];
+          case 'noTubes': case 'noRail': return [Y.destroyed, 'off'];
+          case 'noTorps': return [Y.noAmmo, 'off'];
+          case 'reloading': return [Y.secs(Math.ceil(me.torpReload)), 'wait'];
+          case 'tailNoTubes': return [Y.tail, 'off'];
+          case 'tooFar': return [Y.out(km, o === 'rail' ? me.railRange : N.TORP_RANGE), 'off'];
+          case 'noSensors': return [Y.noSensors, 'off'];
+          case 'charging': return [Y.secs(Math.ceil(me.railCharge)), 'wait'];
+          case 'aiming': return [Y.aim(Math.max(0, N.RAIL_AIM_TIME - me.railAim).toFixed(1)), 'aiming'];
+          case 'railNeedsBow': return [me.turnLeft > 0 ? Y.turning : Y.needBow, 'off'];
+          case 'noDrive': return [Y.driveGone, 'off'];
+          case 'noBurns': return [Y.noBurns, 'off'];
+          case 'aimingNoBurn': return [Y.lockedAim, 'off'];
+          case 'noPdc': return [Y.pdcGone, 'off'];
+          case 'alreadyPdc': case 'alreadyHolding': return [Y.on, 'active'];
+          case 'running': return o === 'run' ? [Y.running, 'active'] : [Y.running, 'off'];
+          default: return [null, ''];
+        }
+      };
       for (const o of Object.keys(B)) {
-        const active = (o === 'hold' && me.move.coast && !me.orders.run) || o === me.orders.pdc || (o === 'run' && me.orders.run);
-        B[o].classList.toggle('active', active);
+        const [why, state] = reasonOf(o), btn = B[o], hint = btn.querySelector('.hint');
+        setText(hint, why || T.hints[o]);
+        hint.classList.toggle('reason', !!why);
+        for (const c of ['off', 'wait', 'ready', 'aiming', 'active']) btn.classList.toggle(c, c === state);
+        btn.setAttribute('aria-disabled', state === 'off' ? 'true' : 'false');
       }
       setProgress(B.torps, me.torpReload > 0 ? 1 - me.torpReload / me.reloadTime : 1, `${me.torps}`);
-      setProgress(B.rail, me.railAim >= 0 ? me.railAim / N.RAIL_AIM_TIME : 1 - me.railCharge / me.railRecharge, me.railAim >= 0 ? 'AIM' : '');
+      setProgress(B.rail, me.railAim >= 0 ? me.railAim / N.RAIL_AIM_TIME : 1 - me.railCharge / me.railRecharge, '');
       setProgress(B.burn, 1, `${me.burns}`);
-      B.torps.classList.toggle('dead', !alive(me, 'tubes') || me.torps === 0 || exposure(me) === 'tail');
-      B.rail.classList.toggle('dead', !canAimRail(me));
-      B.rail.classList.toggle('aiming', me.railAim >= 0);
-      B.burn.classList.toggle('dead', !alive(me, 'drive') || me.burns === 0);
-      for (const o of ['hold', 'run']) B[o].classList.toggle('dead', !alive(me, 'drive'));
-      for (const o of ['guard', 'rake']) B[o].classList.toggle('dead', !pdcAlive(me));
-      B.torps.classList.toggle('ready', me.torpReload === 0 && range <= N.TORP_RANGE && canFireTubes(me));
-      B.rail.classList.toggle('ready', me.railCharge === 0 && me.railAim < 0 && range <= me.railRange && canAimRail(me));
 
       // Result overlay
       if (battle.result) {

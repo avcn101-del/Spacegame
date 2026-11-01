@@ -43,7 +43,7 @@ export function drawArcs(ctx, ship, cx, cy, rot, radius, fill, line) {
 // drawArcs so the hangar can put it over the form (its wedges sit under the hull).
 export function drawPdcCounts(ctx, ship, cx, cy, rot, radius, at = 0.8) {
   ctx.save();
-  ctx.font = '10px "SF Mono", Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '11px "SF Mono", Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const a of arcsOf(ship)) {
     const r = radius(a);
     if (!a.n || r < 26) continue;
