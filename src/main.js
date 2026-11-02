@@ -56,7 +56,7 @@ const tactical = makeTactical(document.getElementById('tactical'), {
 const closeup = makeCloseup(document.getElementById('closeup'));
 const picker = makePicker(document.getElementById('picker')); // TAC: their layout, to pick a target room
 const cuWorld = makeTactical(document.getElementById('cu-world'), {
-  inset: () => ({ top: 0, bottom: 0, left: heroLeft('closeup'), right: heroRight('closeup') }), camera: 'engage', quiet: true,
+  inset: () => ({ top: 0, bottom: 0, left: heroLeft('closeup'), right: heroRight('closeup') }), camera: 'engage', quiet: !hero, // the dock owns shake and white flash; under ?hero=1 the dock is hidden, so the stage takes them
   maxScale: 90, markPx: [36, 48], // knife range reads closer; big top-down hull marks
 });
 // Events and draws go only to the view on show, so a hidden view never replays old effects.
