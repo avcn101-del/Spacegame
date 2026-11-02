@@ -13,28 +13,30 @@ export const PRESETS = {
     runAt: 2,               // run when this few pieces are left and losing
     openWhenNoPdc: true,    // back off when every PDC mount is gone
     target: 'pdc',          // the enemy room it goes for: torpedoes flank to it, PDCs chew it when they see it; 'pdc' is the least-covered living mount; null for the exposed end
+    burnSalvo: 0.25,        // chance to Burn bow-on just before a salvo (faster torpedoes, less time under their PDCs); 0.5 cut AI battles to 81 s
+    torpDodge: 0.5,         // chance per tick to Burn when a torpedo of theirs is within AI_TORP_DODGE
     sternAfterSalvo: true,  // after firing, swing the stern to them while the tubes reload: their answer meets drive and tubes, not rail and sensors
   },
   // Stays out at torpedo range, lets the railgun do the work.
   sniper: {
     range: 'open', face: 'bow', pdc: 'guard', torps: 'always',
-    railGamble: 0.1, burnChance: 0.6, runAt: 2, openWhenNoPdc: true, target: 'drive', sternAfterSalvo: true,
+    railGamble: 0.1, burnChance: 0.6, runAt: 2, openWhenNoPdc: true, target: 'drive', sternAfterSalvo: true, burnSalvo: 0, torpDodge: 0.6, // keeps its range: no Burn in
   },
   // Closes, keeps PDCs on guard, saves torpedoes until their PDCs are down.
   turtle: {
     range: 'close', face: 'side', pdc: 'guard', torps: 'guardDown',
-    railGamble: 0.0, burnChance: 0.6, runAt: 3, openWhenNoPdc: true, target: 'tubes', sternAfterSalvo: true,
+    railGamble: 0.0, burnChance: 0.6, runAt: 3, openWhenNoPdc: true, target: 'tubes', sternAfterSalvo: true, burnSalvo: 0, torpDodge: 0.6,
   },
   // The Belter gunship: closes broadside for its mounts, fires everything, never has a rail to gamble.
   // It never shows its stern: with no plating, one salvo end-on kills drive, tubes, crew and bridge (replay 29836).
   gunship: {
     ship: 'belter', range: 'close', face: 'side', pdc: 'auto', torps: 'always',
-    railGamble: 0, burnChance: 0.3, runAt: 2, openWhenNoPdc: true, target: 'pdc', sternAfterSalvo: false,
+    railGamble: 0, burnChance: 0.3, runAt: 2, openWhenNoPdc: true, target: 'pdc', sternAfterSalvo: false, burnSalvo: 0.25, torpDodge: 0.3,
   },
   // Fights until the end, never runs, never dodges.
   berserker: {
     range: 'close', face: 'side', pdc: 'rake', torps: 'always',
-    railGamble: 1.0, burnChance: 0.0, runAt: 0, openWhenNoPdc: false, target: null, sternAfterSalvo: false,
+    railGamble: 1.0, burnChance: 0.0, runAt: 0, openWhenNoPdc: false, target: null, sternAfterSalvo: false, burnSalvo: 1.0, torpDodge: 0, // every salvo with a Burn in, never dodges
   },
 };
 export const DEFAULT_PRESET = 'brawler';

@@ -643,3 +643,21 @@ Presentation only, behind `?hero=1`: reads events, never touches the sim; no per
   zone is stop.
 - `main.js` owns time: real dt, pause, slow-mo on `railHit` and
   `pieceDead`, and calls `battle.step(N.DT)` in fixed steps.
+
+## Torpedo delta-v (C, 2026-11-02; the owner: the relative speed cap hid the launcher's and the target's speeds)
+
+`stepTorp` (sim/weapons.js): no speed cap. A torpedo has `TORP_DV` (3 km/s) of drive. At launch it records the closing
+speed it wants: the ships' closing speed at launch (`-rangeRate()`, never below 0; the tube's sideways kick not counted)
+plus `TORP_BOOST` (1.5). Each step it pushes its velocity relative to the target toward the line to its aim point at
+that speed (it never brakes on the run in; the flank swing brakes to `TORP_FLANK_SPEED`), at `TORP_HOMING` at most, and
+pays for every push. Dry, it flies straight; dry and going away, it is a miss (`torpMiss` with `dry`). PDC Guard is
+unchanged (a kill rate per second in range), so a faster torpedo spends less time in range and dies less often.
+Consequences: Burn bow-on and salvo (the launch closes faster), two ships closing add their speeds, a target that
+keeps running drains a torpedo, a late Burn dodges a fast one more often. AI: `burnSalvo` (Burn bow-on just before a
+salvo, within `AI_BURN_SALVO_CONE`) and `torpDodge` (Burn when a torpedo is within `AI_TORP_DODGE`, not stern-to,
+keeping one Burn for the railgun) per preset.
+Lab (one salvo at a still target on Guard, 8 km, 200 seeds): standing launch 51 % killed, 1.6 s in PDC range (old: the
+same); launcher Burned in at 0.8 km/s 32 % killed, 1.1 s (old: 51 %). Brawler vs brawler (80 seeds): torpedoes killed
+75 % -> 51 %; the last kill that decided a won battle PDC 54 % -> 42 % (40 seeds before), torpedo 39 % -> 48 %; average
+length 145 s -> 107 s. Arena: battles shorter in most pairings; berserker (Burns in every salvo) vs brawler 1 / 97 ->
+26 / 59.

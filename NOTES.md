@@ -5,7 +5,12 @@ Ideas go here. They are not built until the owner asks.
 - Asymmetric enemies: Belter gunship (many PDCs and torpedoes, no railgun,
   slow); UNN destroyer (bigger, you are the underdog).
 - Nuke torpedo: one per ship, one hit kills, firing it is a decision.
-- Breaching pods / boarding.
+- Breaching pods / boarding (the owner, 2026-11-02): a pod flies like a torpedo (PDCs shoot it down); on a hit the room
+  is not destroyed but taken after a few seconds (a timer per room, no crew counts); the bridge taken = a new end,
+  "captured", with its own end scene. After A and C.
+- Torpedo kinds, picked in the hangar (the launcher slot), after C: fast with little delta-v (Burn dodges it) or slow
+  with much; nuke (below); decoy (draws PDC fire, saturates Guard); breaching pod (above).
+- AP rounds weaker against torpedoes (the owner thought they were; today HE and AP kill torpedoes alike).
 - Shipyard: ships built from parts, Cosmoteer style.
 - Power routing between systems, FTL style.
 - Crew and a Star Trek bridge: orders acknowledged with a delay.
