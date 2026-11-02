@@ -515,6 +515,31 @@ My ship as an object, rear-oblique, in a window at the left of both views. `src/
   sparks). Delays are a `wait` on the fx item, counted only while time runs. The glow, sparks and smoke of PR 61 stay.
 - S2 (not built): bank, plume by thrust, Burn lines, hit flashes, local impact frame, scorch via a dock getter.
 
+## CINE-2D cut shots: spec (2026-11-02, the owner's answers; not built, waits for "go")
+
+Presentation only, behind `?hero=1`: reads events, never touches the sim; no per-class art.
+- Beats: a job room's death (not frame) and a tear, on either ship. Not torpedo hits on the hull, not PDC.
+- One at a time: a beat during a cut, or within 2 s of its start, is dropped; a tear always wins (it replaces the cut).
+- Where: a panel over the middle of the world stage, about 40 % of its width; never over the buttons, the top bar or
+  the status line.
+- Length: about 1.2 s real time, inside the existing slow-mo (`SLOWMO_TIME` 0.6 s at x0.25); the game never pauses.
+- Input: a tap anywhere skips it; drags and buttons still work while it plays. A CINE toggle in the top bar, default
+  on, kept in localStorage.
+- Art: room interiors only (no hull-plate shots yet). Walls follow the room's cell outline in the form; machinery
+  per room kind drawn in code, keyed like `BLAST` (drive: plasma conduits; tubes: the magazine; bridge: consoles;
+  rail: capacitor banks; crew: bunks; sensors: screens; pdc: ammo feed). The event's bearing picks the side the
+  breach opens on.
+- Crew (dark comedy, the owner's tone; visual only, the rule "no crew counts" stands): 1 to 3 small spacesuited
+  figures per room, from the room kind, drawn in code, our own design (not Among Us's bean-with-visor). Mine in my
+  colour, theirs in theirs. Gore level (b): flat red smears, bones, empty suits, no detailed flesh. Deaths per kind:
+  drive: burnt to a skeleton that drops; crew: sucked out of the breach, waving; tubes: blown off, the suit stays;
+  bridge: red light, one still holding a coffee cup; rail: electrocuted, hair on end; sensors: headphones on, never
+  noticed.
+- PRs (estimate 8 to 13 h): C1 (3 to 4 h) the panel, beats, queue, skip, toggle, one interior (drive) for the
+  owner's look check; C2 (3 to 4 h) every room kind's interior; C3 (2 to 5 h) the crew and their deaths.
+- Risks: the panel covers the stage while it plays (the toggle is the way out); a code-drawn crew at 20 to 30 px may
+  not read on the phone; unknown until the owner sees C1 and C3.
+
 ## Render module contract
 
 - `silhouette.js`: `drawShipMark` and `COLORS` are used; the art tables
