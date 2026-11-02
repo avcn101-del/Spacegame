@@ -217,7 +217,7 @@ function frame(now) {
   battle.events.length = 0;
   for (const r of VIEWS[view]) r.draw(battle, dtGame);
   if (hero) hero.draw(view, battle);
-  if (view === 'tac') picker.draw(battle, dtReal);
+  picker.draw(battle, dtReal); // nothing unless open (TAC, or the close-up's hero windows)
   hud.draw(battle, paused, dtReal);
   perfPush(perfWork, performance.now() - t0);
   requestAnimationFrame(frame);
@@ -270,7 +270,20 @@ attachTap(document.getElementById('picker'), (x, y) => {
   const room = picker.roomAt(battle, x, y);
   if (!room) return; // frame, void, a dead room or the edge: the panel stays
   picker.hide();
-  tapThem(room);
+  if (picker.side() === 'me') tapMine(room); else tapThem(room);
+});
+// ?hero=1, close-up: the hero windows stand in for the dock. A tap on their window opens their layout (target a
+// room, as on TAC); a tap on mine opens my layout (what a room does). The panel is centred on the stage between
+// the windows. A tap elsewhere on the stage closes an open panel; a drag still steers.
+if (hero) attachTap(document.getElementById('cu-world'), (x, y) => {
+  if (view !== 'closeup') return;
+  if (picker.isOpen()) { picker.hide(); return; }
+  const inside = (r) => r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  const who = inside(hero.rect('closeup', battle, 'me')) ? 'me' : inside(hero.rect('closeup', battle, 'them')) ? 'them' : null;
+  if (!who || (who === 'them' && (replayer || autoPilot))) return;
+  const cv = document.getElementById('cu-world').getBoundingClientRect(), gm = document.getElementById('game').getBoundingClientRect();
+  const l = heroLeft('closeup'), r = heroRight('closeup');
+  picker.show({ x: cv.left - gm.left + l, y: cv.top - gm.top, w: cv.width - l - r, h: cv.height }, battle.ships[who === 'me' ? 0 : 1], who);
 });
 // The dock: taps only (a drag that starts here never steers).
 attachTap(document.getElementById('closeup'), (x, y) => {

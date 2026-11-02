@@ -482,7 +482,13 @@ My ship as an object, rear-oblique, in a window at the left of both views. `src/
   right edge, the same pose as mine (astern, bow up), edged in their colour; its width is the stage's RIGHT inset.
   TAC keeps my window only. The shake and the white flash: under the flag the world stage is not quiet (the same
   code TAC uses); the hero windows are drawn after it with their own transform, so they never shake. Not yet moved
-  off the dock: tap-a-room on both ships (PR B: a tap on a window opens the picker), hit fx in the windows.
+  off the dock: hit fx in the windows.
+- PR B (tap-a-room under the flag): a tap on a hero window on the close-up opens the TAC picker (`picker.js`, now
+  with a side) centred on the stage between the windows. Their window: their layout, bow left, tap a standing room to
+  target it (`tapThem`, not in a replay or AUTO). My window: "my layout" (`T.picker.mine`), bow right, my colour, tap
+  any job room for what it does (`tapMine`, the dock's inspect toast). A tap elsewhere on the stage closes it; a drag
+  still steers; the 6 s timeout, a view switch and a new battle close it as on TAC. Flag off: no tap handler on the
+  stage, the picker only opens on TAC as before.
 - S2 (not built): bank, plume by thrust, Burn lines, hit flashes, local impact frame, scorch via a dock getter.
 
 ## Render module contract
