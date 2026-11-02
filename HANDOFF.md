@@ -37,6 +37,7 @@ The plan the owner approved (2026-11-02), in this order, one PR each, all behind
    window or over the stage; length; skip and toggle; which beats; how the room interior / hull plate art is
    generated from the form) and STOP for his answers. Then estimate (guess 6 to 10 h, 2 or 3 PRs).
 Run 1 then 2 without waiting (merge each after checks, tell the owner what to look at), stop at 3.
+Done 2026-11-02: 1 = PR 63, 2 = PR 64. 3: the owner answered; spec in ARCHITECTURE "CINE-2D cut shots"; next is C1, after his go.
 Not planned: bank on turns, plume by thrust, Burn speed lines (only if the owner asks). G2 (audio) still frozen.
 
 Known risks: a room death rebakes the hull (15 to 30 ms headless at dpr 2.6); watch for a hitch on the phone.
