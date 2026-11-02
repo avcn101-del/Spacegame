@@ -9,6 +9,7 @@ import { makeCloseup } from './render/closeup.js';
 import { makeHud } from './render/hud.js';
 import { makePicker } from './render/picker.js';
 import { makeHero } from './render/hero.js';
+import { makeCine } from './render/cine.js';
 import { renderDpr } from './render/look.js';
 import { exportReplay, makeReplayer, parseReplay } from './sim/replay.js';
 import { PRESETS, DEFAULT_PRESET } from './ai/presets.js';
@@ -49,6 +50,25 @@ const hero = params.get('hero') === '1' ? makeHero(
 if (hero) document.body.classList.add('hero');
 const heroLeft = (v) => (hero ? hero.left(v, battle) : 0);
 const heroRight = (v) => (hero ? hero.right(v, battle) : 0);
+// ?hero=1: CINE-2D cut shots (render/cine.js). A panel over the middle of the view's stage (between the hero windows,
+// clear of the HUD) on a room death or a tear; a tap anywhere skips it (and still does what it does); the CINE button
+// in the header turns them off (kept on this phone). Flag off: no button, no listener, nothing drawn.
+const cineStage = (v) => {
+  const cv = document.getElementById(v === 'tac' ? 'tactical' : 'cu-world');
+  if (v === 'tac') { const top = cssPx('--top'), l = heroLeft('tac'); return { x: l, y: top, w: cv.clientWidth - l - 8, h: cv.clientHeight - top - cssPx('--bottom') - cssPx('--status') }; }
+  const l = heroLeft('closeup'), r = heroRight('closeup');
+  return { x: l, y: 0, w: cv.clientWidth - l - r, h: cv.clientHeight };
+};
+const cine = hero ? makeCine({ tac: document.getElementById('tactical'), closeup: document.getElementById('cu-world') }, cineStage) : null;
+if (cine) {
+  const b = document.createElement('button');
+  b.id = 'cine';
+  const show = () => { b.textContent = T.cine; b.classList.toggle('on', cine.isOn()); };
+  b.addEventListener('click', () => { cine.setOn(!cine.isOn()); show(); });
+  document.getElementById('pause').before(b);
+  show();
+  document.addEventListener('pointerdown', () => cine.skip(), true); // skip only: the tap still reaches what it hit
+}
 const tactical = makeTactical(document.getElementById('tactical'), {
   // the part of the screen not covered by HUD; the camera fits the ships in here
   inset: () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status'), left: hero ? heroLeft('tac') : 8, right: 8 }),
@@ -137,7 +157,8 @@ function start(replay = null) {
   picker.hide();
   for (const r of [tactical, cuWorld, closeup]) r.reset(battle); // nothing from the last battle carries over (camera, fx)
   if (hero) hero.reset(); // the hero windows: new bake, no scorch, the fx counter back to 0
-  window.game = { battle, tactical, closeup, cuWorld, picker, hero, setView, view: () => view, exportReplay: () => exportReplay(battle), perf }; // for debugging and tests
+  if (cine) cine.reset();
+  window.game = { battle, tactical, closeup, cuWorld, picker, hero, cine, setView, view: () => view, exportReplay: () => exportReplay(battle), perf }; // for debugging and tests
 }
 
 // Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
@@ -215,10 +236,12 @@ function frame(now) {
     }
     for (const r of VIEWS[view]) r.onEvent(ev);
     if (hero) hero.onEvent(ev, battle); // every view: the hull's scorch is kept while a window is hidden
+    if (cine) cine.onEvent(ev, battle);
   }
   battle.events.length = 0;
   for (const r of VIEWS[view]) r.draw(battle, dtGame);
-  if (hero) { hero.draw(view, battle); hero.step(dtGame); } // step after draw: an impact frame set this frame is drawn HERO.NEG frames
+  if (hero) { hero.draw(view, battle); hero.step(dtGame); }
+  if (cine) { cine.draw(view); cine.step(dtReal); } // real time: the shot plays through the slow-mo and a pause // step after draw: an impact frame set this frame is drawn HERO.NEG frames
   picker.draw(battle, dtReal); // nothing unless open (TAC, or the close-up's hero windows)
   hud.draw(battle, paused, dtReal);
   perfPush(perfWork, performance.now() - t0);

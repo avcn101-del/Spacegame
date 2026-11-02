@@ -108,6 +108,7 @@ export const T = {
     pdc: 'one gun fewer', crew: 'reload and recharge at half speed', tubes: 'no torpedoes', drive: 'adrift, no turning, no Burn',
   },
   // One line when a section tears off: whose, which end, what went with it.
+  cine: 'CINE', // ?hero=1: the cut shots' toggle
   tear: { bow: 'BOW TORE OFF', stern: 'STERN TORE OFF' }, adrift: 'adrift', frameAdrift: 'frame adrift',
   lost: { me: 'OUR', them: 'THEIR' }, gone: 'GONE',
   roomInfo: {

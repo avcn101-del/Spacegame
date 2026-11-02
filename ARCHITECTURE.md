@@ -537,6 +537,16 @@ Presentation only, behind `?hero=1`: reads events, never touches the sim; no per
   noticed.
 - PRs (estimate 8 to 13 h): C1 (3 to 4 h) the panel, beats, queue, skip, toggle, one interior (drive) for the
   owner's look check; C2 (3 to 4 h) every room kind's interior; C3 (2 to 5 h) the crew and their deaths.
+- C1 built (2026-11-02): `src/render/cine.js` `makeCine(canvases, stage)` -> `{onEvent, step, draw, skip, reset, setOn,
+  isOn, playing, panelRect}`; main.js feeds every event, draws after the hero windows and steps on real time (the
+  shot plays through slow-mo and pause). Both views: the stage is the view's canvas between the hero windows and clear
+  of the HUD. Room shot: the room's cells top-down (bow right, row 0 at the top), half a cell of hull round it, walls on
+  every cell edge with no room cell beyond, the breach on the outermost cell toward the enemy (`shotFrom`), flash,
+  debris out then sucked back, red light, smoke to the hole, a slow push-in. Drive: conduits that rupture and a
+  reactor that dies; every other kind a generic console interior until C2. Tear shot: the whole hull, the cells that
+  broke away (cut or torn, on that end, not shown before) slide off and turn, sparks on the break. The CINE button
+  (`#cine`, created only under the flag; header one column wider) and a capture-phase pointerdown that only skips.
+  `window.game.cine` for tests. Flag off: no button, header widths as main.
 - Risks: the panel covers the stage while it plays (the toggle is the way out); a code-drawn crew at 20 to 30 px may
   not read on the phone; unknown until the owner sees C1 and C3.
 

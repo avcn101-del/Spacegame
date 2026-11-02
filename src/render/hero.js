@@ -77,7 +77,7 @@ const css = (c, a = 1) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.r
 const newCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; };
 
 // A room's kind from its design (gun, sensors, core, crew, launcher, drive), pdc for a mount, frame else.
-function kindOf(ship, room) {
+export function kindOf(ship, room) {
   if (isPdc(room)) return 'pdc';
   const r = ((DESIGNS[ship.design] || {}).rooms || []).find((q) => q.id === room);
   return r ? r.kind : 'frame';
