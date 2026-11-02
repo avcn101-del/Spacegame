@@ -281,9 +281,10 @@ attachDrag(document.getElementById('cu-world'), cuWorld, () => battle, (arg) => 
 const roomInfo = (room) => T.roomInfo[roomKey(room)];
 // Tap a room on their ship: go for it (tap again to clear). Tap a room on ours: what it does.
 function tapThem(room) {
-  if (replayer || autoPilot || !room) return;
+  if (!room) return;
   const me = battle.ships[0], pc = battle.ships[1].pieces[room];
   const info = `${T.pieces[roomKey(room)]} ${Math.ceil(pc.hp)}/${pc.maxHp}. ${roomInfo(room)}`;
+  if (replayer || autoPilot) { hud.toast(info, 3, 'event'); return; } // AUTO or a replay: look, not target
   const arg = { room: me.target === room ? null : room };
   const why = battle.order('me', 'target', arg);
   if (why) hud.toast(`${T.refusal[why]} ${info}`, 2.4, 'no');
@@ -303,12 +304,20 @@ const tacStage = () => {
   const cv = document.getElementById('tactical'), top = cssPx('--top');
   return { x: 8, y: top, w: cv.clientWidth - 16, h: cv.clientHeight - top - cssPx('--bottom') - cssPx('--status') };
 };
+// A tap on their ship on a map: their mark, their range label under it, or, when they are off the stage, the wedge
+// and its label on the edge (the anchored stage keeps them off it at long range: the owner tapped the label, nothing).
+const TAP_LABEL_PAD = 10; // px round a label or the wedge's tip that still counts
+function tapsThem(map, x, y, markPx = TAP_MARK_PX) {
+  const q = map.shipScreen('them'), inR = (r) => r && x >= r.x - TAP_LABEL_PAD && x <= r.x + r.w + TAP_LABEL_PAD && y >= r.y - TAP_LABEL_PAD && y <= r.y + r.h + TAP_LABEL_PAD;
+  const w = map.bearing && map.bearing();
+  return (q && Math.hypot(x - q.x, y - q.y) <= markPx) || inR(map.rangeLabel && map.rangeLabel())
+    || (w && (inR(w.label) || Math.hypot(x - w.tip.x, y - w.tip.y) <= TAP_MARK_PX));
+}
 attachTap(document.getElementById('tactical'), (x, y) => {
   if (view !== 'tac') return;
   if (picker.isOpen()) { picker.hide(); return; }
-  const q = tactical.shipScreen('them');
-  if (!q || Math.hypot(x - q.x, y - q.y) > TAP_MARK_PX || replayer || autoPilot) return;
-  picker.show(tacStage(), battle.ships[1]);
+  if (!tapsThem(tactical, x, y)) return;
+  picker.show(tacStage(), battle.ships[1]); // in AUTO or a replay too: to look (tapThem does not target there)
 });
 attachTap(document.getElementById('picker'), (x, y) => {
   const room = picker.roomAt(battle, x, y);
@@ -324,9 +333,9 @@ if (hero) attachTap(document.getElementById('cu-world'), (x, y) => {
   if (picker.isOpen()) { picker.hide(); return; }
   const inside = (r) => r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   const near = (id) => { const q = cuWorld.shipScreen(id); return q && Math.hypot(x - q.x, y - q.y) <= TAP_MARK_PX * 1.5; }; // heropop: the marks
-  const who = heroPop ? (near('them') ? 'them' : near('me') ? 'me' : null)
+  const who = heroPop ? (tapsThem(cuWorld, x, y, TAP_MARK_PX * 1.5) ? 'them' : near('me') ? 'me' : null)
     : inside(hero.rect('closeup', battle, 'me')) ? 'me' : inside(hero.rect('closeup', battle, 'them')) ? 'them' : null;
-  if (!who || (who === 'them' && (replayer || autoPilot))) return;
+  if (!who) return; // their layout opens in AUTO or a replay too: to look (tapThem does not target there)
   const cv = document.getElementById('cu-world').getBoundingClientRect(), gm = document.getElementById('game').getBoundingClientRect();
   const l = heroLeft('closeup'), r = heroRight('closeup');
   picker.show({ x: cv.left - gm.left + l, y: cv.top - gm.top, w: cv.width - l - r, h: cv.height }, battle.ships[who === 'me' ? 0 : 1], who);
