@@ -21,7 +21,10 @@ export const HERO = {
   KEYSTONE: 0.2,        // the bow end is this much narrower than the stern end (the far end is further away)
   SHIP_LEN: 0.62,       // share of the window height the hull may take; the rest is plume below and air above
   PLUME_LEN: 0.2,       // share of the window height the idle plume runs toward the camera
-  BEAM_SHARE: 0.62,     // share of the window width the beam takes when the width is fitted to the ship
+  BEAM_SHARE: 0.62,
+  FLAT_W: 0.36,         // heroflat: the strip's width, share of the screen
+  FLAT_H: 0.38,         // heroflat: the strip's height, share of the stage's (two corners leave the middle band free)
+  FLAT_ALPHA: 0.55,     // heroflat: the strips lie over the stage (the camera does not avoid them yet): see through     // share of the window width the beam takes when the width is fitted to the ship
   TAC_MAX_W: 0.34,      // TAC: the window is at most this share of the screen width
   TAC_MAX_H: 300,       // css px: on a tall screen the window stops growing
   TAC_MIN_W: 96,        // css px
@@ -95,8 +98,14 @@ function cellForHeight(ship, wh) {
 }
 // The window rect (css px, canvas coords) for a view on a canvas cw x ch. hud: {top, bottom} covered (TAC).
 // side: 'me' at the left edge, 'them' at the right edge (the close-up only).
-export function heroRect(view, ship, cw, ch, hud, side = 'me') {
+export function heroRect(view, ship, cw, ch, hud, side = 'me', flat = false) {
   const Hc = ship.form.h;
+  if (flat) { // heroflat: a strip lying down, mine at the bottom left (bow right), theirs at the top right (bow left)
+    const top = view === 'tac' ? hud.top + HERO.PAD : 0, bot = view === 'tac' ? ch - hud.bottom - HERO.PAD : ch;
+    const w = clamp(Math.round(cw * HERO.FLAT_W), 160, 360), h = clamp(Math.round((bot - top) * HERO.FLAT_H), 56, 140);
+    const x0 = view === 'tac' ? 8 : 0;
+    return side === 'them' ? { x: cw - w, y: top, w, h } : { x: x0, y: bot - h, w, h };
+  }
   if (view === 'tac') {
     const y = hud.top + HERO.PAD, h = Math.max(40, Math.min(HERO.TAC_MAX_H, ch - hud.top - hud.bottom - 2 * HERO.PAD));
     const w = clamp(Math.ceil(cellForHeight(ship, h) * Hc / HERO.BEAM_SHARE), HERO.TAC_MIN_W, Math.round(cw * HERO.TAC_MAX_W));
@@ -201,7 +210,7 @@ function stack(g, scratch, tex, m, pr, z, px, dpr) {
 
 // Fill a canvas layer with the key-light gradient over what is already there (source-atop).
 function keyLight(g, ww, wh, lit, dark) {
-  const K = LOOK.KEY, cx = ww / 2, cy = wh / 2, L = Math.hypot(ww, wh) / 2;
+  const K = KEY, cx = ww / 2, cy = wh / 2, L = Math.hypot(ww, wh) / 2;
   const gr = g.createLinearGradient(cx + K.x * L, cy + K.y * L, cx - K.x * L, cy - K.y * L);
   gr.addColorStop(0, `rgba(255,255,255,${lit})`); gr.addColorStop(0.5, 'rgba(255,255,255,0)'); gr.addColorStop(1, `rgba(0,0,0,${dark})`);
   g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = gr; g.fillRect(0, 0, ww, wh); g.restore();
@@ -214,13 +223,20 @@ function rim(dst, layer, dpr, col, a, px = LOOK.RIM_PX) {
   g.globalCompositeOperation = 'copy'; g.drawImage(layer, 0, 0);
   g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, r.width, r.height);
   g.globalCompositeOperation = 'destination-out';
-  g.drawImage(layer, -LOOK.KEY.x * px * dpr, -LOOK.KEY.y * px * dpr);
+  g.drawImage(layer, -KEY.x * px * dpr, -KEY.y * px * dpr);
   dst.save(); dst.setTransform(1, 0, 0, 1, 0, 0); dst.globalAlpha = a; dst.drawImage(r, 0, 0); dst.restore();
 }
 
 // --- the bake: the static hull, one bitmap per battle and hull state --------------------------------
 
-function bake(ship, ww, wh, dpr) {
+// The key light the bake uses, in the bake's own frame: LOOK.KEY, or turned so that it lands on LOOK.KEY once a flat
+// window (heroflat) has turned the bitmap a quarter round.
+let KEY = LOOK.KEY;
+function bake(ship, ww, wh, dpr, key = LOOK.KEY) {
+  const prevKey = KEY; KEY = key;
+  try { return bakeLit(ship, ww, wh, dpr); } finally { KEY = prevKey; }
+}
+function bakeLit(ship, ww, wh, dpr) {
   const pr = projection(ship, ww, wh), { c, P, zPx } = pr;
   const out = newCanvas(ww * dpr, wh * dpr), g = out.getContext('2d');
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -278,7 +294,7 @@ function bake(ship, ww, wh, dpr) {
     const hPx = h * zPx;
     // contact shadow: the footprint, dark, pushed away from the light by the block's height
     const sh = paint(m, () => [0, 0, 0], 0.5);
-    g.save(); g.translate(-LOOK.KEY.x * hPx * 0.9, -LOOK.KEY.y * hPx * 0.9); warp(g, sh, m, pr, deckZ); g.restore();
+    g.save(); g.translate(-KEY.x * hPx * 0.9, -KEY.y * hPx * 0.9); warp(g, sh, m, pr, deckZ); g.restore();
     // sides: the footprint stacked, darker toward the deck
     const sideTex = paint(m, () => mul(top, 0.42));
     stack(g, scratch, sideTex, m, pr, deckZ, hPx, dpr);
@@ -316,9 +332,9 @@ function bake(ship, ww, wh, dpr) {
     if (!standing(ship, cell)) return;
     const alive = ship.pieces[room].alive, p = P(mx + 0.5, my + 0.5, deckZ), r = HERO.DOME * c * p.k;
     g.fillStyle = 'rgba(0,0,0,0.45)';
-    g.beginPath(); g.ellipse(p.x - LOOK.KEY.x * r * 0.6, p.y - LOOK.KEY.y * r * 0.4, r * 1.1, r * 0.8, 0, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(p.x - KEY.x * r * 0.6, p.y - KEY.y * r * 0.4, r * 1.1, r * 0.8, 0, 0, Math.PI * 2); g.fill();
     const base = alive ? roomColor(room) : DEAD, top = { x: p.x, y: p.y - r * 0.45 };
-    const dg = g.createRadialGradient(top.x + LOOK.KEY.x * r * 0.45, top.y + LOOK.KEY.y * r * 0.45, r * 0.1, top.x, top.y, r * 1.05);
+    const dg = g.createRadialGradient(top.x + KEY.x * r * 0.45, top.y + KEY.y * r * 0.45, r * 0.1, top.x, top.y, r * 1.05);
     dg.addColorStop(0, css(mix(base, [255, 255, 255], alive ? 0.55 : 0.1))); dg.addColorStop(0.55, css(mix(base, STEEL, 0.35))); dg.addColorStop(1, css(mul(base, 0.35)));
     g.fillStyle = dg;
     g.beginPath(); g.ellipse(top.x, top.y, r, r * 0.85, 0, 0, Math.PI * 2); g.fill();
@@ -383,20 +399,22 @@ function hullKey(ship) {
 
 // canvases: {tac, closeup} the canvas each view draws on; hud(): {top, bottom} css px the HUD covers on TAC.
 // twin: the close-up shows their ship too, in a window at the right edge (same pose as mine). TAC: mine only.
-export function makeHero(canvases, hud, { twin = false } = {}) {
+export function makeHero(canvases, hud, { twin = false, flat = false } = {}) {
   const cache = {}; // side -> {key, canvas, info}
   const sides = (view) => (view === 'closeup' && twin ? ['me', 'them'] : ['me']);
   const rectFor = (view, ship, side) => {
     const cv = canvases[view];
     if (!cv || !cv.clientWidth || !cv.clientHeight) return null;
-    return heroRect(view, ship, cv.clientWidth, cv.clientHeight, view === 'tac' ? hud() : { top: 0, bottom: 0 }, side);
+    return heroRect(view, ship, cv.clientWidth, cv.clientHeight, view === 'tac' ? hud() : { top: 0, bottom: 0 }, side, flat);
   };
   // css px the camera's view rect must leave free at the left (my window) and the right (theirs): 0 with no window
   function left(view, battle) {
+    if (flat) return view === 'tac' ? 8 : 0; // the strips lie in the corners: the camera keeps its own insets
     const r = battle && rectFor(view, battle.ships[0], 'me');
     return r ? r.x + r.w + HERO.GAP : 0;
   }
   function right(view, battle) {
+    if (flat) return 0;
     if (!battle || !sides(view).includes('them')) return 0;
     const r = rectFor(view, battle.ships[1], 'them');
     return r ? r.w + HERO.GAP : 0;
@@ -410,34 +428,41 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
   function drawOne(view, battle, side, shot) {
     const cv = canvases[view], ship = battle.ships[side === 'me' ? 0 : 1], r = rectFor(view, ship, side);
     if (!r) return;
-    const dpr = renderDpr(), key = `${battle.seed}|${view}|${r.w}x${r.h}@${dpr}|${hullKey(ship)}`;
-    if (!cache[side] || cache[side].key !== key) cache[side] = { key, ...bake(ship, r.w, r.h, dpr) };
+    // vr: the window as the ship is drawn in it, bow up. A flat strip (heroflat) is that picture turned a quarter
+    // round (M: bow right for mine, bow left for theirs), the key light turned back so it still comes from LOOK.KEY.
+    const vr = flat ? { w: r.h, h: r.w } : { w: r.w, h: r.h };
+    const M = !flat ? [1, 0, 0, 1, 0, 0] : side === 'me' ? [0, 1, -1, 0, r.w, 0] : [0, -1, 1, 0, 0, r.h];
+    const lk = !flat ? LOOK.KEY : side === 'me' ? { x: LOOK.KEY.y, y: -LOOK.KEY.x } : { x: -LOOK.KEY.y, y: LOOK.KEY.x };
+    const dpr = renderDpr(), key = `${battle.seed}|${view}|${vr.w}x${vr.h}@${dpr}|${flat ? side : ''}|${hullKey(ship)}`;
+    if (!cache[side] || cache[side].key !== key) cache[side] = { key, ...bake(ship, vr.w, vr.h, dpr, lk) };
     const c = cache[side];
     const g = cv.getContext('2d');
-    // a cut: the window grows over the stage (R) and the camera pushes on the impact (cam); the bake stays at r's size
-    const cut = shot ? cutFrame(shot, r, cv.clientWidth, c.info, ship, side) : null, R = cut ? cut.R : r;
+    // a cut: the window grows over the stage (R) and the camera pushes on the impact; the bake stays at its own size
+    const cut = shot ? cutFrame(shot, r, cv, c.info, side, M) : null, R = cut ? cut.R : r;
     g.save();
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.translate(R.x, R.y);
     // the window: dark glass, rounded; on the close-up it sits on the stage's edge, square on that side
     const rad = HERO.RADIUS, corners = view !== 'closeup' ? rad : side === 'me' ? [0, rad, rad, 0] : [rad, 0, 0, rad];
     g.beginPath();
-    if (g.roundRect) g.roundRect(0, 0, R.w, R.h, corners); else g.rect(0, 0, R.w, R.h);
-    const bg = g.createLinearGradient(0, 0, 0, R.h);
-    bg.addColorStop(0, `rgba(10,15,26,${HERO.ALPHA})`); bg.addColorStop(1, `rgba(4,6,11,${HERO.ALPHA})`);
+    if (g.roundRect) g.roundRect(0, 0, R.w, R.h, flat ? rad : corners); else g.rect(0, 0, R.w, R.h);
+    const bg = g.createLinearGradient(0, 0, 0, R.h), al = flat && !cut ? HERO.FLAT_ALPHA : HERO.ALPHA;
+    bg.addColorStop(0, `rgba(10,15,26,${al})`); bg.addColorStop(1, `rgba(4,6,11,${al})`);
     g.fillStyle = bg; g.fill();
     g.strokeStyle = side === 'me' ? 'rgba(140,165,200,0.28)' : 'rgba(255,160,80,0.32)'; g.lineWidth = 1; g.stroke(); // their window edged in their colour
     g.clip();
-    if (cut) { g.save(); g.translate(cut.A.x - cut.Z * cut.F.x, cut.A.y - cut.Z * cut.F.y); g.scale(cut.Z, cut.Z); }
+    g.save();
+    if (cut) { g.translate(cut.A.x - cut.Z * cut.F0.x, cut.A.y - cut.Z * cut.F0.y); g.scale(cut.Z, cut.Z); }
+    g.transform(...M);
     const t = battle.t || 0, info = c.info;
     // the idle plume, behind the bell's mouth toward the camera
     if (info.bell) {
       const b = info.bell;
-      drawPlume(g, b.x, b.y, 0, 1, HERO.PLUME_LEN * r.h, b.r * 0.9, t, side === 'me' ? 11 : 23);
+      drawPlume(g, b.x, b.y, 0, 1, HERO.PLUME_LEN * vr.h, b.r * 0.9, t, side === 'me' ? 11 : 23);
     }
-    g.drawImage(c.canvas, 0, 0, r.w, r.h);
-    drawHits(g, side, info, r, battle.t || 0, ship);
-    drawIncoming(g, side, info, r, battle, ship);
+    g.drawImage(c.canvas, 0, 0, vr.w, vr.h);
+    drawHits(g, side, info, vr, battle.t || 0, ship);
+    drawIncoming(g, side, info, vr, battle, ship);
     if (info.bell) glow(g, info.bell.x, info.bell.y, info.bell.r * 1.6, [150, 200, 255], 0.35, false);
     // running lights: steady with a slow breath, the bow strobe flashes once every 1.6 s
     for (const L of info.lights) {
@@ -446,9 +471,9 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
       g.fillStyle = css(L.col, Math.min(1, a + 0.3)); g.beginPath(); g.arc(L.x, L.y, 1.1, 0, Math.PI * 2); g.fill();
       glow(g, L.x, L.y, 6, L.col, a * 0.6, false);
     }
+    if (cut) drawCut(g, shot, cut, info, ship, vr, dpr, lk);
+    g.restore();
     if (cut) {
-      drawCut(g, shot, cut, info, ship, r, dpr);
-      g.restore();
       // the flash of the impact, over the whole window
       if (shot.age < 0.08) { g.fillStyle = `rgba(255,255,255,${0.75 * (1 - shot.age / 0.08)})`; g.fillRect(0, 0, R.w, R.h); }
     }
@@ -463,23 +488,27 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
   // room dead (a room's death rebakes the hull): the flash covers the swap. All in the window's own coordinates.
   const ease = (x) => x * x * (3 - 2 * x);
   let cutKey = 0, cutMem = null; // what the cut playing has built once: the chunks, the section's bake
-  function cutFrame(shot, r, cw, info, ship, side) {
+  // r: the window's rect on screen; M: the turn from the bow-up picture to it (heroflat), identity else.
+  function cutFrame(shot, r, cv, info, side, M) {
     const a = shot.age, T = CINE.TIME;
     const grow = ease(clamp(Math.min(a / CINE.GROW, (T - a) / CINE.SHRINK), 0, 1));
     const v = ease(clamp(Math.min(a / CINE.ZOOM_IN, (T - a) / CINE.ZOOM_OUT), 0, 1));
     const Z = 1 + ((shot.kind === 'tear' ? CINE.ZOOM_TEAR : CINE.ZOOM) - 1) * v;
-    const maxW = Math.max(r.w, Math.round(cw * CINE.W)), W = r.w + (maxW - r.w) * grow;
-    const R = { x: side === 'me' ? r.x : r.x + r.w - W, y: r.y, w: W, h: r.h }, dx = r.x - R.x;
+    const maxW = Math.max(r.w, Math.round(cv.clientWidth * CINE.W)), W = r.w + (maxW - r.w) * grow;
+    // heroflat: the strip also grows toward the middle of the stage, to twice its height at most
+    const maxH = flat ? Math.min(r.h * 2, cv.clientHeight - r.h * 0.2) : r.h, H = r.h + (maxH - r.h) * grow;
+    const R = { x: side === 'me' ? r.x : r.x + r.w - W, y: flat && side === 'me' ? r.y + r.h - H : r.y, w: W, h: H };
     const m = centroidOf(shot.cells), z = shot.kind === 'room' ? HERO.WALL + (HERO.HEIGHT[shot.rk] || 0) : HERO.WALL;
-    const F = info.pr.P(m[0], m[1], z);
-    const A = { x: F.x + dx + (W / 2 - F.x - dx) * v, y: F.y + (r.h * 0.5 - F.y) * v };
-    return { R, Z, F, A, z, m };
+    const F = info.pr.P(m[0], m[1], z), F0 = { x: M[0] * F.x + M[2] * F.y + M[4], y: M[1] * F.x + M[3] * F.y + M[5] };
+    const sx = F0.x + r.x - R.x, sy = F0.y + r.y - R.y; // where the impact is drawn when the cut starts
+    const A = { x: sx + (W / 2 - sx) * v, y: sy + (H / 2 - sy) * v };
+    return { R, Z, F, F0, A, z, m };
   }
   const centroidOf = (cs) => [cs.reduce((q, c) => q + c[0] + 0.5, 0) / cs.length, cs.reduce((q, c) => q + c[1] + 0.5, 0) / cs.length];
   const quad = (P, x, y, z) => [P(x, y, z), P(x + 1, y, z), P(x + 1, y + 1, z), P(x, y + 1, z)];
   // Built once per cut: the hull pieces (two triangles per cell of the room, or of the break for a tear) and the
   // section's own bake for a tear.
-  function cutBuild(shot, cut, info, ship, r, dpr) {
+  function cutBuild(shot, cut, info, ship, r, dpr, lk) {
     const P = info.pr.P, hs = (i) => hash01(shot.s * 7919 + i);
     const [dX, dY] = screenDir(info, cut.m, -shot.bear[0], -shot.bear[1], cut.z); // the way the shot travels
     // hull plate: steel, a touch of the room's colour
@@ -511,12 +540,12 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
       const set = new Set(shot.cells.map(([x, y]) => `${x},${y}`));
       const fake = { ...ship, cells: ship.cells.map((row, y) => row.map((c, x) => (c && set.has(`${x},${y}`) ? { ...c, cut: false } : null))),
         pieces: Object.fromEntries(Object.entries(ship.pieces).map(([id, p]) => [id, { ...p, torn: false, alive: p.alive || p.torn }])) };
-      section = bake(fake, r.w, r.h, dpr).canvas;
+      section = bake(fake, r.w, r.h, dpr, lk).canvas;
     }
     return { chunks, section, dX, dY };
   }
-  function drawCut(g, shot, cut, info, ship, r, dpr) {
-    if (cutKey !== shot.s || !cutMem) { cutKey = shot.s; cutMem = cutBuild(shot, cut, info, ship, r, dpr); }
+  function drawCut(g, shot, cut, info, ship, r, dpr, lk) {
+    if (cutKey !== shot.s || !cutMem) { cutKey = shot.s; cutMem = cutBuild(shot, cut, info, ship, r, dpr, lk); }
     const M = cutMem, P = info.pr.P, a = shot.age, c = info.pr.c, hs = (i) => hash01(shot.s * 104729 + i);
     const fade = clamp((CINE.TIME - a) / 0.3, 0, 1), col = shot.kind === 'room' ? (BLAST[shot.rk] || {}).col || [255, 150, 60] : [255, 220, 170];
     const hf = (i) => hash01(shot.s * 89 + i + Math.floor(a * 25) * 131);

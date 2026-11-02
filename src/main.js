@@ -42,10 +42,14 @@ const cssPx = (name) => parseFloat(getComputedStyle(document.documentElement).ge
 // On the close-up the dock is hidden (body.hero) and their ship gets a window at the right; the world stage takes
 // the full height between them. The windows' widths join the insets, so the camera fit, the wedge and the labels
 // keep clear of them. Off: no window, no class, the insets are exactly as before.
+// &heroflat=1 (a trial, with hero=1): the windows lie down as strips in the corners, mine bottom left (bow right),
+// theirs top right (bow left), the two ships facing each other; the camera keeps its own insets (it does not avoid the
+// strips yet; they are see-through).
+const heroFlat = params.get('heroflat') === '1';
 const hero = params.get('hero') === '1' ? makeHero(
   { tac: document.getElementById('tactical'), closeup: document.getElementById('cu-world') },
   () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status') }),
-  { twin: true },
+  { twin: true, flat: heroFlat },
 ) : null;
 if (hero) document.body.classList.add('hero');
 const heroLeft = (v) => (hero ? hero.left(v, battle) : 0);
@@ -147,7 +151,7 @@ function start(replay = null) {
   hud.setAuto(!!autoPilot);
   paused = false; slowmo = 0; acc = 0;
   const fitQ = fitString(battle.designs.me.fit);
-  history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}${hero ? '&hero=1' : ''}`); // the spike flag survives a reload
+  history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}${hero ? '&hero=1' : ''}${hero && heroFlat ? '&heroflat=1' : ''}`); // the spike flags survive a reload
   picker.hide();
   for (const r of [tactical, cuWorld, closeup]) r.reset(battle); // nothing from the last battle carries over (camera, fx)
   if (hero) hero.reset(); // the hero windows: new bake, no scorch, the fx counter back to 0
