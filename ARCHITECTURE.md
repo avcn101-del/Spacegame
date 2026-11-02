@@ -572,6 +572,14 @@ Presentation only, behind `?hero=1`: reads events, never touches the sim; no per
   still comes from LOOK.KEY. A cut grows the strip to `CINE.W` wide and up to twice its height toward the middle. The
   camera keeps its own insets (it does not avoid the corners yet), so the strips are see-through (`FLAT_ALPHA`) and a
   mark can pass under one. The ship is about the same size as in the standing window (the strip's height limits it).
+- heropop (2026-11-02, `&heropop=1` with `hero=1`; the owner hardly looked at the windows): no window but during a cut,
+  then a big one lying down in its corner (`HERO.POP_W` 0.6 of the width, `POP_H` 0.72 of the stage; mine bottom left,
+  theirs top right): the ship about twice the strip's. The cut lasts 1.4 s: it fades in (`POP_IN`), shows the whole
+  ship `POP_SHOW` s, pushes x1.8 (`POP_ZOOM`, x1.2 on a tear), pulls back, fades out. The big window's bake is made at
+  `POP_DPR` 1.25 at most. The close-up's hull marks are bigger (markPx 54 to 72, was 36 to 48); a tap near a mark on the
+  close-up opens that ship's layout (no window to tap). The bake now works per layer in the box a mask covers
+  (`devBox`: stack, block tops, rims, the key light), not the whole window: same pixels (checked against main), a bake
+  at 844 x 390 dpr 2.6 headless 61 -> 38 ms (standing), 100 -> 44 ms (heropop).
 - Risks: the panel covers the stage while it plays (the toggle is the way out); a code-drawn crew at 20 to 30 px may
   not read on the phone; unknown until the owner sees C1 and C3.
 

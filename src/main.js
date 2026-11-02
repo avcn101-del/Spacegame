@@ -46,10 +46,14 @@ const cssPx = (name) => parseFloat(getComputedStyle(document.documentElement).ge
 // theirs top right (bow left), the two ships facing each other; the camera keeps its own insets (it does not avoid the
 // strips yet; they are see-through).
 const heroFlat = params.get('heroflat') === '1';
+// &heropop=1 (with hero=1; the owner hardly looked at the windows): no window but during a CINE cut, then a big one
+// lying down in its corner; the close-up's hull marks are bigger (the stage is all theirs); a tap on a mark on the
+// close-up opens that ship's layout, as on TAC.
+const heroPop = params.get('heropop') === '1';
 const hero = params.get('hero') === '1' ? makeHero(
   { tac: document.getElementById('tactical'), closeup: document.getElementById('cu-world') },
   () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status') }),
-  { twin: true, flat: heroFlat },
+  { twin: true, flat: heroFlat, pop: heroPop },
 ) : null;
 if (hero) document.body.classList.add('hero');
 const heroLeft = (v) => (hero ? hero.left(v, battle) : 0);
@@ -57,7 +61,7 @@ const heroRight = (v) => (hero ? hero.right(v, battle) : 0);
 // ?hero=1: CINE-2D cut shots (render/cine.js picks the beats; render/hero.js draws them: the hit ship's window grows
 // over the stage and zooms on the impact). A tap anywhere skips it (and still does what it does); the CINE button in
 // the header turns them off (kept on this phone). Flag off: no button, no listener, nothing drawn.
-const cine = hero ? makeCine((side) => view === 'closeup' || side === 'me') : null; // TAC: my window only
+const cine = hero ? makeCine((side) => view === 'closeup' || side === 'me', heroPop ? 1.4 : undefined) : null; // TAC: my window only
 if (cine) {
   const b = document.createElement('button');
   b.id = 'cine';
@@ -75,7 +79,7 @@ const closeup = makeCloseup(document.getElementById('closeup'));
 const picker = makePicker(document.getElementById('picker')); // TAC: their layout, to pick a target room
 const cuWorld = makeTactical(document.getElementById('cu-world'), {
   inset: () => ({ top: 0, bottom: 0, left: heroLeft('closeup'), right: heroRight('closeup') }), camera: 'engage', quiet: !hero, // the dock owns shake and white flash; under ?hero=1 the dock is hidden, so the stage takes them
-  maxScale: 90, markPx: [36, 48], // knife range reads closer; big top-down hull marks
+  maxScale: 90, markPx: hero && heroPop ? [54, 72] : [36, 48], // knife range reads closer; big top-down hull marks (heropop: bigger)
 });
 // Events and draws go only to the view on show, so a hidden view never replays old effects.
 const VIEWS = { tac: [tactical], closeup: [cuWorld, closeup] };
@@ -151,7 +155,7 @@ function start(replay = null) {
   hud.setAuto(!!autoPilot);
   paused = false; slowmo = 0; acc = 0;
   const fitQ = fitString(battle.designs.me.fit);
-  history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}${hero ? '&hero=1' : ''}${hero && heroFlat ? '&heroflat=1' : ''}`); // the spike flags survive a reload
+  history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}${hero ? '&hero=1' : ''}${hero && heroFlat ? '&heroflat=1' : ''}${hero && heroPop ? '&heropop=1' : ''}`); // the spike flags survive a reload
   picker.hide();
   for (const r of [tactical, cuWorld, closeup]) r.reset(battle); // nothing from the last battle carries over (camera, fx)
   if (hero) hero.reset(); // the hero windows: new bake, no scorch, the fx counter back to 0
@@ -302,7 +306,9 @@ if (hero) attachTap(document.getElementById('cu-world'), (x, y) => {
   if (view !== 'closeup') return;
   if (picker.isOpen()) { picker.hide(); return; }
   const inside = (r) => r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
-  const who = inside(hero.rect('closeup', battle, 'me')) ? 'me' : inside(hero.rect('closeup', battle, 'them')) ? 'them' : null;
+  const near = (id) => { const q = cuWorld.shipScreen(id); return q && Math.hypot(x - q.x, y - q.y) <= TAP_MARK_PX * 1.5; }; // heropop: the marks
+  const who = heroPop ? (near('them') ? 'them' : near('me') ? 'me' : null)
+    : inside(hero.rect('closeup', battle, 'me')) ? 'me' : inside(hero.rect('closeup', battle, 'them')) ? 'them' : null;
   if (!who || (who === 'them' && (replayer || autoPilot))) return;
   const cv = document.getElementById('cu-world').getBoundingClientRect(), gm = document.getElementById('game').getBoundingClientRect();
   const l = heroLeft('closeup'), r = heroRight('closeup');

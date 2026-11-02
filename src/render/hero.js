@@ -24,7 +24,16 @@ export const HERO = {
   BEAM_SHARE: 0.62,
   FLAT_W: 0.36,         // heroflat: the strip's width, share of the screen
   FLAT_H: 0.38,         // heroflat: the strip's height, share of the stage's (two corners leave the middle band free)
-  FLAT_ALPHA: 0.55,     // heroflat: the strips lie over the stage (the camera does not avoid them yet): see through     // share of the window width the beam takes when the width is fitted to the ship
+  FLAT_ALPHA: 0.55,
+  // heropop: no window but during a cut; then a big one, so the ship is big (the owner: windows he hardly looked at)
+  POP_W: 0.6,           // the cut window's width, share of the screen
+  POP_H: 0.72,          // its height, share of the stage
+  POP_DPR: 1.25,        // the big window's bake is made at this pixel ratio at most: its cost stays near the strip's
+  POP_SHOW: 0.2,        // s the whole ship is shown before the camera pushes in (where on the ship it is)
+  POP_ZOOM: 1.8,        // the push (the ship is already about twice the strip's)
+  POP_ZOOM_TEAR: 1.2,
+  POP_IN: 0.1,          // s fade in, POP_OUT fade out
+  POP_OUT: 0.15,     // heroflat: the strips lie over the stage (the camera does not avoid them yet): see through     // share of the window width the beam takes when the width is fitted to the ship
   TAC_MAX_W: 0.34,      // TAC: the window is at most this share of the screen width
   TAC_MAX_H: 300,       // css px: on a tall screen the window stops growing
   TAC_MIN_W: 96,        // css px
@@ -98,8 +107,13 @@ function cellForHeight(ship, wh) {
 }
 // The window rect (css px, canvas coords) for a view on a canvas cw x ch. hud: {top, bottom} covered (TAC).
 // side: 'me' at the left edge, 'them' at the right edge (the close-up only).
-export function heroRect(view, ship, cw, ch, hud, side = 'me', flat = false) {
+export function heroRect(view, ship, cw, ch, hud, side = 'me', flat = false, pop = false) {
   const Hc = ship.form.h;
+  if (pop) { // heropop: the cut's window, big, in the same corners as the strips
+    const top = view === 'tac' ? hud.top + HERO.PAD : 0, bot = view === 'tac' ? ch - hud.bottom - HERO.PAD : ch;
+    const w = Math.round(cw * HERO.POP_W), h = Math.round((bot - top) * HERO.POP_H), x0 = view === 'tac' ? 8 : 0;
+    return side === 'them' ? { x: cw - w, y: top, w, h } : { x: x0, y: bot - h, w, h };
+  }
   if (flat) { // heroflat: a strip lying down, mine at the bottom left (bow right), theirs at the top right (bow left)
     const top = view === 'tac' ? hud.top + HERO.PAD : 0, bot = view === 'tac' ? ch - hud.bottom - HERO.PAD : ch;
     const w = clamp(Math.round(cw * HERO.FLAT_W), 160, 360), h = clamp(Math.round((bot - top) * HERO.FLAT_H), 56, 140);
@@ -198,33 +212,52 @@ function warp(ctx, tex, m, pr, z) {
   }
 }
 // Warp once into a scratch layer, then stack it from 0 to px css px up (a wall or a block's sides).
+// The device-px box a mask covers once warped at height z, padded, clipped to a canvas cv. Every layer op below works
+// in such a box, not the whole window: a block is a small part of it (a big heropop window baked 3x faster).
+function devBox(m, pr, z, dpr, cv, pad = 4) {
+  const T = HERO.TEX, ps = [[m.gxTop, m.gy0], [m.gxTop, m.gy0 + m.tw / T], [m.gxTop - m.th / T, m.gy0], [m.gxTop - m.th / T, m.gy0 + m.tw / T]].map(([x, y]) => pr.P(x, y, z));
+  const x0 = Math.max(0, Math.floor((Math.min(...ps.map((p) => p.x)) - pad) * dpr)), y0 = Math.max(0, Math.floor((Math.min(...ps.map((p) => p.y)) - pad) * dpr));
+  const x1 = Math.min(cv.width, Math.ceil((Math.max(...ps.map((p) => p.x)) + pad) * dpr)), y1 = Math.min(cv.height, Math.ceil((Math.max(...ps.map((p) => p.y)) + pad) * dpr));
+  return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
+}
 function stack(g, scratch, tex, m, pr, z, px, dpr) {
-  const q = scratch.getContext('2d');
-  q.setTransform(1, 0, 0, 1, 0, 0); q.clearRect(0, 0, scratch.width, scratch.height);
+  const q = scratch.getContext('2d'), b = devBox(m, pr, z, dpr, scratch), o = scratch.box || b;
+  q.setTransform(1, 0, 0, 1, 0, 0); q.clearRect(o.x, o.y, o.w, o.h); q.clearRect(b.x, b.y, b.w, b.h); scratch.box = b;
   q.setTransform(dpr, 0, 0, dpr, 0, 0); warp(q, tex, m, pr, z);
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
-  for (let s = 0; s <= px; s += 0.75) g.drawImage(scratch, 0, -Math.round(s * dpr));
+  for (let s = 0; s <= px; s += 0.75) g.drawImage(scratch, b.x, b.y, b.w, b.h, b.x, b.y - Math.round(s * dpr), b.w, b.h);
   g.restore();
   return scratch;
 }
 
 // Fill a canvas layer with the key-light gradient over what is already there (source-atop).
-function keyLight(g, ww, wh, lit, dark) {
+// box: css px to fill (the gradient still spans the whole window), else all of it.
+function keyLight(g, ww, wh, lit, dark, box = null) {
   const K = KEY, cx = ww / 2, cy = wh / 2, L = Math.hypot(ww, wh) / 2;
   const gr = g.createLinearGradient(cx + K.x * L, cy + K.y * L, cx - K.x * L, cy - K.y * L);
   gr.addColorStop(0, `rgba(255,255,255,${lit})`); gr.addColorStop(0.5, 'rgba(255,255,255,0)'); gr.addColorStop(1, `rgba(0,0,0,${dark})`);
-  g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = gr; g.fillRect(0, 0, ww, wh); g.restore();
+  g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = gr;
+  if (box) g.fillRect(box.x, box.y, box.w, box.h); else g.fillRect(0, 0, ww, wh);
+  g.restore();
 }
 // A rim on the edges facing the light: the shape less itself shifted away from the light.
 let rimCv = null;
-function rim(dst, layer, dpr, col, a, px = LOOK.RIM_PX) {
+// b: the device-px box to work in (devBox), else the whole layer.
+function rim(dst, layer, dpr, col, a, px = LOOK.RIM_PX, b = null) {
   if (!rimCv || rimCv.width !== layer.width || rimCv.height !== layer.height) rimCv = newCanvas(layer.width, layer.height);
-  const r = rimCv, g = r.getContext('2d');
-  g.globalCompositeOperation = 'copy'; g.drawImage(layer, 0, 0);
-  g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, r.width, r.height);
+  const r = rimCv, g = r.getContext('2d'), B = b || { x: 0, y: 0, w: layer.width, h: layer.height };
+  const kx = KEY.x * px * dpr, ky = KEY.y * px * dpr;
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+  g.beginPath(); g.rect(B.x, B.y, B.w, B.h); g.clip(); // source-in clears all it covers: keep it to the box
+  g.globalCompositeOperation = 'source-over'; g.clearRect(B.x, B.y, B.w, B.h);
+  g.drawImage(layer, B.x, B.y, B.w, B.h, B.x, B.y, B.w, B.h);
+  g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(B.x, B.y, B.w, B.h);
   g.globalCompositeOperation = 'destination-out';
-  g.drawImage(layer, -KEY.x * px * dpr, -KEY.y * px * dpr);
-  dst.save(); dst.setTransform(1, 0, 0, 1, 0, 0); dst.globalAlpha = a; dst.drawImage(r, 0, 0); dst.restore();
+  // the shape shifted away from the light: the box's source moved by the key, kept inside the layer
+  const sx0 = Math.max(0, B.x + kx), sy0 = Math.max(0, B.y + ky), sx1 = Math.min(layer.width, B.x + B.w + kx), sy1 = Math.min(layer.height, B.y + B.h + ky);
+  if (sx1 > sx0 && sy1 > sy0) g.drawImage(layer, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0 - kx, sy0 - ky, sx1 - sx0, sy1 - sy0);
+  g.restore();
+  dst.save(); dst.setTransform(1, 0, 0, 1, 0, 0); dst.globalAlpha = a; dst.drawImage(r, B.x, B.y, B.w, B.h, B.x, B.y, B.w, B.h); dst.restore();
 }
 
 // --- the bake: the static hull, one bitmap per battle and hull state --------------------------------
@@ -299,11 +332,12 @@ function bakeLit(ship, ww, wh, dpr) {
     const sideTex = paint(m, () => mul(top, 0.42));
     stack(g, scratch, sideTex, m, pr, deckZ, hPx, dpr);
     // top: the room colour, lit, with a rim
-    tq.setTransform(1, 0, 0, 1, 0, 0); tq.clearRect(0, 0, tl.width, tl.height); tq.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const tb = devBox(m, pr, deckZ + h, dpr, tl, 6), ob = tl.box || tb; tl.box = tb;
+    tq.setTransform(1, 0, 0, 1, 0, 0); tq.clearRect(ob.x, ob.y, ob.w, ob.h); tq.clearRect(tb.x, tb.y, tb.w, tb.h); tq.setTransform(dpr, 0, 0, dpr, 0, 0);
     warp(tq, paint(m, () => top), m, pr, deckZ + h);
-    keyLight(tq, ww, wh, LOOK.SHADE_LIT * 1.4, LOOK.SHADE_DARK * 0.8);
-    g.drawImage(tl, 0, 0, ww, wh);
-    rim(g, tl, dpr, 'rgb(240,248,255)', alive ? LOOK.RIM : 0.25);
+    keyLight(tq, ww, wh, LOOK.SHADE_LIT * 1.4, LOOK.SHADE_DARK * 0.8, { x: tb.x / dpr, y: tb.y / dpr, w: tb.w / dpr, h: tb.h / dpr });
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(tl, tb.x, tb.y, tb.w, tb.h, tb.x, tb.y, tb.w, tb.h); g.restore();
+    rim(g, tl, dpr, 'rgb(240,248,255)', alive ? LOOK.RIM : 0.25, LOOK.RIM_PX, tb);
     r.top = deckZ + h;
   }
   for (const r of rooms) info.top[r.room] = r.top || deckZ + (r.kind === 'pdc' ? HERO.DOME * 0.8 : 0);
@@ -399,13 +433,14 @@ function hullKey(ship) {
 
 // canvases: {tac, closeup} the canvas each view draws on; hud(): {top, bottom} css px the HUD covers on TAC.
 // twin: the close-up shows their ship too, in a window at the right edge (same pose as mine). TAC: mine only.
-export function makeHero(canvases, hud, { twin = false, flat = false } = {}) {
+export function makeHero(canvases, hud, { twin = false, flat: flat0 = false, pop = false } = {}) {
+  const flat = flat0 || pop; // heropop: the cut's window lies down too
   const cache = {}; // side -> {key, canvas, info}
   const sides = (view) => (view === 'closeup' && twin ? ['me', 'them'] : ['me']);
   const rectFor = (view, ship, side) => {
     const cv = canvases[view];
     if (!cv || !cv.clientWidth || !cv.clientHeight) return null;
-    return heroRect(view, ship, cv.clientWidth, cv.clientHeight, view === 'tac' ? hud() : { top: 0, bottom: 0 }, side, flat);
+    return heroRect(view, ship, cv.clientWidth, cv.clientHeight, view === 'tac' ? hud() : { top: 0, bottom: 0 }, side, flat, pop);
   };
   // css px the camera's view rect must leave free at the left (my window) and the right (theirs): 0 with no window
   function left(view, battle) {
@@ -420,27 +455,29 @@ export function makeHero(canvases, hud, { twin = false, flat = false } = {}) {
     return r ? r.w + HERO.GAP : 0;
   }
   // the window rect of a side in a view (css px), or null: for taps
-  const rect = (view, battle, side) => (battle && sides(view).includes(side) ? rectFor(view, battle.ships[side === 'me' ? 0 : 1], side) : null);
+  const rect = (view, battle, side) => (battle && !pop && sides(view).includes(side) ? rectFor(view, battle.ships[side === 'me' ? 0 : 1], side) : null);
   // shot: the CINE cut playing (cine.current()), or null; it is drawn in the window of the ship it is about
   function draw(view, battle, shot = null) {
     for (const side of sides(view)) drawOne(view, battle, side, shot && shot.side === side ? shot : null);
   }
   function drawOne(view, battle, side, shot) {
     const cv = canvases[view], ship = battle.ships[side === 'me' ? 0 : 1], r = rectFor(view, ship, side);
-    if (!r) return;
+    if (!r || (pop && !shot)) return; // heropop: a window only while a cut plays
     // vr: the window as the ship is drawn in it, bow up. A flat strip (heroflat) is that picture turned a quarter
     // round (M: bow right for mine, bow left for theirs), the key light turned back so it still comes from LOOK.KEY.
     const vr = flat ? { w: r.h, h: r.w } : { w: r.w, h: r.h };
     const M = !flat ? [1, 0, 0, 1, 0, 0] : side === 'me' ? [0, 1, -1, 0, r.w, 0] : [0, -1, 1, 0, 0, r.h];
     const lk = !flat ? LOOK.KEY : side === 'me' ? { x: LOOK.KEY.y, y: -LOOK.KEY.x } : { x: -LOOK.KEY.y, y: LOOK.KEY.x };
-    const dpr = renderDpr(), key = `${battle.seed}|${view}|${vr.w}x${vr.h}@${dpr}|${flat ? side : ''}|${hullKey(ship)}`;
-    if (!cache[side] || cache[side].key !== key) cache[side] = { key, ...bake(ship, vr.w, vr.h, dpr, lk) };
+    const dpr = renderDpr(), bdpr = pop ? Math.min(dpr, HERO.POP_DPR) : dpr; // bdpr: the bake's pixel ratio
+    const key = `${battle.seed}|${view}|${vr.w}x${vr.h}@${bdpr}|${flat ? side : ''}|${hullKey(ship)}`;
+    if (!cache[side] || cache[side].key !== key) cache[side] = { key, ...bake(ship, vr.w, vr.h, bdpr, lk) };
     const c = cache[side];
     const g = cv.getContext('2d');
     // a cut: the window grows over the stage (R) and the camera pushes on the impact; the bake stays at its own size
     const cut = shot ? cutFrame(shot, r, cv, c.info, side, M) : null, R = cut ? cut.R : r;
     g.save();
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (pop) g.globalAlpha = clamp(Math.min(shot.age / HERO.POP_IN, (shot.T - shot.age) / HERO.POP_OUT), 0, 1);
     g.translate(R.x, R.y);
     // the window: dark glass, rounded; on the close-up it sits on the stage's edge, square on that side
     const rad = HERO.RADIUS, corners = view !== 'closeup' ? rad : side === 'me' ? [0, rad, rad, 0] : [rad, 0, 0, rad];
@@ -471,7 +508,7 @@ export function makeHero(canvases, hud, { twin = false, flat = false } = {}) {
       g.fillStyle = css(L.col, Math.min(1, a + 0.3)); g.beginPath(); g.arc(L.x, L.y, 1.1, 0, Math.PI * 2); g.fill();
       glow(g, L.x, L.y, 6, L.col, a * 0.6, false);
     }
-    if (cut) drawCut(g, shot, cut, info, ship, vr, dpr, lk);
+    if (cut) drawCut(g, shot, cut, info, ship, vr, bdpr, lk);
     g.restore();
     if (cut) {
       // the flash of the impact, over the whole window
@@ -490,13 +527,15 @@ export function makeHero(canvases, hud, { twin = false, flat = false } = {}) {
   let cutKey = 0, cutMem = null; // what the cut playing has built once: the chunks, the section's bake
   // r: the window's rect on screen; M: the turn from the bow-up picture to it (heroflat), identity else.
   function cutFrame(shot, r, cv, info, side, M) {
-    const a = shot.age, T = CINE.TIME;
-    const grow = ease(clamp(Math.min(a / CINE.GROW, (T - a) / CINE.SHRINK), 0, 1));
-    const v = ease(clamp(Math.min(a / CINE.ZOOM_IN, (T - a) / CINE.ZOOM_OUT), 0, 1));
-    const Z = 1 + ((shot.kind === 'tear' ? CINE.ZOOM_TEAR : CINE.ZOOM) - 1) * v;
-    const maxW = Math.max(r.w, Math.round(cv.clientWidth * CINE.W)), W = r.w + (maxW - r.w) * grow;
+    const a = shot.age, T = shot.T;
+    // heropop: the window is already big and does not grow; the whole ship first, then the push
+    const grow = pop ? 0 : ease(clamp(Math.min(a / CINE.GROW, (T - a) / CINE.SHRINK), 0, 1));
+    const v = ease(clamp(Math.min((a - (pop ? HERO.POP_SHOW : 0)) / CINE.ZOOM_IN, (T - a) / CINE.ZOOM_OUT), 0, 1));
+    const zMax = pop ? (shot.kind === 'tear' ? HERO.POP_ZOOM_TEAR : HERO.POP_ZOOM) : shot.kind === 'tear' ? CINE.ZOOM_TEAR : CINE.ZOOM;
+    const Z = 1 + (zMax - 1) * v;
+    const maxW = pop ? r.w : Math.max(r.w, Math.round(cv.clientWidth * CINE.W)), W = r.w + (maxW - r.w) * grow;
     // heroflat: the strip also grows toward the middle of the stage, to twice its height at most
-    const maxH = flat ? Math.min(r.h * 2, cv.clientHeight - r.h * 0.2) : r.h, H = r.h + (maxH - r.h) * grow;
+    const maxH = pop ? r.h : flat ? Math.min(r.h * 2, cv.clientHeight - r.h * 0.2) : r.h, H = r.h + (maxH - r.h) * grow;
     const R = { x: side === 'me' ? r.x : r.x + r.w - W, y: flat && side === 'me' ? r.y + r.h - H : r.y, w: W, h: H };
     const m = centroidOf(shot.cells), z = shot.kind === 'room' ? HERO.WALL + (HERO.HEIGHT[shot.rk] || 0) : HERO.WALL;
     const F = info.pr.P(m[0], m[1], z), F0 = { x: M[0] * F.x + M[2] * F.y + M[4], y: M[1] * F.x + M[3] * F.y + M[5] };
@@ -547,7 +586,7 @@ export function makeHero(canvases, hud, { twin = false, flat = false } = {}) {
   function drawCut(g, shot, cut, info, ship, r, dpr, lk) {
     if (cutKey !== shot.s || !cutMem) { cutKey = shot.s; cutMem = cutBuild(shot, cut, info, ship, r, dpr, lk); }
     const M = cutMem, P = info.pr.P, a = shot.age, c = info.pr.c, hs = (i) => hash01(shot.s * 104729 + i);
-    const fade = clamp((CINE.TIME - a) / 0.3, 0, 1), col = shot.kind === 'room' ? (BLAST[shot.rk] || {}).col || [255, 150, 60] : [255, 220, 170];
+    const fade = clamp((shot.T - a) / 0.3, 0, 1), col = shot.kind === 'room' ? (BLAST[shot.rk] || {}).col || [255, 150, 60] : [255, 220, 170];
     const hf = (i) => hash01(shot.s * 89 + i + Math.floor(a * 25) * 131);
     // the shot coming in along its real bearing, the first 0.06 s
     if (a < 0.06 && shot.kind === 'room') {
