@@ -22,12 +22,13 @@ export const CINE = {
 
 // shows(side): whether that ship has a window in the view on show (TAC has mine only); a beat it cannot show is not
 // taken, so it never holds back the next one for nothing.
-export function makeCine(shows = () => true) {
+// time: s a cut lasts (CINE.TIME; heropop gives a little more, the window first shows the whole ship).
+export function makeCine(shows = () => true, time = CINE.TIME) {
   let on = true, shot = null, lastStart = -1e9, clock = 0, seq = 0;
   try { on = localStorage.getItem('cine') !== '0'; } catch (e) { /* no storage: on */ }
   const gone = { me: new Set(), them: new Set() }; // cells already shown tearing off, per ship
 
-  function begin(s) { shot = { ...s, age: 0, s: ++seq }; lastStart = clock; }
+  function begin(s) { shot = { ...s, age: 0, s: ++seq, T: time }; lastStart = clock; }
   // The enemy's bearing in the hit ship's frame: (cells toward the bow, toward row h), as shotFrom sees it.
   function bearing(ship, foe) {
     const dx = foe.x - ship.x, dy = foe.y - ship.y, c = Math.cos(ship.heading), s = Math.sin(ship.heading);
@@ -59,7 +60,7 @@ export function makeCine(shows = () => true) {
   }
   function step(dtReal) {
     clock += dtReal;
-    if (shot) { shot.age += dtReal; if (shot.age >= CINE.TIME) shot = null; }
+    if (shot) { shot.age += dtReal; if (shot.age >= shot.T) shot = null; }
   }
   function skip() { shot = null; }
   function setOn(v) { on = v; if (!on) shot = null; try { localStorage.setItem('cine', on ? '1' : '0'); } catch (e) { /* the toggle still works this session */ } }
