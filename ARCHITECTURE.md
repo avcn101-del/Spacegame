@@ -498,6 +498,15 @@ My ship as an object, rear-oblique, in a window at the left of both views. `src/
   any job room for what it does (`tapMine`, the dock's inspect toast). A tap elsewhere on the stage closes it; a drag
   still steers; the 6 s timeout, a view switch and a new battle close it as on TAC. Flag off: no tap handler on the
   stage, the picker only opens on TAC as before.
+- Incoming in the windows (2026-11-02, plan step 1): torpedoes and slugs whose target is that window's ship, drawn at
+  their real bearing in that ship's frame (bow up = its heading, row 0 = its 'top' side, as `shotFrom`/`mountSees`),
+  on the ray from the room they go for (`p.room`), else the hull's centre; distance squeezed (`HERO.TORP_SHOW` 6 km,
+  `HERO.SLUG_SHOW` 15 km just past the window's edge, 0 km on the hull's edge). Torpedo: hot head, exhaust against its
+  velocity relative to the ship; slug: a streak back along its ray. The ship's own PDC tracers (`battle.tracers`,
+  owner) come out of a living dome whose arc holds the tracer's end point (`mountSees`, one dome per tracer, kept in a
+  WeakMap) and run to a torpedo (placed as above) or past the edge for a Rake (end point within 0.25 km of their
+  ship); muzzle glow on the dome. `torpKilled`: a pop where it died, in the defender's window. Nothing stored per
+  frame; reads battle only. Limit: the windows are narrow, so a torpedo from the beam has ~20 px between hull and edge.
 - S2 (not built): bank, plume by thrust, Burn lines, hit flashes, local impact frame, scorch via a dock getter.
 
 ## Render module contract
