@@ -565,6 +565,13 @@ Presentation only, behind `?hero=1`: reads events, never touches the sim; no per
   projection) shows through the hole from 0.1 to 0.6 s; sparks, fireball, smoke. The live bake under it already has the
   room dead: the flash covers the swap. Tear: the cells that broke off baked on their own (a copy of the ship with only
   them, standing) drift off along their end and turn, pieces off the break. A tear costs one more bake at the beat.
+- heroflat trial (2026-11-02, `&heroflat=1` with `hero=1`; the owner: the two ships facing each other). The windows lie
+  down as strips in the corners (`HERO.FLAT_W` 0.36 of the width, `FLAT_H` 0.38 of the stage's height): mine bottom left,
+  bow right; theirs top right, bow left (TAC: mine only, above the status line). Same bake, drawn bow up in a virtual
+  window (the strip's height x width) and turned a quarter round (`M`); the bake's key light is turned back so the light
+  still comes from LOOK.KEY. A cut grows the strip to `CINE.W` wide and up to twice its height toward the middle. The
+  camera keeps its own insets (it does not avoid the corners yet), so the strips are see-through (`FLAT_ALPHA`) and a
+  mark can pass under one. The ship is about the same size as in the standing window (the strip's height limits it).
 - Risks: the panel covers the stage while it plays (the toggle is the way out); a code-drawn crew at 20 to 30 px may
   not read on the phone; unknown until the owner sees C1 and C3.
 
