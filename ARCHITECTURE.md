@@ -604,6 +604,19 @@ Presentation only, behind `?hero=1`: reads events, never touches the sim; no per
   flash, arcs, hair on end); sensors headphones on, still sitting, nodding, notes; pdc fires a short burst, the recoil
   spins him. Gore (b): a flat red splat on the deck by the hole (drive, tubes, rail, pdc). "Up" comes from the canvas
   transform, so the cup and the headphones stand on screen in the turned strips too. No Math.random.
+- End scene (2026-11-02, behind `?hero=1`; the owner: a cine before the result screen, dark humour, picked from the
+  battle's events, every ending, about 3 s, a tap skips, the camera on the ship that lost). `render/ending.js`
+  (`ENDING`, `drawEnd`, `SCENES`); `cine.end(battle)` picks it when `battle.result` is first set (main.js `endShown`) and
+  replaces any cut; the HUD holds the result overlay while it plays (`hud.draw(..., holdResult)`). Shot `kind: 'end'`
+  with `per[side]` (its bridge cells, its scene); hero.js draws each side's part in that side's window, the camera
+  pushes `ENDING.ZOOM` on the bridge. Scenes: win/lose by bridge, from the cause of the bridge's death: rail `chair`
+  (the captain leaves in his chair, saluting), torp `cup` (the bridge goes up, a steaming coffee cup floats out, bones,
+  a splat), pdc `cheese` (the bridge riddled with holes, one drifts out with a tired wave); disarmed `flag` (a white
+  sock on a stick, another with hands up); hull `halves` (one waves at the half that left, one on it waves back); the
+  winner's gunner (arms up, jumping, a burst in the air) if their PDCs shot down `ENDING.GUNNER` torpedoes or more;
+  escaped `bye` (the runner waves from the stern, the other shakes a fist); draws: apart `shrug`, time `sleep` (Zzz, a
+  skeleton beside one of them, by the seed), both `boom` (both bridges go up, a survivor out of each, fists up, at the
+  other). Two-window scenes: the heropop windows overlap in the middle.
 - Risks: the panel covers the stage while it plays (the toggle is the way out); a code-drawn crew at 20 to 30 px may
   not read on the phone; unknown until the owner sees C1 and C3.
 

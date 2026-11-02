@@ -6,6 +6,7 @@
 // owns no input (a tap anywhere skips, main.js). No Math.random: the shot's seed is a per-battle counter.
 import { meanX } from '../sim/ship.js';
 import { kindOf } from './hero.js';
+import { ENDING } from './ending.js';
 
 // Visual-only knobs. Not game numbers.
 export const CINE = {
@@ -34,7 +35,12 @@ export function makeCine(shows = () => true, time = CINE.TIME) {
     const dx = foe.x - ship.x, dy = foe.y - ship.y, c = Math.cos(ship.heading), s = Math.sin(ship.heading);
     return [dx * c + dy * s, -dx * s + dy * c];
   }
+  // what the end scene is picked from: per ship, the cause of the last hit that killed a job room on the bridge, and
+  // which end tore off last
+  const last = { me: {}, them: {} };
   function onEvent(ev, battle) {
+    if (ev.type === 'pieceDead' && ev.piece === 'bridge' && last[ev.ship]) last[ev.ship].bridge = ev.cause;
+    if (ev.type === 'tear' && last[ev.ship]) last[ev.ship].tear = ev.end;
     if (ev.type === 'tear') {
       const ship = battle.shipById(ev.ship), bx = meanX(ship, 'bridge');
       const fresh = [];
@@ -58,12 +64,39 @@ export function makeCine(shows = () => true, time = CINE.TIME) {
     if (!cells.length) return;
     begin({ kind: 'room', side: ev.ship, room: ev.piece, rk: kindOf(ship, ev.piece), cells, cause: ev.cause, bear: bearing(ship, battle.enemyOf(ship)) });
   }
+  // The battle is over: a ~3 s scene before the result screen, from what happened (the owner: by the battle's events).
+  // It replaces any cut playing. Win or lose: the beaten ship's window (and the winner's gunner if their PDCs shot
+  // down ENDING.GUNNER torpedoes or more); escaped and draws: both windows.
+  function end(battle) {
+    if (!on) return;
+    const r = battle.result, st = battle.stats || {}, other = (x) => (x === 'me' ? 'them' : 'me');
+    const bridgeCells = (id) => { const sh = battle.shipById(id), out = []; sh.cells.forEach((row, y) => row.forEach((c, x) => { if (c && c.room === 'bridge') out.push([x, y]); })); return out; };
+    const per = {};
+    const add = (id, o) => { const sh = battle.shipById(id), cells = bridgeCells(id); if (cells.length) per[id] = { cells, shotBear: bearing(sh, battle.enemyOf(sh)), ...o }; };
+    if (r.kind === 'win' || r.kind === 'lose') {
+      const L = r.kind === 'win' ? 'them' : 'me', W = other(L), cause = last[L].bridge;
+      const scene = r.reason === 'disarmed' ? 'flag' : r.reason === 'hull' ? 'halves'
+        : cause === 'rail' ? 'chair' : cause === 'pdc' ? 'cheese' : 'cup';
+      add(L, { scene, end: last[L].tear || 'stern' });
+      if (((st[L] || {}).torpsShotDown || 0) >= ENDING.GUNNER) add(W, { scene: 'gunner' });
+    } else if (r.kind === 'escaped') {
+      for (const id of ['me', 'them']) add(id, { scene: 'bye', runner: r.reason === id });
+    } else {
+      const scene = r.reason === 'both' ? 'boom' : r.reason === 'time' ? 'sleep' : 'shrug';
+      const sleeper = (battle.seed | 0) % 2 ? 'me' : 'them'; // time: on one of the two, a skeleton waits beside him
+      for (const id of ['me', 'them']) add(id, { scene, bonesToo: id === sleeper });
+    }
+    const sides = Object.keys(per).filter(shows);
+    if (!sides.length) return;
+    shot = { kind: 'end', side: sides[0], sides, per, cells: per[sides[0]].cells, rk: 'core', age: 0, s: ++seq, T: ENDING.TIME };
+    lastStart = clock;
+  }
   function step(dtReal) {
     clock += dtReal;
     if (shot) { shot.age += dtReal; if (shot.age >= shot.T) shot = null; }
   }
   function skip() { shot = null; }
   function setOn(v) { on = v; if (!on) shot = null; try { localStorage.setItem('cine', on ? '1' : '0'); } catch (e) { /* the toggle still works this session */ } }
-  function reset() { shot = null; lastStart = -1e9; seq = 0; gone.me.clear(); gone.them.clear(); }
-  return { onEvent, step, skip, reset, setOn, isOn: () => on, playing: () => !!shot, current: () => shot };
+  function reset() { shot = null; lastStart = -1e9; seq = 0; gone.me.clear(); gone.them.clear(); last.me = {}; last.them = {}; }
+  return { onEvent, end, step, skip, reset, setOn, isOn: () => on, playing: () => !!shot, current: () => shot };
 }

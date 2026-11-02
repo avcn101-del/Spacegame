@@ -42,11 +42,15 @@ function limb(g, x, y, a, b, len) {
 
 // One figure in its own frame: origin at the torso, up = -y, u = a tenth of its height. pose: limb angles; look:
 // 'suit' | 'char' (burnt) | 'bones' | 'empty'; extras: hair, phones, cup, gun.
-function figure(g, u, col, pose, look, ex = {}) {
+export function figure(g, u, col, pose, look, ex = {}) {
   g.lineCap = 'round'; g.lineJoin = 'round';
   if (look === 'bones') return skeleton(g, u, pose);
   const suit = look === 'char' ? mix(col, DARK, 0.85) : look === 'empty' ? mix(col, [120, 120, 120], 0.35) : col;
   const shade = mix(suit, DARK, 0.45), glove = mix(suit, DARK, 0.6);
+  if (ex.chair) { // the captain's chair, behind him: seat under the hips, the back behind the torso
+    g.fillStyle = css([170, 40, 40]); g.fillRect(-1.6 * u, 2 * u, 5.4 * u, 1.3 * u); g.fillRect(-3.1 * u, -3 * u, 1.5 * u, 6.3 * u); // red leather, it reads
+    g.fillStyle = css([40, 44, 52]); g.fillRect(0.6 * u, 3.3 * u, 0.6 * u, 1.6 * u); g.fillRect(-1 * u, 4.6 * u, 3.8 * u, 0.5 * u);
+  }
   // backpack, behind
   g.fillStyle = css(shade); g.fillRect(-2.3 * u, -1.6 * u, 1.1 * u, 3.4 * u);
   // legs, then arms (the far ones darker)
@@ -65,6 +69,14 @@ function figure(g, u, col, pose, look, ex = {}) {
   const hR = limb(g, 1.6 * u, -1.1 * u, pose.aR, pose.eR, 3.2 * u);
   g.fillStyle = css(glove); disc(g, hR[0], hR[1], 0.6 * u);
   if (ex.cup) cup(g, hR[0], hR[1], u, ex.cup);
+  if (ex.flag) { // a stick with a white sock on it: the surrender flag
+    g.save(); g.translate(hR[0], hR[1]); g.rotate(ex.flag.ang);
+    g.strokeStyle = css([150, 120, 80]); g.lineWidth = 0.35 * u; line(g, 0, 1 * u, 0, -6 * u);
+    const w = Math.sin(ex.flag.t * 14) * 0.8 * u;
+    g.fillStyle = css([245, 245, 240]); g.beginPath(); g.moveTo(0, -6 * u); g.quadraticCurveTo(2 * u, -6.4 * u + w, 3.6 * u, -5.6 * u + w);
+    g.lineTo(3.6 * u, -4.3 * u + w); g.lineTo(2.4 * u, -4.4 * u + w); g.quadraticCurveTo(1.4 * u, -4.6 * u, 0, -4.4 * u); g.closePath(); g.fill();
+    g.restore();
+  }
   if (ex.gun) { g.fillStyle = css([60, 66, 74]); g.save(); g.translate(hR[0], hR[1]); g.rotate(ex.gun.ang); g.fillRect(-0.4 * u, -0.5 * u, 3 * u, 1 * u); g.restore(); }
   // the neck ring and the helmet: round, with a small round faceplate set to the front, and an antenna
   g.fillStyle = css(shade); g.fillRect(-0.9 * u, -2.4 * u, 1.8 * u, 0.8 * u);
@@ -107,6 +119,18 @@ function cup(g, x, y, u, c) {
   g.strokeStyle = css([240, 240, 236]); g.lineWidth = 0.3 * u; g.beginPath(); g.arc(0.9 * u, -0.8 * u, 0.45 * u, -Math.PI / 2, Math.PI / 2); g.stroke();
   g.fillStyle = css(COFFEE); g.fillRect(-0.55 * u, -1.6 * u, 1.1 * u, 0.35 * u);
   g.restore();
+}
+
+// Which way is up on screen, as an angle in the picture's frame (a figure turned by it stands on screen), and a screen
+// direction (sx, sy) in the picture's frame, unit length. From the canvas transform: the strips are turned a quarter.
+export function screenUp(g) {
+  const m = g.getTransform(), det = m.a * m.d - m.b * m.c || 1;
+  return Math.atan2(m.c / det, m.a / det);
+}
+export function screenDir(g, sx, sy) {
+  const m = g.getTransform(), det = m.a * m.d - m.b * m.c || 1;
+  const px = (m.d * sx - m.c * sy) / det, py = (-m.b * sx + m.a * sy) / det, l = Math.hypot(px, py) || 1;
+  return [px / l, py / l];
 }
 
 // Built once per cut (hero.js cutBuild): the figures, from the room's cells, where they start and how they go.

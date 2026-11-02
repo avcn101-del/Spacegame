@@ -32,7 +32,7 @@ let replayer = null; // set while watching a recorded battle
 let autoPreset = PRESETS[params.get('auto')] ? params.get('auto') : null; // ?auto=brawler: the AI flies my ship
 let autoPilot = null;
 
-let battle, enemy, paused = false, slowmo = 0, acc = 0;
+let battle, enemy, paused = false, slowmo = 0, acc = 0, endShown = false; // endShown: the end scene (hero) was started
 // Two views, one at a time (the VIEW button). TAC: the map over the whole screen, a camera that fits both ships
 // (drag to steer, tap their mark to pick a target). CLOSE-UP: the world stage on top (the anchored camera that keeps
 // every projectile in frame) and the cutaway dock below (both hulls, tap a room). PR 55 brought TAC back: a strip
@@ -170,7 +170,7 @@ function start(replay = null) {
   autoPilot = autoPreset && !replayer ? makeEnemy('me', autoPreset) : null;
   hud.setReplay(!!replayer);
   hud.setAuto(!!autoPilot);
-  paused = false; slowmo = 0; acc = 0;
+  paused = false; slowmo = 0; acc = 0; endShown = false;
   const fitQ = fitString(battle.designs.me.fit);
   history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}${hero ? '&hero=1' : ''}${hero && heroFlat ? '&heroflat=1' : ''}${hero && heroPop ? '&heropop=1' : ''}`); // the spike flags survive a reload
   picker.hide();
@@ -258,11 +258,12 @@ function frame(now) {
     if (cine) cine.onEvent(ev, battle);
   }
   battle.events.length = 0;
+  if (cine && battle.result && !endShown) { endShown = true; cine.end(battle); } // ?hero=1: ~3 s of the end before the result screen
   for (const r of VIEWS[view]) r.draw(battle, dtGame);
   if (hero) { hero.draw(view, battle, cine && cine.current()); hero.step(dtGame); } // step after draw: an impact frame set this frame is drawn HERO.NEG frames
   if (cine) cine.step(dtReal); // real time: the cut plays through the slow-mo and a pause
   picker.draw(battle, dtReal); // nothing unless open (TAC, or the close-up's hero windows)
-  hud.draw(battle, paused, dtReal);
+  hud.draw(battle, paused, dtReal, !!(cine && cine.current() && cine.current().kind === 'end')); // the result waits for the end scene (a tap skips it)
   perfPush(perfWork, performance.now() - t0);
   requestAnimationFrame(frame);
 }

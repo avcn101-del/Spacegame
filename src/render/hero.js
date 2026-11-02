@@ -15,6 +15,7 @@ import { LOOK, drawPlume, glow, hash01, renderDpr } from './look.js';
 import { INTERIOR } from './interior.js';
 import { CINE } from './cine.js';
 import { crewBuild, drawCrew } from './crew.js';
+import { drawEnd, ENDING } from './ending.js';
 
 // Visual-only knobs. Not game numbers.
 export const HERO = {
@@ -460,7 +461,11 @@ export function makeHero(canvases, hud, { twin = false, flat: flat0 = false, pop
   const rect = (view, battle, side) => (battle && !pop && sides(view).includes(side) ? rectFor(view, battle.ships[side === 'me' ? 0 : 1], side) : null);
   // shot: the CINE cut playing (cine.current()), or null; it is drawn in the window of the ship it is about
   function draw(view, battle, shot = null) {
-    for (const side of sides(view)) drawOne(view, battle, side, shot && shot.side === side ? shot : null);
+    for (const side of sides(view)) {
+      // the end scene can show both ships: each window gets its own part (its bridge, its scene)
+      const mine = !shot ? null : shot.kind === 'end' ? (shot.per[side] && shot.sides.includes(side) ? { ...shot, side, cells: shot.per[side].cells } : null) : shot.side === side ? shot : null;
+      drawOne(view, battle, side, mine);
+    }
   }
   function drawOne(view, battle, side, shot) {
     const cv = canvases[view], ship = battle.ships[side === 'me' ? 0 : 1], r = rectFor(view, ship, side);
@@ -510,7 +515,8 @@ export function makeHero(canvases, hud, { twin = false, flat: flat0 = false, pop
       g.fillStyle = css(L.col, Math.min(1, a + 0.3)); g.beginPath(); g.arc(L.x, L.y, 1.1, 0, Math.PI * 2); g.fill();
       glow(g, L.x, L.y, 6, L.col, a * 0.6, false);
     }
-    if (cut) drawCut(g, shot, cut, info, ship, vr, bdpr, lk);
+    if (cut && shot.kind === 'end') drawEnd(g, shot, cut, info, ship, side);
+    else if (cut) drawCut(g, shot, cut, info, ship, vr, bdpr, lk);
     g.restore();
     if (cut) {
       // the flash of the impact, over the whole window
@@ -534,12 +540,12 @@ export function makeHero(canvases, hud, { twin = false, flat: flat0 = false, pop
     const grow = pop ? 0 : ease(clamp(Math.min(a / CINE.GROW, (T - a) / CINE.SHRINK), 0, 1));
     const v = ease(clamp(Math.min((a - (pop ? HERO.POP_SHOW : 0)) / CINE.ZOOM_IN, (T - a) / CINE.ZOOM_OUT), 0, 1));
     const zMax = pop ? (shot.kind === 'tear' ? HERO.POP_ZOOM_TEAR : HERO.POP_ZOOM) : shot.kind === 'tear' ? CINE.ZOOM_TEAR : CINE.ZOOM;
-    const Z = 1 + (zMax - 1) * v;
+    const Z = 1 + ((shot.kind === 'end' ? ENDING.ZOOM : zMax) - 1) * v; // the end: closer, it is about the crew
     const maxW = pop ? r.w : Math.max(r.w, Math.round(cv.clientWidth * CINE.W)), W = r.w + (maxW - r.w) * grow;
     // heroflat: the strip also grows toward the middle of the stage, to twice its height at most
     const maxH = pop ? r.h : flat ? Math.min(r.h * 2, cv.clientHeight - r.h * 0.2) : r.h, H = r.h + (maxH - r.h) * grow;
     const R = { x: side === 'me' ? r.x : r.x + r.w - W, y: flat && side === 'me' ? r.y + r.h - H : r.y, w: W, h: H };
-    const m = centroidOf(shot.cells), z = shot.kind === 'room' ? HERO.WALL + (HERO.HEIGHT[shot.rk] || 0) : HERO.WALL;
+    const m = centroidOf(shot.cells), z = shot.kind !== 'tear' ? HERO.WALL + (HERO.HEIGHT[shot.rk] || 0) : HERO.WALL;
     const F = info.pr.P(m[0], m[1], z), F0 = { x: M[0] * F.x + M[2] * F.y + M[4], y: M[1] * F.x + M[3] * F.y + M[5] };
     const sx = F0.x + r.x - R.x, sy = F0.y + r.y - R.y; // where the impact is drawn when the cut starts
     const A = { x: sx + (W / 2 - sx) * v, y: sy + (H / 2 - sy) * v };

@@ -23,6 +23,7 @@ ARCHITECTURE "CINE-2D cut shots" and "Hero window spike, S1"):
   PR 72: tapping their ship is consistent (mark, range label, edge wedge; AUTO opens it to look). PR 73: their cuts
   show on TAC too.
 
+End scene built (2026-11-02, see ARCHITECTURE "End scene"): waits for the owner's look; tune `ENDING.ZOOM`, `ENDING.TIME`.
 R2 built (2026-11-02, see ARCHITECTURE "R2 crew"): waits for the owner's look; tune `CREW.H` / `CREW.SPEED` (double or halve).
 
 Was next: R2 (approved by the owner, start it in this chat): the crew in the cut, dark comedy, gore level (b). One PR,
