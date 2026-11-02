@@ -180,7 +180,7 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
     inspect(room) { inspect = room ? { room, ttl: 5.5 } : null; },
     setView(v) { $('#view').textContent = v === 'closeup' ? T.view.tac : T.view.closeup; },
     setReplay(on) { replay = on; document.getElementById('orders').classList.toggle('replay', on || auto); },
-    draw(battle, paused, dtReal) {
+    draw(battle, paused, dtReal, holdResult = false) { // holdResult: the end scene plays first (?hero=1)
       const me = battle.ships[0], them = battle.ships[1];
       el.clock.textContent = fmtClock(battle.t);
       el.range.textContent = battle.range().toFixed(1);
@@ -294,7 +294,7 @@ export function makeHud({ onOrder, onView, onPause, onHelp, onResume, onRestart,
       setProgress(B.burn, 1, `${me.burns}`);
 
       // Result overlay
-      if (battle.result) {
+      if (battle.result && !holdResult) {
         const r = battle.result;
         el.resultText.textContent = T.result[r.kind][r.reason];
         el.resultSeed.textContent = `${T.seed} ${battle.seed} · ${fmtClock(battle.t)}${battle.enemyPreset ? ` · ${T.enemyLabel} ${battle.enemyPreset}` : ''}`;
