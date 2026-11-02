@@ -79,5 +79,7 @@ Sequence: F.1 → the owner's phone playtest → the owner green-lights G. Nothi
   PDC spark. 2–3 variants per shot (clean vs smouldering), flippable to the event's real bearing,
   skippable and toggleable, never blocks command input. The same room art should enrich dock cells (one
   investment, two payoffs). Presentation only: reads events, never touches sim.
+- Approved by the owner 2026-11-02, after the hero cam (order in HANDOFF "Now"): explosions by room kind in the hero
+  windows (keyed by event x room kind, every class), then the CINE-2D cut shots, spec and owner's answers first.
 - Tier 3 — parked: a 3D presentation spike (extrude the room grid into low-poly hulls) only if, after G
   + CINE-2D, it still does not feel right; the owner expects it will not be needed.
