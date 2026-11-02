@@ -123,7 +123,7 @@ export function heroRect(view, ship, cw, ch, hud, side = 'me', flat = false, pop
   if (view === 'tac') {
     const y = hud.top + HERO.PAD, h = Math.max(40, Math.min(HERO.TAC_MAX_H, ch - hud.top - hud.bottom - 2 * HERO.PAD));
     const w = clamp(Math.ceil(cellForHeight(ship, h) * Hc / HERO.BEAM_SHARE), HERO.TAC_MIN_W, Math.round(cw * HERO.TAC_MAX_W));
-    return { x: 8, y, w, h };
+    return { x: side === 'them' ? cw - w - 8 : 8, y, w, h }; // theirs on TAC: only for a cut, at the right edge
   }
   const h = ch, w = clamp(Math.ceil(cellForHeight(ship, h) * Hc / HERO.BEAM_SHARE), HERO.CU_MIN_W, HERO.CU_MAX_W);
   return { x: side === 'them' ? cw - w : 0, y: 0, w, h };
@@ -436,7 +436,8 @@ function hullKey(ship) {
 export function makeHero(canvases, hud, { twin = false, flat: flat0 = false, pop = false } = {}) {
   const flat = flat0 || pop; // heropop: the cut's window lies down too
   const cache = {}; // side -> {key, canvas, info}
-  const sides = (view) => (view === 'closeup' && twin ? ['me', 'them'] : ['me']);
+  // TAC shows their window too, but only while a cut of theirs plays (the owner: no enemy cam on TAC, but the cut yes)
+  const sides = (view) => (twin ? ['me', 'them'] : ['me']);
   const rectFor = (view, ship, side) => {
     const cv = canvases[view];
     if (!cv || !cv.clientWidth || !cv.clientHeight) return null;
@@ -449,7 +450,7 @@ export function makeHero(canvases, hud, { twin = false, flat: flat0 = false, pop
     return r ? r.x + r.w + HERO.GAP : 0;
   }
   function right(view, battle) {
-    if (flat) return 0;
+    if (flat || view === 'tac') return 0; // TAC: their window only comes for a cut, over the map; the camera keeps its inset
     if (!battle || !sides(view).includes('them')) return 0;
     const r = rectFor(view, battle.ships[1], 'them');
     return r ? r.w + HERO.GAP : 0;
@@ -462,7 +463,7 @@ export function makeHero(canvases, hud, { twin = false, flat: flat0 = false, pop
   }
   function drawOne(view, battle, side, shot) {
     const cv = canvases[view], ship = battle.ships[side === 'me' ? 0 : 1], r = rectFor(view, ship, side);
-    if (!r || (pop && !shot)) return; // heropop: a window only while a cut plays
+    if (!r || (pop && !shot) || (view === 'tac' && side === 'them' && !shot)) return; // heropop, and theirs on TAC: only while a cut plays
     // vr: the window as the ship is drawn in it, bow up. A flat strip (heroflat) is that picture turned a quarter
     // round (M: bow right for mine, bow left for theirs), the key light turned back so it still comes from LOOK.KEY.
     const vr = flat ? { w: r.h, h: r.w } : { w: r.w, h: r.h };
