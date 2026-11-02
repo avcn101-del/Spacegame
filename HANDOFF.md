@@ -6,29 +6,53 @@ in Vietnamese mixed with English; answer short, verified facts only, say
 "I don't know" when you don't, raise problems before doing work. Before any
 work longer than about an hour, give the estimate and wait for go.
 
-## Now (handover, 2026-11-01, after PR 56)
+## Now (handover, 2026-11-02, after PR 61: the hero cam)
 
-- Merged and accepted before: H (48), `?perf=1` (49), dpr cap 2 (50), camera floor + wedge (51), docs (52); the
-  phone perf passed (frame95 33.3 ms), the FX cut order is dropped (PR 53 closed). PR 54, the anchored stage, merged.
-- The owner after playing 54: the stage strip cannot replace TAC at range (physics: 12 km vertical in ~108 px).
-  PR 55 brings TAC back as a second view (ARCHITECTURE "TAC back as a second view"): the map over the whole screen,
-  TAC on load, VIEW in the header, drag to steer, tap their mark to cycle the target; the close-up is PR 54's.
-  Also fixed: the wedge shows when their mark is cut by the stage edge (the owner's seed 85898 screenshot).
-- PR 56: on TAC a tap on their mark opens their layout (the dock's grid, 17 px cells); tap a room to target it.
-  The tap-to-cycle of PR 55 is gone (the owner: unusable).
-- Next, owner-approved but NOT started: the "hero cam" spike (`?hero=1`, my ship rear-oblique in a window in both
-  views). Its estimate and open questions were posted; it waits for the owner's go.
-- Waiting on the owner's phone playtest of both views. G2 (audio) stays frozen until then. Nothing else starts.
-- Old remote branches (14 `claude/*`, all closed PRs) could not be deleted from the session (the git proxy refuses
-  pushes to any branch but the session's own, 403); the owner deletes them on GitHub.
-- Checks that worked this session (scripts are ad hoc, not in the repo): serve the branch on :8123 and origin/main from
-  a git worktree on :8124 (`python3 -m http.server`); compare rects with both pages PAUSED (running pages differ in
-  clock/range text); compare drag orders by heading/speed within 1e-6, never by `t`, and keep test drags off the
-  12 px dead-zone edge; inject state (ship positions, torpedoes) then `game.cuWorld.reset()` for camera probes.
-  Kill servers with `pgrep -f "http[.]server"`, never `pkill -f`.
-  AUTO battles start along the screen's horizontal axis and never anchor; to test the anchored stage in a real
-  battle, turn the whole scene 90 degrees about my ship right after load (x, y, vx, vy, heading), then
-  `cuWorld.reset()`. Toasts for a rect test: tap a room of theirs, then one of mine, in the dock.
+Merged (each behind `?hero=1`, default off; flag off = every DOM rect and camera probe equal to main):
+- PR 57, hero cam S1: `src/render/hero.js`, my ship rear-oblique (astern, looking down, bow up, keystone), every
+  shape derived from the form by generic rules, baked once per battle and hull state. Merged with the flag off so the
+  owner could play it; he then judged it on the phone ("so far so good").
+- PR 58: on the close-up the dock is hidden (`body.hero #closeup`); my window on the left, theirs on the right
+  (same pose, edged orange), the world stage takes the full height between them; windows' widths are the stage's
+  left/right insets. TAC keeps my window only (owner: TAC needs no enemy cam).
+- PR 59: under the flag the world stage shakes and white-flashes (the hidden dock owned those).
+- PR 60: a tap on their window opens the TAC picker (their layout, target a room); on mine, "my layout" (what a room
+  does). A drag still steers.
+- PR 61: hit fx in the windows (pdc/torp/rail at `ev.at`, rail and tear a 2-frame negative impact frame local to the
+  window, room death glow then smoke, permanent scorch kept by the hero itself: the owner chose it because the hidden
+  dock never fills its charMap). `start()` keeps `&hero=1` in the URL. `window.game.hero` for tests.
+  ARCHITECTURE "Hero window spike, S1" has the details of all five.
+
+Decided by the owner (do not re-ask): pose (a), the same for their ship; the picker on a window tap; the hero's own
+scorch; buttons and the status line never covered; TAC: no enemy cam; one PR per change, merged by the agent after
+checks (the flag keeps main unchanged); no mega PR.
+
+The plan the owner approved (2026-11-02), in this order, one PR each, all behind `?hero=1`:
+1. Incoming in the windows: PDC tracers out of the domes whose arcs bear, torpedoes and rail slugs coming in from
+   their real bearing turned into the window's frame (bow up = my heading; theirs: their heading), to the hit cell.
+   Estimate 3 to 5 h. Data exists: torpedo positions, each mount's arc (`mountSees`), railFire / torpLaunch events.
+2. Explosions by room kind (drive, tubes, bridge, gun, crew, sensors, pdc): one variant set for every class, keyed by
+   (event x room kind), never by ship class. Estimate 2 to 3 h.
+3. CINE-2D cut shots: spec first, no code. Write the open questions for the owner (where the cut shows: the hero
+   window or over the stage; length; skip and toggle; which beats; how the room interior / hull plate art is
+   generated from the form) and STOP for his answers. Then estimate (guess 6 to 10 h, 2 or 3 PRs).
+Run 1 then 2 without waiting (merge each after checks, tell the owner what to look at), stop at 3.
+Not planned: bank on turns, plume by thrust, Burn speed lines (only if the owner asks). G2 (audio) still frozen.
+
+Known risks: a room death rebakes the hull (15 to 30 ms headless at dpr 2.6); watch for a hitch on the phone.
+The Cloudflare preview build for PR branches fails (the log is on the owner's dashboard; not readable from a
+session), so the owner plays from `main` with `?hero=1`; the sandbox cannot reach workers.dev to confirm a deploy.
+
+Checks that worked (scripts are ad hoc, in the scratchpad, not in the repo): `node tools/selfplay.mjs`
+(deterministic: true), `node tools/arena.mjs all seeds=30` byte-identical to main; serve the branch on :8123 and
+origin/main from a git worktree on :8124 (`python3 -m http.server`; `git fetch origin main` first, the local
+origin/main ref can be stale); Playwright at `/opt/node-tools/node_modules/playwright/index.js`, 844x390
+hasTouch/isMobile dpr 2.6 and 1, 844x332 dpr 2.6, 1440x900 hasTouch; pages open in TAC, `game.setView('closeup')`;
+compare DOM rects with both pages paused (`#pause`); camera probes: set both ships (x, y, v 0), `reset()` the view's
+renderer, read `shipScreen` (12 km horizontal and knife range); perf from `game.perf()` after 10 s of AUTO
+(`?auto=berserker&enemy=berserker` gives many hits); inject hero hits while paused with `game.hero.onEvent(ev,
+game.battle)`. Kill servers with `pgrep -f "http[.]server"` and kill the pids, never `pkill -f`.
+Old remote `claude/*` branches cannot be deleted from a session (git proxy 403); the owner deletes them on GitHub.
 
 ## Where things are
 
