@@ -62,6 +62,23 @@ const heroRight = (v) => (hero ? hero.right(v, battle) : 0);
 // over the stage and zooms on the impact). A tap anywhere skips it (and still does what it does); the CINE button in
 // the header turns them off (kept on this phone). Flag off: no button, no listener, nothing drawn.
 const cine = hero ? makeCine((side) => view === 'closeup' || side === 'me', heroPop ? 1.4 : undefined) : null; // TAC: my window only
+// ?hero=1: the SHIP button brings the dock back (both hulls cut away, their damage; tap their room to target it, mine
+// for what it does): the close-up's stage on top, the dock below, as before the hero windows hid it. On TAC it goes
+// to the close-up with the dock. Again: the dock hides. The battle runs on (PAUSE is apart).
+let shipOn = false;
+if (hero) {
+  const b = document.createElement('button');
+  b.id = 'ship';
+  const show = () => { b.textContent = T.shipView; b.classList.toggle('on', shipOn); document.body.classList.toggle('ship', shipOn); };
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (view !== 'closeup') { shipOn = true; setView('closeup'); } else shipOn = !shipOn;
+    show();
+    if (shipOn && battle) closeup.reset(battle); // nothing stale from before it showed
+  });
+  document.getElementById('view').after(b);
+  show();
+}
 if (cine) {
   const b = document.createElement('button');
   b.id = 'cine';
