@@ -594,6 +594,16 @@ Presentation only, behind `?hero=1`: reads events, never touches the sim; no per
   both ships' beats; on TAC their window appears only while a cut of theirs plays (standing: at the right edge; flat
   and heropop: top right), over the map; TAC's camera insets are unchanged. Checked: 3 modes x 2 views x 2 sides with
   `?enemy=gunship`.
+- R2 crew (2026-11-02, behind `?hero=1`): `src/render/crew.js` (`CREW`, `crewBuild`, `drawCrew`), called from hero.js
+  `cutBuild` / `drawCut` on a room cut (not a tear). 1 to 3 figures per room kind (`CREW.KIND`, the BLAST keys), our own
+  figure (round helmet on a neck, small round faceplate, antenna, boxy torso, backpack, jointed limbs, boots), in the
+  side's map colour (mine pale blue, theirs orange). They leave the breach with the pieces (out from the impact, along
+  the shot, spread apart), `CREW.H` 1.4 cells tall (about 12 to 16 css px in the heropop window at the push). The first
+  one plays the kind's beat: drive burnt to a skeleton that drops; crew sucked out, waving; tubes the body goes (red
+  streak, bones), the empty suit drifts; bridge holds a coffee cup level (coffee drops trail); rail electrocuted (bones
+  flash, arcs, hair on end); sensors headphones on, still sitting, nodding, notes; pdc fires a short burst, the recoil
+  spins him. Gore (b): a flat red splat on the deck by the hole (drive, tubes, rail, pdc). "Up" comes from the canvas
+  transform, so the cup and the headphones stand on screen in the turned strips too. No Math.random.
 - Risks: the panel covers the stage while it plays (the toggle is the way out); a code-drawn crew at 20 to 30 px may
   not read on the phone; unknown until the owner sees C1 and C3.
 

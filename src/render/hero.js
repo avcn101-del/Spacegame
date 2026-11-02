@@ -14,6 +14,7 @@ import { roomColor } from './form.js';
 import { LOOK, drawPlume, glow, hash01, renderDpr } from './look.js';
 import { INTERIOR } from './interior.js';
 import { CINE } from './cine.js';
+import { crewBuild, drawCrew } from './crew.js';
 
 // Visual-only knobs. Not game numbers.
 export const HERO = {
@@ -582,7 +583,8 @@ export function makeHero(canvases, hud, { twin = false, flat: flat0 = false, pop
         pieces: Object.fromEntries(Object.entries(ship.pieces).map(([id, p]) => [id, { ...p, torn: false, alive: p.alive || p.torn }])) };
       section = bake(fake, r.w, r.h, dpr, lk).canvas;
     }
-    return { chunks, section, dX, dY };
+    const crew = crewBuild(shot, P, cut.F, dX, dY, info.pr.c, cut.z, shot.side); // R2: who was in the room
+    return { chunks, section, dX, dY, crew };
   }
   function drawCut(g, shot, cut, info, ship, r, dpr, lk) {
     if (cutKey !== shot.s || !cutMem) { cutKey = shot.s; cutMem = cutBuild(shot, cut, info, ship, r, dpr, lk); }
@@ -650,6 +652,7 @@ export function makeHero(canvases, hud, { twin = false, flat: flat0 = false, pop
       g.fillStyle = css(k.col, fade); g.fill();
       g.strokeStyle = `rgba(255,${150 + 80 * clamp(1 - t / 0.5, 0, 1)},80,${clamp(1 - t / 0.6, 0, 1) * fade})`; g.lineWidth = 0.6; g.stroke();
     }
+    drawCrew(g, M.crew, a, c, fade, shot.s); // R2: the crew, flung out with the pieces
     // sparks and a fireball at the impact
     for (let i = 0; i < 36; i++) {
       const life = 0.3 + 0.4 * hs(i), k = t / life; if (k >= 1) continue;
