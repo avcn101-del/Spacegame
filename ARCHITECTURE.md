@@ -507,6 +507,12 @@ My ship as an object, rear-oblique, in a window at the left of both views. `src/
   WeakMap) and run to a torpedo (placed as above) or past the edge for a Rake (end point within 0.25 km of their
   ship); muzzle glow on the dome. `torpKilled`: a pop where it died, in the defender's window. Nothing stored per
   frame; reads battle only. Limit: the windows are narrow, so a torpedo from the beam has ~20 px between hull and edge.
+- Explosions by room kind (2026-11-02, plan step 2): `BLAST` in hero.js, keyed by (event x room kind), never by class.
+  torpHit/railHit: the glow takes the room kind's hit colour. pieceDead (job rooms, not on a tear): drive and crew
+  `vent` (a jet of puffs out of the hull's nearest side; a room on the keel line vents astern or ahead; blue plasma,
+  white air), tubes and PDC `cook` (delayed bursts over the room's cells), bridge `alarm` (red light pulsing 4 s),
+  rail `arcs` (two jagged arcs between its cells, re-struck 20 times a second), sensors `crackle` (small blue
+  sparks). Delays are a `wait` on the fx item, counted only while time runs. The glow, sparks and smoke of PR 61 stay.
 - S2 (not built): bank, plume by thrust, Burn lines, hit flashes, local impact frame, scorch via a dock getter.
 
 ## Render module contract

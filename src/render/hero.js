@@ -53,6 +53,22 @@ export const HERO = {
   TRACER_SEG: 0.28,     // share of the dome-to-edge path one tracer streak covers
 };
 
+// Explosions by room kind (plan step 2): keyed by (event x room kind), never by ship class, so every class shares them.
+// hit: the colour of a torpedo or rail hit on that kind; dead: what the room does when it dies (job rooms only).
+// vent: a jet out of the hull's side (drive plasma, crew air); cook: delayed bursts over the room (tubes, PDC rounds);
+// alarm: red emergency light pulsing (bridge); arcs: capacitors discharging along the room (rail); crackle: small
+// electric sparks (sensors).
+export const BLAST = {
+  drive:    { hit: [150, 200, 255], dead: 'vent', col: [170, 215, 255], time: 1.6 },
+  launcher: { hit: [255, 150, 60], dead: 'cook', col: [255, 150, 60], n: 4, gap: 0.3 },
+  core:     { hit: [255, 190, 130], dead: 'alarm', col: [255, 50, 40], time: 4 },
+  gun:      { hit: [170, 215, 255], dead: 'arcs', col: [170, 220, 255], time: 0.9 },
+  crew:     { hit: [255, 170, 110], dead: 'vent', col: [225, 232, 240], time: 2.2 },
+  sensors:  { hit: [200, 225, 255], dead: 'crackle', col: [140, 200, 255], n: 5, gap: 0.12 },
+  pdc:      { hit: [255, 210, 120], dead: 'cook', col: [255, 225, 130], n: 3, gap: 0.12 },
+};
+const HIT_DEFAULT = { torpHit: [255, 150, 60], railHit: [170, 215, 255] };
+
 const STEEL = [92, 104, 118], STEEL_DARK = [34, 40, 48], WALL_C = [52, 60, 70], DEAD = [26, 29, 34];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
@@ -432,18 +448,43 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
   // No ids on events: a counter (reset per battle) and the event's own fields seed the hash, so the same battle
   // looks the same every run.
   let seq = 0, fx = { me: newFx(), them: newFx() }, running = true; // running: the last step moved time (not paused)
-  function newFx() { return { parts: [], glows: [], smoke: [], pops: [], scorch: new Map(), neg: 0 }; }
+  function newFx() { return { parts: [], glows: [], smoke: [], pops: [], jets: [], alarms: [], arcs: [], scorch: new Map(), neg: 0 }; }
   const roomCellsOf = (ship, room) => {
     const out = [];
     for (let y = 0; y < ship.form.h; y++) for (let x = 0; x < ship.form.w; x++) { const c = ship.cells[y][x]; if (c && c.room === room) out.push([x, y]); }
     return out;
   };
   const centroid = (cs) => cs.reduce((a, c) => [a[0] + c[0] / cs.length, a[1] + c[1] / cs.length], [0, 0]);
-  function burst(f, cell, room, n, speed, life, col) {
+  function burst(f, cell, room, n, speed, life, col, wait = 0) {
     const s0 = ++seq;
     for (let i = 0; i < n && f.parts.length < HERO.PARTS; i++) {
       const a = hash01(s0 * 31 + i * 7) * Math.PI * 2, v = speed * (0.4 + 0.6 * hash01(s0 * 17 + i * 13));
-      f.parts.push({ x: cell[0] + 0.5, y: cell[1] + 0.5, room, dx: Math.cos(a) * v, dy: Math.sin(a) * v - speed * 0.3, ttl: life, life, col });
+      f.parts.push({ x: cell[0] + 0.5, y: cell[1] + 0.5, room, dx: Math.cos(a) * v, dy: Math.sin(a) * v - speed * 0.3, ttl: life, life, col, wait });
+    }
+  }
+  const hitCol = (ship, ev) => { const b = BLAST[kindOf(ship, ev.piece)]; return b ? b.hit : HIT_DEFAULT[ev.type]; };
+  // A job room's death, by its kind (BLAST). cs: its cells, m: their centroid.
+  function blast(f, ship, room, cs, m, battle) {
+    const b = BLAST[kindOf(ship, room)];
+    if (!b) return;
+    const s = ++seq, cx = m[0] + 0.5, cy = m[1] + 0.5;
+    if (b.dead === 'vent') {
+      // out of the hull's nearest side: from the hull's centre through the room (the drive: astern when it sits on the axis)
+      const H = ship.form.h, W = ship.form.w;
+      let ux = 0, uy = cy - H / 2;
+      if (Math.abs(uy) < H * 0.15) { ux = cx < W / 2 ? -1 : 1; uy = 0; } else uy = Math.sign(uy);
+      f.jets.push({ x: cx, y: cy, room, ux, uy, col: b.col, ttl: b.time, life: b.time, s });
+    } else if (b.dead === 'cook' || b.dead === 'crackle') {
+      const small = b.dead === 'crackle';
+      for (let i = 0; i < b.n; i++) {
+        const c = cs[Math.floor(hash01(s * 13 + i * 7) * cs.length)], wait = 0.12 + i * b.gap * (0.6 + 0.8 * hash01(s * 5 + i));
+        f.glows.push({ x: c[0] + 0.5, y: c[1] + 0.5, room, r: small ? 6 : 14, a: small ? 0.8 : 1, ttl: small ? 0.12 : 0.35, life: small ? 0.12 : 0.35, col: b.col, wait });
+        burst(f, c, room, small ? 3 : 7, small ? 18 : 30, small ? 0.2 : 0.45, b.col, wait);
+      }
+    } else if (b.dead === 'alarm') {
+      f.alarms.push({ x: cx, y: cy, room, col: b.col, ttl: b.time, life: b.time });
+    } else if (b.dead === 'arcs') {
+      f.arcs.push({ cells: cs, room, col: b.col, ttl: b.time, life: b.time, s });
     }
   }
   function onEvent(ev, battle) {
@@ -465,17 +506,18 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
     } else if (ev.type === 'torpHit') {
       const c = hit(); if (!c) return;
       burst(f, c, ev.piece, 12, 30, 0.5, [255, 170, 80]);
-      f.glows.push({ x: c[0] + 0.5, y: c[1] + 0.5, room: ev.piece, r: 16, a: 0.9, ttl: 0.45, life: 0.45, col: [255, 150, 60] });
+      f.glows.push({ x: c[0] + 0.5, y: c[1] + 0.5, room: ev.piece, r: 16, a: 0.9, ttl: 0.45, life: 0.45, col: hitCol(ship, ev) });
     } else if (ev.type === 'railHit') {
       const c = hit(); if (!c) return;
       burst(f, c, ev.piece, 16, 45, 0.45, [200, 230, 255]);
-      f.glows.push({ x: c[0] + 0.5, y: c[1] + 0.5, room: ev.piece, r: 20, a: 1, ttl: 0.5, life: 0.5, col: [170, 215, 255] });
+      f.glows.push({ x: c[0] + 0.5, y: c[1] + 0.5, room: ev.piece, r: 20, a: 1, ttl: 0.5, life: 0.5, col: hitCol(ship, ev) });
       f.neg = HERO.NEG;
     } else if (ev.type === 'pieceDead' && !String(ev.piece).startsWith('frame:')) {
       const cs = roomCellsOf(ship, ev.piece); if (!cs.length) return;
       const m = centroid(cs);
       f.glows.push({ x: m[0] + 0.5, y: m[1] + 0.5, room: ev.piece, r: 22, a: 1, ttl: 0.7, life: 0.7, col: [255, 140, 50] });
       burst(f, [Math.floor(m[0]), Math.floor(m[1])], ev.piece, 14, 35, 0.6, [255, 190, 110]);
+      if (ev.cause !== 'tear') blast(f, ship, ev.piece, cs, m, battle);
       f.smoke.push({ x: m[0] + 0.5, y: m[1] + 0.5, room: ev.piece, ttl: HERO.SMOKE_TIME, life: HERO.SMOKE_TIME, s: ++seq });
     } else if (ev.type === 'tear') {
       f.neg = HERO.NEG;
@@ -487,8 +529,12 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
     for (const side in fx) {
       const f = fx[side];
       if (dt > 0) f.neg = Math.max(0, f.neg - 1); // frames, counted only while the game runs
-      for (const L of [f.parts, f.glows, f.smoke, f.pops]) for (let i = L.length - 1; i >= 0; i--) { L[i].ttl -= dt; if (L[i].ttl <= 0) L.splice(i, 1); }
-      for (const p of f.parts) { p.ox = (p.ox || 0) + p.dx * dt; p.oy = (p.oy || 0) + p.dy * dt; p.dy += 40 * dt; }
+      for (const L of [f.parts, f.glows, f.smoke, f.pops, f.jets, f.alarms, f.arcs]) for (let i = L.length - 1; i >= 0; i--) {
+        const q = L[i];
+        if (q.wait > 0) { q.wait -= dt; continue; } // a delayed burst (cook-off) has not gone off yet
+        q.ttl -= dt; if (q.ttl <= 0) L.splice(i, 1);
+      }
+      for (const p of f.parts) { if (p.wait > 0) continue; p.ox = (p.ox || 0) + p.dx * dt; p.oy = (p.oy || 0) + p.dy * dt; p.dy += 40 * dt; }
     }
   }
   // Project a cell point at its room's top (the deck for frame, the hull's base if the room is gone).
@@ -516,8 +562,39 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
       }
     }
     // glows (room hit, room death) and sparks
-    for (const q of f.glows) { const p = at(info, q.x, q.y, q.room), k = q.ttl / q.life; glow(g, p.x, p.y, q.r * (1.3 - 0.3 * k), q.col, q.a * k * k); }
+    for (const q of f.glows) { if (q.wait > 0) continue; const p = at(info, q.x, q.y, q.room), k = q.ttl / q.life; glow(g, p.x, p.y, q.r * (1.3 - 0.3 * k), q.col, q.a * k * k); }
+    // bridge: red emergency light, pulsing, fading over its time
+    for (const q of f.alarms) {
+      const p = at(info, q.x, q.y, q.room), k = Math.min(1, q.ttl / 1.5), pulse = 0.5 + 0.5 * Math.sin((q.life - q.ttl) * 9);
+      glow(g, p.x, p.y, c * 2.4, q.col, 0.55 * pulse * k, false);
+    }
+    // drive plasma or crew air: a jet out of the hull's side, a stream of puffs that shrinks as the room empties
+    for (const q of f.jets) {
+      const p = at(info, q.x, q.y, q.room), k = q.ttl / q.life, age = q.life - q.ttl;
+      const [dx, dy] = screenDir(info, [q.x, q.y], q.ux, q.uy, HERO.WALL), len = c * 7 * k;
+      for (let i = 0; i < 10; i++) {
+        const ph = (age * 3 + i / 10) % 1, a = (1 - ph) * k * 0.7, jit = (hash01(q.s * 19 + i + Math.floor(age * 20) * 31) - 0.5) * c * ph * 1.6;
+        g.fillStyle = css(q.col, a);
+        g.beginPath(); g.arc(p.x + dx * ph * len - dy * jit, p.y + dy * ph * len + dx * jit, c * (0.25 + ph * 0.7), 0, Math.PI * 2); g.fill();
+      }
+      glow(g, p.x, p.y, c * 2 * k + 3, q.col, 0.6 * k, false);
+    }
+    // rail capacitors: two jagged arcs between cells of the room, re-struck twenty times a second
+    for (const q of f.arcs) {
+      const k = q.ttl / q.life, n = Math.floor((q.life - q.ttl) * 20);
+      g.strokeStyle = css(q.col, 0.9 * k); g.lineWidth = 1;
+      for (let j = 0; j < 2; j++) {
+        const h = (i) => hash01(q.s * 97 + n * 13 + j * 7 + i);
+        const A = q.cells[Math.floor(h(1) * q.cells.length)], B = q.cells[Math.floor(h(2) * q.cells.length)];
+        const pa = at(info, A[0] + 0.5, A[1] + 0.5, q.room), pb = at(info, B[0] + 0.5, B[1] + 0.5, q.room);
+        g.beginPath(); g.moveTo(pa.x, pa.y);
+        for (let i = 1; i < 5; i++) g.lineTo(pa.x + (pb.x - pa.x) * i / 5 + (h(10 + i) - 0.5) * c * 1.4, pa.y + (pb.y - pa.y) * i / 5 + (h(20 + i) - 0.5) * c * 1.4);
+        g.lineTo(pb.x, pb.y); g.stroke();
+        glow(g, pb.x, pb.y, 6, q.col, 0.5 * k, false);
+      }
+    }
     for (const q of f.parts) {
+      if (q.wait > 0) continue;
       const p = at(info, q.x, q.y, q.room), k = q.ttl / q.life;
       g.fillStyle = css(q.col, Math.min(1, k * 1.2));
       g.fillRect(p.x + q.ox - 0.8, p.y + q.oy - 0.8, 1.6, 1.6);
