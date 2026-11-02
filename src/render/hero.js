@@ -65,7 +65,8 @@ function cellForHeight(ship, wh) {
   return HERO.SHIP_LEN * wh / (W * Math.sin(HERO.PITCH) * (1 - HERO.KEYSTONE / 2) + zTop * Math.cos(HERO.PITCH));
 }
 // The window rect (css px, canvas coords) for a view on a canvas cw x ch. hud: {top, bottom} covered (TAC).
-export function heroRect(view, ship, cw, ch, hud) {
+// side: 'me' at the left edge, 'them' at the right edge (the close-up only).
+export function heroRect(view, ship, cw, ch, hud, side = 'me') {
   const Hc = ship.form.h;
   if (view === 'tac') {
     const y = hud.top + HERO.PAD, h = Math.max(40, Math.min(HERO.TAC_MAX_H, ch - hud.top - hud.bottom - 2 * HERO.PAD));
@@ -73,9 +74,8 @@ export function heroRect(view, ship, cw, ch, hud) {
     return { x: 8, y, w, h };
   }
   const h = ch, w = clamp(Math.ceil(cellForHeight(ship, h) * Hc / HERO.BEAM_SHARE), HERO.CU_MIN_W, HERO.CU_MAX_W);
-  return { x: 0, y: 0, w, h };
+  return { x: side === 'them' ? cw - w : 0, y: 0, w, h };
 }
-
 // The projection for a window ww x wh: form x (stern 0, bow W) runs up the window, form y across it (row 0
 // on the left: bow up, as the map draws a ship heading up). z: cells above the hull's base.
 function projection(ship, ww, wh) {
@@ -347,43 +347,56 @@ function hullKey(ship) {
 // --- the window -----------------------------------------------------------------------------
 
 // canvases: {tac, closeup} the canvas each view draws on; hud(): {top, bottom} css px the HUD covers on TAC.
-export function makeHero(canvases, hud) {
-  let cache = null; // {key, canvas, info}
-  const rectFor = (view, ship) => {
+// twin: the close-up shows their ship too, in a window at the right edge (same pose as mine). TAC: mine only.
+export function makeHero(canvases, hud, { twin = false } = {}) {
+  const cache = {}; // side -> {key, canvas, info}
+  const sides = (view) => (view === 'closeup' && twin ? ['me', 'them'] : ['me']);
+  const rectFor = (view, ship, side) => {
     const cv = canvases[view];
     if (!cv || !cv.clientWidth || !cv.clientHeight) return null;
-    return heroRect(view, ship, cv.clientWidth, cv.clientHeight, view === 'tac' ? hud() : { top: 0, bottom: 0 });
+    return heroRect(view, ship, cv.clientWidth, cv.clientHeight, view === 'tac' ? hud() : { top: 0, bottom: 0 }, side);
   };
-  // css px the camera's view rect must leave free at the left, past the window (0 when there is no window)
+  // css px the camera's view rect must leave free at the left (my window) and the right (theirs): 0 with no window
   function left(view, battle) {
-    const r = battle && rectFor(view, battle.ships[0]);
+    const r = battle && rectFor(view, battle.ships[0], 'me');
     return r ? r.x + r.w + HERO.GAP : 0;
   }
+  function right(view, battle) {
+    if (!battle || !sides(view).includes('them')) return 0;
+    const r = rectFor(view, battle.ships[1], 'them');
+    return r ? r.w + HERO.GAP : 0;
+  }
+  // the window rect of a side in a view (css px), or null: for taps
+  const rect = (view, battle, side) => (battle && sides(view).includes(side) ? rectFor(view, battle.ships[side === 'me' ? 0 : 1], side) : null);
   function draw(view, battle) {
-    const cv = canvases[view], ship = battle.ships[0], r = rectFor(view, ship);
+    for (const side of sides(view)) drawOne(view, battle, side);
+  }
+  function drawOne(view, battle, side) {
+    const cv = canvases[view], ship = battle.ships[side === 'me' ? 0 : 1], r = rectFor(view, ship, side);
     if (!r) return;
     const dpr = renderDpr(), key = `${battle.seed}|${view}|${r.w}x${r.h}@${dpr}|${hullKey(ship)}`;
-    if (!cache || cache.key !== key) cache = { key, ...bake(ship, r.w, r.h, dpr) };
+    if (!cache[side] || cache[side].key !== key) cache[side] = { key, ...bake(ship, r.w, r.h, dpr) };
+    const c = cache[side];
     const g = cv.getContext('2d');
     g.save();
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.translate(r.x, r.y);
-    // the window: dark glass, rounded (the close-up's sits on the stage's left edge: square there)
-    const rad = HERO.RADIUS, sq = view === 'closeup';
+    // the window: dark glass, rounded; on the close-up it sits on the stage's edge, square on that side
+    const rad = HERO.RADIUS, corners = view !== 'closeup' ? rad : side === 'me' ? [0, rad, rad, 0] : [rad, 0, 0, rad];
     g.beginPath();
-    if (g.roundRect) g.roundRect(0, 0, r.w, r.h, sq ? [0, rad, rad, 0] : rad); else g.rect(0, 0, r.w, r.h);
+    if (g.roundRect) g.roundRect(0, 0, r.w, r.h, corners); else g.rect(0, 0, r.w, r.h);
     const bg = g.createLinearGradient(0, 0, 0, r.h);
     bg.addColorStop(0, `rgba(10,15,26,${HERO.ALPHA})`); bg.addColorStop(1, `rgba(4,6,11,${HERO.ALPHA})`);
     g.fillStyle = bg; g.fill();
-    g.strokeStyle = 'rgba(140,165,200,0.28)'; g.lineWidth = 1; g.stroke();
+    g.strokeStyle = side === 'me' ? 'rgba(140,165,200,0.28)' : 'rgba(255,160,80,0.32)'; g.lineWidth = 1; g.stroke(); // their window edged in their colour
     g.clip();
-    const t = battle.t || 0, info = cache.info;
+    const t = battle.t || 0, info = c.info;
     // the idle plume, behind the bell's mouth toward the camera
     if (info.bell) {
       const b = info.bell;
-      drawPlume(g, b.x, b.y, 0, 1, HERO.PLUME_LEN * r.h, b.r * 0.9, t, 11);
+      drawPlume(g, b.x, b.y, 0, 1, HERO.PLUME_LEN * r.h, b.r * 0.9, t, side === 'me' ? 11 : 23);
     }
-    g.drawImage(cache.canvas, 0, 0, r.w, r.h);
+    g.drawImage(c.canvas, 0, 0, r.w, r.h);
     if (info.bell) glow(g, info.bell.x, info.bell.y, info.bell.r * 1.6, [150, 200, 255], 0.35, false);
     // running lights: steady with a slow breath, the bow strobe flashes once every 1.6 s
     for (const L of info.lights) {
@@ -394,5 +407,5 @@ export function makeHero(canvases, hud) {
     }
     g.restore();
   }
-  return { draw, left, reset() { cache = null; } };
+  return { draw, left, right, rect, reset() { for (const k in cache) delete cache[k]; } };
 }
