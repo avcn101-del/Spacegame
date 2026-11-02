@@ -547,6 +547,13 @@ Presentation only, behind `?hero=1`: reads events, never touches the sim; no per
   broke away (cut or torn, on that end, not shown before) slide off and turn, sparks on the break. The CINE button
   (`#cine`, created only under the flag; header one column wider) and a capture-phase pointerdown that only skips.
   `window.game.cine` for tests. Flag off: no button, header widths as main.
+- C2 built (2026-11-02): `INTERIOR` in cine.js, one draw per room kind (the BLAST keys), from the room's cells and
+  box only, each with its death: drive (conduits rupture, reactor dies), tubes (torpedoes on every other cell cook off
+  one by one, scorched racks), bridge (consoles on the walls facing in, main display on the bow wall, chair; screens
+  go red then out, consoles spark), rail (twin rails down the middle, capacitor banks burst, arcs between them), crew
+  (bunks on the walls, tables; loose things pulled out of the breach), sensors (radar sweeps stop, static, crackle),
+  pdc (turret, ammo belt cooking off round by round); `generic` for a kind added later. The blast (hole, debris, glow)
+  is sized in a unit capped at 40 px, so a one-cell room's hole does not fill the panel.
 - Risks: the panel covers the stage while it plays (the toggle is the way out); a code-drawn crew at 20 to 30 px may
   not read on the phone; unknown until the owner sees C1 and C3.
 
