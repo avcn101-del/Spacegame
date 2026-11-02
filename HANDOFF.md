@@ -6,7 +6,43 @@ in Vietnamese mixed with English; answer short, verified facts only, say
 "I don't know" when you don't, raise problems before doing work. Before any
 work longer than about an hour, give the estimate and wait for go.
 
-## Now (handover, 2026-11-02, after PR 61: the hero cam)
+## Now (handover, 2026-11-02, after PR 73: CINE cut on the ship, heroflat, heropop, SHIP)
+
+The owner plays `main` with `?hero=1&heroflat=1&heropop=1` (link: https://spacegame.avcn101.workers.dev/?hero=1&heroflat=1&heropop=1;
+`&auto=berserker&enemy=berserker` for many cuts). Merged this session (all render/UI, sim untouched; details in
+ARCHITECTURE "CINE-2D cut shots" and "Hero window spike, S1"):
+- PR 63 incoming fire in the hero windows; PR 64 explosions by room kind (`BLAST` in hero.js).
+- PR 65 to 67: CINE spec, C1 panel, C2 interiors. The owner on the phone: a room blowing up in a panel away from the
+  ship makes no sense. PR 68 (R1): the cut plays in the hit ship's window (zoom on the room, the hull rips into pieces,
+  the interior, `render/interior.js`, flashes through the hole; a tear: the section drifts off). `cine.js` only picks
+  beats (job room death, tear; one at a time, 2 s gap, a tear cuts in; tap anywhere skips; CINE toggle).
+- PR 69 `&heroflat=1`: windows lie down in the corners, mine bottom left bow right, theirs top right bow left (the
+  owner keeps this: the ships face each other). PR 70 `&heropop=1`: no window during play, a big one (60 % x 72 %) only
+  during a cut (1.4 s: whole ship 0.2 s, push x1.8); bigger close-up marks; bake per layer box (same pixels, 100 -> 44
+  ms headless for the big window). PR 71: SHIP button shows the dock (both ships, tap their room to target).
+  PR 72: tapping their ship is consistent (mark, range label, edge wedge; AUTO opens it to look). PR 73: their cuts
+  show on TAC too.
+
+Next: R2 (approved by the owner, start it in this chat): the crew in the cut, dark comedy, gore level (b). One PR,
+estimate 2 to 5 h (say so before starting; the owner already said go).
+- Crew are visual only (the rule "no crew counts" stands): 1 to 3 small spacesuited figures per hit room, from the
+  room kind, drawn in code, our own design (NOT Among Us's bean-with-visor). Mine in my colour, theirs in theirs.
+- They are flung out of the breach with the hull pieces (`cutBuild` / `drawCut` in hero.js: chunks fly out from the
+  impact and along the shot). Gore (b): flat red smears, bones, empty suits; no detailed flesh.
+- Per kind, a dark-comedy beat while they fly (keyed like BLAST, every class): drive: burnt to a skeleton; crew:
+  sucked out, waving; tubes: blown off, the suit stays; bridge: one still holding a coffee cup; rail: electrocuted,
+  hair on end; sensors: headphones on, never noticed; pdc: still firing (a short burst) as he goes.
+- They must read at the cut's zoom on the phone (a figure about 10 to 16 px tall in the heropop window). Unknown until
+  the owner sees it: tell him that.
+- Tests that worked: inject a death while the page runs (`s.pieces[p].alive=false; b.pieceDied(...)`, then feed
+  `b.events` to `game.hero.onEvent` and `game.cine.onEvent`), screenshot at 40/200/350/600 ms; a tear: kill
+  `frame:H1` then `rail` on the Tachi. Playwright, perf from `game.perf()`, `node tools/selfplay.mjs`, flag off header
+  widths `90,130,222,110,84,84,60`.
+
+Known risks: a cut's first frame bakes (44 ms headless for the big window, under the flash); the zoom scales a bitmap
+(soft); the heroflat map camera does not avoid the strips (see-through); few cuts per battle (2 s gap, frame deaths have none).
+
+## Earlier (handover, 2026-11-02, after PR 61: the hero cam)
 
 Merged (each behind `?hero=1`, default off; flag off = every DOM rect and camera probe equal to main):
 - PR 57, hero cam S1: `src/render/hero.js`, my ship rear-oblique (astern, looking down, bow up, keystone), every
