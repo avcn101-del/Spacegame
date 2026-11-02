@@ -480,8 +480,9 @@ My ship as an object, rear-oblique, in a window at the left of both views. `src/
 - PR A (2026-11-02, the owner after playing S1: the dock goes, both ships as objects). Under `?hero=1` the close-up
   hides the dock (`body.hero #closeup`, so `#cu-world` takes the wrap's height) and draws their ship in a window at the
   right edge, the same pose as mine (astern, bow up), edged in their colour; its width is the stage's RIGHT inset.
-  TAC keeps my window only. Not yet moved off the dock: the shake and the white flash (the dock owned them; with it
-  hidden the close-up has neither), tap-a-room on both ships (PR B: a tap on a window opens the picker), hit fx.
+  TAC keeps my window only. The shake and the white flash: under the flag the world stage is not quiet (the same
+  code TAC uses); the hero windows are drawn after it with their own transform, so they never shake. Not yet moved
+  off the dock: tap-a-room on both ships (PR B: a tap on a window opens the picker), hit fx in the windows.
 - S2 (not built): bank, plume by thrust, Burn lines, hit flashes, local impact frame, scorch via a dock getter.
 
 ## Render module contract
