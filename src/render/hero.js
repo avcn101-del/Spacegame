@@ -9,7 +9,7 @@
 // bitmap per battle and rebuilt when a room dies or a cell is cut; each frame draws only the plume and the
 // lights. No Math.random: flicker and blink hash battle.t.
 import { DESIGNS } from '../ships/index.js';
-import { isPdc } from '../sim/ship.js';
+import { isPdc, mountSees } from '../sim/ship.js';
 import { roomColor } from './form.js';
 import { LOOK, drawPlume, glow, hash01, renderDpr } from './look.js';
 
@@ -45,6 +45,12 @@ export const HERO = {
   NEG: 2,               // drawn frames of the negative impact frame on a rail hit or a tear (frames, not s: slow-mo would stretch it)
   PARTS: 160,           // cap on live sparks per window
   SMOKE_TIME: 5,        // s a dead room smokes after its glow
+  // Incoming (and my PDC fire): what is in flight drawn at its real bearing in the window's frame (bow up = the
+  // ship's heading). Distance is squeezed: SHOW km away sits just outside the window's edge, 0 km on the hull.
+  TORP_SHOW: 6,         // km: a torpedo enters the window here, 4 s before it reaches the hull at full speed
+  SLUG_SHOW: 15,        // km: a slug enters at the rail's range, so every shot crosses the window (about 2 s)
+  EDGE: 10,             // css px past the window's edge where SHOW km sits (it slides in, not pops in)
+  TRACER_SEG: 0.28,     // share of the dome-to-edge path one tracer streak covers
 };
 
 const STEEL = [92, 104, 118], STEEL_DARK = [34, 40, 48], WALL_C = [52, 60, 70], DEAD = [26, 29, 34];
@@ -267,6 +273,11 @@ function bake(ship, ww, wh, dpr) {
     r.top = deckZ + h;
   }
   for (const r of rooms) info.top[r.room] = r.top || deckZ + (r.kind === 'pdc' ? HERO.DOME * 0.8 : 0);
+  // incoming fire homes on a room's centre, or on the hull's when it goes for no room
+  info.center = rooms.reduce((a, r) => [a[0] + r.sx, a[1] + r.sy, a[2] + r.n], [0, 0, 0]);
+  info.center = [info.center[0] / info.center[2], info.center[1] / info.center[2]];
+  info.rc = {};
+  for (const r of rooms) info.rc[r.room] = [r.sx / r.n, r.sy / r.n];
 
   // 4. the rail: a spine along its cells and a barrel past the bow (only when the form has rail cells)
   const rail = rooms.find((r) => r.kind === 'gun');
@@ -404,6 +415,7 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
     }
     g.drawImage(c.canvas, 0, 0, r.w, r.h);
     drawHits(g, side, info, r, battle.t || 0, ship);
+    drawIncoming(g, side, info, r, battle, ship);
     if (info.bell) glow(g, info.bell.x, info.bell.y, info.bell.r * 1.6, [150, 200, 255], 0.35, false);
     // running lights: steady with a slow breath, the bow strobe flashes once every 1.6 s
     for (const L of info.lights) {
@@ -420,7 +432,7 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
   // No ids on events: a counter (reset per battle) and the event's own fields seed the hash, so the same battle
   // looks the same every run.
   let seq = 0, fx = { me: newFx(), them: newFx() }, running = true; // running: the last step moved time (not paused)
-  function newFx() { return { parts: [], glows: [], smoke: [], scorch: new Map(), neg: 0 }; }
+  function newFx() { return { parts: [], glows: [], smoke: [], pops: [], scorch: new Map(), neg: 0 }; }
   const roomCellsOf = (ship, room) => {
     const out = [];
     for (let y = 0; y < ship.form.h; y++) for (let x = 0; x < ship.form.w; x++) { const c = ship.cells[y][x]; if (c && c.room === room) out.push([x, y]); }
@@ -435,6 +447,7 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
     }
   }
   function onEvent(ev, battle) {
+    if (ev.type === 'torpKilled' && fx[ev.by]) { fx[ev.by].pops.push({ x: ev.x, y: ev.y, ttl: 0.3, life: 0.3 }); return; } // a torpedo shot down short of this hull
     const f = fx[ev.ship];
     if (!f || !battle) return;
     const ship = battle.shipById ? battle.shipById(ev.ship) : battle.ships[ev.ship === 'me' ? 0 : 1];
@@ -474,7 +487,7 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
     for (const side in fx) {
       const f = fx[side];
       if (dt > 0) f.neg = Math.max(0, f.neg - 1); // frames, counted only while the game runs
-      for (const L of [f.parts, f.glows, f.smoke]) for (let i = L.length - 1; i >= 0; i--) { L[i].ttl -= dt; if (L[i].ttl <= 0) L.splice(i, 1); }
+      for (const L of [f.parts, f.glows, f.smoke, f.pops]) for (let i = L.length - 1; i >= 0; i--) { L[i].ttl -= dt; if (L[i].ttl <= 0) L.splice(i, 1); }
       for (const p of f.parts) { p.ox = (p.ox || 0) + p.dx * dt; p.oy = (p.oy || 0) + p.dy * dt; p.dy += 40 * dt; }
     }
   }
@@ -513,8 +526,110 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
     if (f.neg > 0 && running) { g.save(); g.globalCompositeOperation = 'difference'; g.fillStyle = '#fff'; g.fillRect(0, 0, r.w, r.h); g.restore(); }
   }
 
+  // --- incoming: torpedoes and slugs in flight toward a hull, and its own PDC tracers out of the domes ---------
+  // A world point is turned into the ship's frame (bow = its heading, row 0 = its 'top' side, as shotFrom and
+  // mountSees see it) and drawn on the ray from an anchor (the room it goes for, else the hull's centre) at its
+  // real bearing; the distance is squeezed: 0 km on the hull's edge, SHOW km just past the window's edge.
+  // Nothing here is stored per frame but a tracer's mount (a WeakMap, so a tracer stays on one dome).
+  let tracerSeq = 0, tracerMount = new WeakMap();
+  function frameOf(ship) {
+    const c = Math.cos(ship.heading), s = Math.sin(ship.heading);
+    return (dx, dy) => [dx * c + dy * s, -dx * s + dy * c]; // world vector -> (cells toward the bow, toward row h)
+  }
+  // The window point of a world point (wx, wy) seen from `ship`, on the ray from form point `a` (cells), at height z.
+  function place(info, r, ship, toLocal, a, wx, wy, show, z) {
+    const [lx, ly] = toLocal(wx - ship.x, wy - ship.y), d = Math.hypot(lx, ly);
+    if (d < 1e-6) return null;
+    const ux = lx / d, uy = ly / d, P = info.pr.P;
+    const A = P(a[0], a[1], z), B = P(a[0] + ux, a[1] + uy, z);
+    let sx = B.x - A.x, sy = B.y - A.y;
+    const sl = Math.hypot(sx, sy) || 1; sx /= sl; sy /= sl;
+    // the hull's edge on this ray: walk out of the form's box in half cells
+    let k = 0;
+    const W = ship.form.w, H = ship.form.h;
+    while (k < W + H) { const gx = a[0] + ux * k, gy = a[1] + uy * k; if (gx < 0 || gx > W || gy < 0 || gy > H) break; k += 0.5; }
+    const Ex = P(a[0] + ux * k, a[1] + uy * k, z), hullR = Math.hypot(Ex.x - A.x, Ex.y - A.y);
+    // the window's edge on this ray
+    const tx = sx > 0 ? (r.w - A.x) / sx : sx < 0 ? -A.x / sx : Infinity;
+    const ty = sy > 0 ? (r.h - A.y) / sy : sy < 0 ? -A.y / sy : Infinity;
+    const edge = Math.max(hullR, Math.min(tx, ty)) + HERO.EDGE;
+    const rad = hullR + (edge - hullR) * clamp(d / show, 0, 1);
+    return { x: A.x + sx * rad, y: A.y + sy * rad, sx, sy, A, d };
+  }
+  // A local direction (cells toward the bow, toward row h) as a unit vector on the window, near form point a.
+  function screenDir(info, a, lx, ly, z) {
+    const d = Math.hypot(lx, ly) || 1, A = info.pr.P(a[0], a[1], z), B = info.pr.P(a[0] + lx / d, a[1] + ly / d, z);
+    const sx = B.x - A.x, sy = B.y - A.y, l = Math.hypot(sx, sy) || 1;
+    return [sx / l, sy / l];
+  }
+  function drawIncoming(g, side, info, r, battle, ship) {
+    if (!info.center || !ship.form) return;
+    const toLocal = frameOf(ship), zFly = HERO.WALL + 0.6;
+    const anchor = (room) => (room && info.rc[room]) || info.center;
+    g.save();
+    g.lineCap = 'round';
+    // torpedoes coming for this hull: a red-hot head, the exhaust trailing against its motion (relative to us)
+    for (const p of battle.projectiles) {
+      if (p.dead || p.target !== ship.id) continue;
+      if (p.kind === 'torp') {
+        const q = place(info, r, ship, toLocal, anchor(p.room), p.x, p.y, HERO.TORP_SHOW, zFly);
+        if (!q || q.d > HERO.TORP_SHOW * 1.2) continue;
+        const [vx, vy] = toLocal(p.vx - ship.vx, p.vy - ship.vy), [dx, dy] = screenDir(info, anchor(p.room), vx, vy, zFly);
+        const tail = 9 + 5 * hash01(Math.round(battle.t * 30) + Math.round(p.x * 997));
+        const gr = g.createLinearGradient(q.x, q.y, q.x - dx * tail, q.y - dy * tail);
+        gr.addColorStop(0, 'rgba(255,200,120,0.9)'); gr.addColorStop(1, 'rgba(255,90,40,0)');
+        g.strokeStyle = gr; g.lineWidth = 1.6;
+        g.beginPath(); g.moveTo(q.x, q.y); g.lineTo(q.x - dx * tail, q.y - dy * tail); g.stroke();
+        g.fillStyle = 'rgba(255,240,210,1)'; g.fillRect(q.x - 1, q.y - 1, 2, 2);
+        glow(g, q.x, q.y, 7, [255, 120, 60], 0.55, false);
+      } else if (p.kind === 'slug') {
+        const q = place(info, r, ship, toLocal, anchor(p.room), p.x, p.y, HERO.SLUG_SHOW, zFly);
+        if (!q) continue;
+        // a streak along its flight: from where it is back toward where it came from
+        const L = 22;
+        const gr = g.createLinearGradient(q.x, q.y, q.x + q.sx * L, q.y + q.sy * L);
+        gr.addColorStop(0, 'rgba(235,248,255,1)'); gr.addColorStop(1, 'rgba(140,200,255,0)');
+        g.strokeStyle = gr; g.lineWidth = 2.2;
+        g.beginPath(); g.moveTo(q.x, q.y); g.lineTo(q.x + q.sx * L, q.y + q.sy * L); g.stroke();
+        glow(g, q.x, q.y, 10, [170, 215, 255], 0.8, false);
+      }
+    }
+    // this hull's PDC tracers: each comes out of a living dome whose arc holds where it is going (mountSees),
+    // and runs to that point: a torpedo it is shooting at (placed as above), or past the edge toward their ship
+    const mounts = ship.form.mounts || [], enemy = battle.ships[side === 'me' ? 1 : 0];
+    for (const tr of battle.tracers || []) {
+      if (tr.owner !== ship.id) continue;
+      const domes = [];
+      mounts.forEach(([mx, my], i) => { const room = `pdc${i + 1}`; if (ship.pieces[room] && ship.pieces[room].alive && standing(ship, ship.cells[my] && ship.cells[my][mx]) && mountSees(ship, room, tr.x2, tr.y2)) domes.push([mx, my, room]); });
+      if (!domes.length) continue;
+      let n = tracerMount.get(tr);
+      if (n === undefined) tracerMount.set(tr, (n = ++tracerSeq));
+      const [mx, my, room] = domes[Math.floor(hash01(n * 7919) * domes.length)];
+      const a = [mx + 0.5, my + 0.5], zDome = info.top[room] !== undefined ? info.top[room] : HERO.WALL;
+      const atShip = Math.hypot(tr.x2 - enemy.x, tr.y2 - enemy.y) < 0.25; // a Rake: out past the edge
+      const q = place(info, r, ship, toLocal, a, tr.x2, tr.y2, atShip ? 1e-6 : HERO.TORP_SHOW, zDome);
+      if (!q) continue;
+      const D = q.A, len = Math.hypot(q.x - D.x, q.y - D.y), prog = clamp(1 - tr.ttl / 0.12, 0, 1);
+      const s0 = prog * (1 - HERO.TRACER_SEG) * len, s1 = s0 + HERO.TRACER_SEG * len;
+      const x0 = D.x + q.sx * s0, y0 = D.y + q.sy * s0, x1 = D.x + q.sx * s1, y1 = D.y + q.sy * s1;
+      const gr = g.createLinearGradient(x0, y0, x1, y1);
+      gr.addColorStop(0, 'rgba(255,210,120,0)'); gr.addColorStop(1, 'rgba(255,236,170,0.95)');
+      g.strokeStyle = gr; g.lineWidth = 1.1;
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+      if (prog < 0.35) glow(g, D.x, D.y, 5, [255, 210, 130], 0.5 * (1 - prog / 0.35), false); // muzzle flash on the dome
+    }
+    // torpedoes the PDCs killed: a short pop where the torpedo was
+    for (const k of fx[side].pops) {
+      const q = place(info, r, ship, toLocal, info.center, k.x, k.y, HERO.TORP_SHOW, zFly);
+      if (!q) continue;
+      const f = k.ttl / k.life;
+      glow(g, q.x, q.y, 12 * (1.4 - 0.4 * f), [255, 200, 120], 0.8 * f, false);
+    }
+    g.restore();
+  }
+
   return {
     draw, left, right, rect, onEvent, step,
-    reset() { for (const k in cache) delete cache[k]; seq = 0; fx = { me: newFx(), them: newFx() }; },
+    reset() { for (const k in cache) delete cache[k]; seq = 0; tracerSeq = 0; tracerMount = new WeakMap(); fx = { me: newFx(), them: newFx() }; },
   };
 }
