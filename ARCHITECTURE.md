@@ -590,6 +590,10 @@ Presentation only, behind `?hero=1`: reads events, never touches the sim; no per
   counted only round their mark; and AUTO blocked their picker. Now (`tapsThem`, TAC and the close-up, flag or not):
   their mark, their range label, the wedge's tip or its label open their layout; in AUTO or a replay it opens too, and a
   room tap shows what it is (no target).
+- Their cuts on TAC (2026-11-02, the owner: on TAC the enemy's cut did not show, Roci vs Belter). Every view now takes
+  both ships' beats; on TAC their window appears only while a cut of theirs plays (standing: at the right edge; flat
+  and heropop: top right), over the map; TAC's camera insets are unchanged. Checked: 3 modes x 2 views x 2 sides with
+  `?enemy=gunship`.
 - Risks: the panel covers the stage while it plays (the toggle is the way out); a code-drawn crew at 20 to 30 px may
   not read on the phone; unknown until the owner sees C1 and C3.
 
