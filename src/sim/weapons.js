@@ -96,6 +96,9 @@ function spawnTracers(battle, ship, target, dt, turrets = 1) {
 
 export function launchTorps(battle, ship, enemy) {
   const n = Math.min(ship.salvo, ship.torps);
+  // The closing speed the salvo wants: the launcher's own speed toward them (and theirs toward it) at
+  // launch, never less than 0, plus the torpedo's boost. The tube's kick (sideways spread) is not counted.
+  const want = Math.max(0, -battle.rangeRate()) + N.TORP_BOOST;
   for (let i = 0; i < n; i++) {
     const side = i % 2 === 0 ? 1 : -1;
     battle.projectiles.push({
@@ -105,7 +108,7 @@ export function launchTorps(battle, ship, enemy) {
       aim: aimFactor(ship), // the shooter's sensors at launch decide whether it finds its mark
       room: ship.target && alive(enemy, ship.target) ? ship.target : null, // the room it goes for, else whatever its ray meets
       side, dove: false,    // a buried room: swing wide on this side, then dive in; dove once past the shoulder
-      dead: false, age: 0,
+      dead: false, age: 0, want, dv: N.TORP_DV,
     });
   }
   ship.torps -= n;
@@ -117,38 +120,43 @@ export function launchTorps(battle, ship, enemy) {
 // to TORP_FLANK_SPEED, swings wide to a point TORP_FLANK beside the target (across the line from the
 // shooter), then turns in: slow enough to make the turn, a longer and slower flight inside PDC
 // range, so more of them die. It strikes from wherever it is when it goes off.
-// Returns {x, y, speed}: the point it homes on right now and its speed cap.
+// Returns {x, y, speed, exact}: the point it homes on right now, the closing speed it wants, and
+// whether it brakes to that speed (the swing) or only never goes slower (the run in).
 function torpAim(battle, t, target) {
   const buried = t.room && alive(target, t.room) && !exposed(target, t.room, shotFrom(target, t.x, t.y));
-  if (!buried) return { x: target.x, y: target.y, speed: N.TORP_SPEED };
-  const slow = N.TORP_SPEED * N.TORP_FLANK_SPEED;
-  if (t.dove) return { x: target.x, y: target.y, speed: slow };
+  if (!buried) return { x: target.x, y: target.y, speed: t.want, exact: false };
+  const slow = N.TORP_BOOST * N.TORP_FLANK_SPEED;
+  if (t.dove) return { x: target.x, y: target.y, speed: slow, exact: false };
   const shooter = battle.shipById(t.owner);
   const dx = target.x - shooter.x, dy = target.y - shooter.y;
   const d = Math.hypot(dx, dy) || 1e-6;
   const wx = target.x - (dy / d) * t.side * N.TORP_FLANK, wy = target.y + (dx / d) * t.side * N.TORP_FLANK;
-  if (Math.hypot(wx - t.x, wy - t.y) < N.TORP_FLANK * 0.5) { t.dove = true; return { x: target.x, y: target.y, speed: slow }; }
-  return { x: wx, y: wy, speed: slow };
+  if (Math.hypot(wx - t.x, wy - t.y) < N.TORP_FLANK * 0.5) { t.dove = true; return { x: target.x, y: target.y, speed: slow, exact: false }; }
+  return { x: wx, y: wy, speed: slow, exact: true };
 }
 
+// A torpedo has TORP_DV of drive. It steers its velocity relative to the target toward the line to
+// its aim point at the closing speed it wants (it never brakes on the run in: a faster closing is
+// kept), at TORP_HOMING at most, and every push costs drive. No speed cap: the launcher's speed and
+// the target's add up. Dry, it flies straight on: past the target it is a miss.
 export function stepTorp(battle, t, dt) {
   const target = battle.shipById(t.target);
   t.age += dt;
-  // homing: accelerate toward the aim point, cap speed
+  if (t.want === undefined) { t.want = N.TORP_BOOST; t.dv = N.TORP_DV; } // a torpedo from an older replay or a test
   const aim = torpAim(battle, t, target);
-  const ax = aim.x - t.x, ay = aim.y - t.y;
-  const da = Math.hypot(ax, ay) || 1e-6;
-  t.vx += (ax / da) * N.TORP_HOMING * dt;
-  t.vy += (ay / da) * N.TORP_HOMING * dt;
+  if (t.dv > 0) {
+    const ax = aim.x - t.x, ay = aim.y - t.y, da = Math.hypot(ax, ay) || 1e-6, ux = ax / da, uy = ay / da;
+    const rvx = t.vx - target.vx, rvy = t.vy - target.vy, along = rvx * ux + rvy * uy;
+    const want = aim.exact ? aim.speed : Math.max(along, aim.speed);
+    const ex = ux * want - rvx, ey = uy * want - rvy, el = Math.hypot(ex, ey);
+    const dv = Math.min(el, N.TORP_HOMING * dt, t.dv);
+    if (el > 1e-9) { t.vx += (ex / el) * dv; t.vy += (ey / el) * dv; t.dv -= dv; }
+  }
   const dBefore = Math.hypot(target.x - t.x, target.y - t.y);
-  // The speed cap is relative to the target, like the ships' own autopilot: a ship that has
-  // Burned itself up to 2 km/s is still caught. Before this, torpedoes chased such a ship forever.
-  const rvx = t.vx - target.vx, rvy = t.vy - target.vy;
-  const sp = Math.hypot(rvx, rvy);
-  if (sp > aim.speed) { t.vx = target.vx + rvx * (aim.speed / sp); t.vy = target.vy + rvy * (aim.speed / sp); }
   t.x += t.vx * dt; t.y += t.vy * dt;
   const d = Math.hypot(target.x - t.x, target.y - t.y);
   // Proximity fuse: go off at closest approach when that is inside TORP_FUSE, or on a direct hit.
+  // (At 4 km/s closing a step moves 0.07 km: well inside the fuse, so a fast one cannot skip it.)
   const closest = d > dBefore && dBefore < N.TORP_FUSE;
   if (d < 0.08 || closest) {
     t.dead = true;
@@ -157,7 +165,10 @@ export function stepTorp(battle, t, dt) {
       return;
     }
     strike(battle, target, 'torpHit', N.ROOM_HP, t.x, t.y, t.room); // from where it actually is
+    return;
   }
+  // Out of drive and going away from the target: it will never come back. A miss.
+  if (t.dv <= 0 && d > dBefore) { t.dead = true; battle.emit({ type: 'torpMiss', x: t.x, y: t.y, ship: target.id, dry: true }); }
 }
 
 export function stepRail(battle, ship, enemy, dt) {

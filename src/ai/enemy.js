@@ -55,8 +55,17 @@ function think(b, P, me, you, give, rng) {
     give(incoming ? 'guard' : 'rake');
   } else give(P.pdc);
 
-  // Torpedoes.
-  if (P.torps === 'always' || (P.torps === 'guardDown' && !pdcAlive(you))) give('torps');
+  // Torpedoes. A Burn first, bow to them, when the tubes are ready: the salvo leaves with the kick and
+  // arrives faster, less time under their PDCs (keeps one Burn for their railgun).
+  const wantTorps = P.torps === 'always' || (P.torps === 'guardDown' && !pdcAlive(you));
+  const bearingTo = Math.atan2(you.y - me.y, you.x - me.x), r0 = b.range();
+  if (wantTorps && P.burnSalvo && me.burns > 1 && me.torps > 0 && me.torpReload <= 0 && r0 > N.PDC_RANGE && r0 <= N.TORP_RANGE
+    && Math.abs(angleDiff(bearingTo, me.heading)) * 180 / Math.PI < N.AI_BURN_SALVO_CONE && rng.chance(P.burnSalvo)) give('burn');
+  if (wantTorps) give('torps');
+  // Burn out of a torpedo's way when one is close (keeps one Burn for their railgun).
+  // Not with the stern to them: that kick only opens the range (both doing it broke battles off).
+  if (P.torpDodge && me.burns > 1 && Math.cos(angleDiff(bearingTo, me.heading)) > -0.5 && b.projectiles.some((p) => p.kind === 'torp' && p.target === me.id && !p.dead
+    && Math.hypot(p.x - me.x, p.y - me.y) < N.AI_TORP_DODGE) && rng.chance(P.torpDodge)) give('burn');
 
   // Railgun: sure shot when they cannot dodge (no burns, or aiming themselves); otherwise a gamble.
   if (canAimRail(me) && (you.burns === 0 || you.railAim >= 0 || rng.chance(P.railGamble))) give('rail');

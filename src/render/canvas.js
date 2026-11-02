@@ -1004,7 +1004,7 @@ export function makeTactical(canvas, opts = {}) {
         }
         const sp = Math.hypot(p.vx, p.vy) || 1e-6;
         const dx = p.vx / sp, dy = p.vy / sp;
-        const len = 7 + 12 * Math.min(1, sp / N.TORP_SPEED);
+        const len = 7 + 12 * Math.min(1, sp / N.TORP_BOOST);
         const col = tint(p.owner);
         const flick = 0.8 + 0.2 * Math.sin(time * 40 + p.x * 7);
         ctx.strokeStyle = rgba(col, 0.35 * flick);
