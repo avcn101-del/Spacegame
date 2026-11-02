@@ -38,13 +38,17 @@ let battle, enemy, paused = false, slowmo = 0, acc = 0;
 // a hundred-odd px tall cannot show 12 km of vertical separation at a readable scale.
 const cssPx = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
 // ?hero=1 (spike, default off): my ship rear-oblique in a window at the left of both views (render/hero.js).
-// Its width joins the left inset, so the camera fit, the wedge and the labels keep clear of it. Off: no window,
-// the insets are exactly as before.
+// On the close-up the dock is hidden (body.hero) and their ship gets a window at the right; the world stage takes
+// the full height between them. The windows' widths join the insets, so the camera fit, the wedge and the labels
+// keep clear of them. Off: no window, no class, the insets are exactly as before.
 const hero = params.get('hero') === '1' ? makeHero(
   { tac: document.getElementById('tactical'), closeup: document.getElementById('cu-world') },
   () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status') }),
+  { twin: true },
 ) : null;
+if (hero) document.body.classList.add('hero');
 const heroLeft = (v) => (hero ? hero.left(v, battle) : 0);
+const heroRight = (v) => (hero ? hero.right(v, battle) : 0);
 const tactical = makeTactical(document.getElementById('tactical'), {
   // the part of the screen not covered by HUD; the camera fits the ships in here
   inset: () => ({ top: cssPx('--top'), bottom: cssPx('--bottom') + cssPx('--status'), left: hero ? heroLeft('tac') : 8, right: 8 }),
@@ -52,7 +56,7 @@ const tactical = makeTactical(document.getElementById('tactical'), {
 const closeup = makeCloseup(document.getElementById('closeup'));
 const picker = makePicker(document.getElementById('picker')); // TAC: their layout, to pick a target room
 const cuWorld = makeTactical(document.getElementById('cu-world'), {
-  inset: () => ({ top: 0, bottom: 0, left: heroLeft('closeup'), right: 0 }), camera: 'engage', quiet: true,
+  inset: () => ({ top: 0, bottom: 0, left: heroLeft('closeup'), right: heroRight('closeup') }), camera: 'engage', quiet: true,
   maxScale: 90, markPx: [36, 48], // knife range reads closer; big top-down hull marks
 });
 // Events and draws go only to the view on show, so a hidden view never replays old effects.

@@ -477,6 +477,11 @@ My ship as an object, rear-oblique, in a window at the left of both views. `src/
   go dark, cut and torn cells drop out.
 - Cache: one bitmap per battle, view, window size, dpr and hull state (dead, torn, cut); per frame only the plume,
   bell glow and lights (~0.05 ms). A bake costs 15 to 30 ms headless at dpr 2.6 (one-off; again on each room death).
+- PR A (2026-11-02, the owner after playing S1: the dock goes, both ships as objects). Under `?hero=1` the close-up
+  hides the dock (`body.hero #closeup`, so `#cu-world` takes the wrap's height) and draws their ship in a window at the
+  right edge, the same pose as mine (astern, bow up), edged in their colour; its width is the stage's RIGHT inset.
+  TAC keeps my window only. Not yet moved off the dock: the shake and the white flash (the dock owned them; with it
+  hidden the close-up has neither), tap-a-room on both ships (PR B: a tap on a window opens the picker), hit fx.
 - S2 (not built): bank, plume by thrust, Burn lines, hit flashes, local impact frame, scorch via a dock getter.
 
 ## Render module contract
