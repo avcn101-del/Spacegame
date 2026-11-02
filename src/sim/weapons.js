@@ -149,7 +149,10 @@ export function torpApply(battle, t, target) {
   if (!tachiCells) tachiCells = 158;
   const shooter = battle.shipById(t.owner);
   const S = N.TORP_APPLY_SIZE ? cellsOf(target) / tachiCells : 1, E = N.TORP_BLAST_SIZE || 1;
-  const V = Math.hypot(target.vx - shooter.vx, target.vy - shooter.vy), Ve = N.TORP_BLAST_SPEED || 0.5, k = N.TORP_APPLY_K || 0.5;
+  // V: how fast the target slides across the torpedo's path at the blast: its velocity square to the torpedo's own
+  // direction of flight (the map's frame, where both ships started at rest). A late Burn sideways leaves a slide.
+  const tv = Math.hypot(t.vx, t.vy) || 1e-6, px = -t.vy / tv, py = t.vx / tv;
+  const V = Math.abs((target.vx - t.vx) * px + (target.vy - t.vy) * py), Ve = N.TORP_BLAST_SPEED || 0.5, k = N.TORP_APPLY_K || 0.5;
   const sp = N.TORP_APPLY_SPEED && V > 1e-6 ? Math.pow((S / E) * (Ve / V), k) : Infinity;
   const f = Math.min(1, S / E, sp);
   if (battle.applyLog) battle.applyLog.push(f);
