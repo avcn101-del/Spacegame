@@ -133,10 +133,11 @@ function start(replay = null) {
   hud.setAuto(!!autoPilot);
   paused = false; slowmo = 0; acc = 0;
   const fitQ = fitString(battle.designs.me.fit);
-  history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}`);
+  history.replaceState(null, '', `?seed=${seed}${enemyPreset !== DEFAULT_PRESET ? `&enemy=${enemyPreset}` : ''}${myShip !== DEFAULT_DESIGN ? `&ship=${myShip}` : ''}${fitQ ? `&fit=${fitQ}` : ''}${hero ? '&hero=1' : ''}`); // the spike flag survives a reload
   picker.hide();
   for (const r of [tactical, cuWorld, closeup]) r.reset(battle); // nothing from the last battle carries over (camera, fx)
-  window.game = { battle, tactical, closeup, cuWorld, picker, setView, view: () => view, exportReplay: () => exportReplay(battle), perf }; // for debugging and tests
+  if (hero) hero.reset(); // the hero windows: new bake, no scorch, the fx counter back to 0
+  window.game = { battle, tactical, closeup, cuWorld, picker, hero, setView, view: () => view, exportReplay: () => exportReplay(battle), perf }; // for debugging and tests
 }
 
 // Phones: on the first touch, go fullscreen and ask for landscape. Best effort only.
@@ -213,10 +214,11 @@ function frame(now) {
         : `${T.lost[ev.ship]} ${T.tear[ev.end]}: ${names.join(', ')} ${T.adrift}.`, 4, 'event');
     }
     for (const r of VIEWS[view]) r.onEvent(ev);
+    if (hero) hero.onEvent(ev, battle); // every view: the hull's scorch is kept while a window is hidden
   }
   battle.events.length = 0;
   for (const r of VIEWS[view]) r.draw(battle, dtGame);
-  if (hero) hero.draw(view, battle);
+  if (hero) { hero.draw(view, battle); hero.step(dtGame); } // step after draw: an impact frame set this frame is drawn HERO.NEG frames
   picker.draw(battle, dtReal); // nothing unless open (TAC, or the close-up's hero windows)
   hud.draw(battle, paused, dtReal);
   perfPush(perfWork, performance.now() - t0);

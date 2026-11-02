@@ -482,7 +482,16 @@ My ship as an object, rear-oblique, in a window at the left of both views. `src/
   right edge, the same pose as mine (astern, bow up), edged in their colour; its width is the stage's RIGHT inset.
   TAC keeps my window only. The shake and the white flash: under the flag the world stage is not quiet (the same
   code TAC uses); the hero windows are drawn after it with their own transform, so they never shake. Not yet moved
-  off the dock: hit fx in the windows.
+  off the dock: nothing (hit fx below).
+- Hits in the windows (2026-11-02): `hero.onEvent` gets every event in every view (the scorch is kept while a window
+  is hidden); `hero.reset()` only in `start()`. pdcHit: sparks and a small glow at `ev.at`; torpHit: a bigger burst
+  and glow; railHit: burst, glow and a negative impact frame (`HERO.NEG` drawn frames, counted only while the game
+  runs, inverting that window only); pieceDead (job rooms): a fire glow at the room's centroid, sparks, then smoke
+  for `HERO.SMOKE_TIME`; tear: the impact frame and sparks from the rooms that went. Scorch: the owner chose (the
+  dock is hidden under the flag and its charMap only fills while it draws) that the hero keeps its own map per cell,
+  the dock's amounts and cap (`HERO.SCORCH`, 0.75), drawn per frame, skipped on cells that tore off. Every effect
+  sits on a form cell and the room's block height and is projected when drawn. Seeds: a counter reset per battle.
+  `start()` keeps `&hero=1` in the URL it rewrites, so a reload keeps the flag. `window.game.hero` for tests.
 - PR B (tap-a-room under the flag): a tap on a hero window on the close-up opens the TAC picker (`picker.js`, now
   with a side) centred on the stage between the windows. Their window: their layout, bow left, tap a standing room to
   target it (`tapThem`, not in a replay or AUTO). My window: "my layout" (`T.picker.mine`), bow right, my colour, tap
