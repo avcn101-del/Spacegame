@@ -50,16 +50,10 @@ const hero = params.get('hero') === '1' ? makeHero(
 if (hero) document.body.classList.add('hero');
 const heroLeft = (v) => (hero ? hero.left(v, battle) : 0);
 const heroRight = (v) => (hero ? hero.right(v, battle) : 0);
-// ?hero=1: CINE-2D cut shots (render/cine.js). A panel over the middle of the view's stage (between the hero windows,
-// clear of the HUD) on a room death or a tear; a tap anywhere skips it (and still does what it does); the CINE button
-// in the header turns them off (kept on this phone). Flag off: no button, no listener, nothing drawn.
-const cineStage = (v) => {
-  const cv = document.getElementById(v === 'tac' ? 'tactical' : 'cu-world');
-  if (v === 'tac') { const top = cssPx('--top'), l = heroLeft('tac'); return { x: l, y: top, w: cv.clientWidth - l - 8, h: cv.clientHeight - top - cssPx('--bottom') - cssPx('--status') }; }
-  const l = heroLeft('closeup'), r = heroRight('closeup');
-  return { x: l, y: 0, w: cv.clientWidth - l - r, h: cv.clientHeight };
-};
-const cine = hero ? makeCine({ tac: document.getElementById('tactical'), closeup: document.getElementById('cu-world') }, cineStage) : null;
+// ?hero=1: CINE-2D cut shots (render/cine.js picks the beats; render/hero.js draws them: the hit ship's window grows
+// over the stage and zooms on the impact). A tap anywhere skips it (and still does what it does); the CINE button in
+// the header turns them off (kept on this phone). Flag off: no button, no listener, nothing drawn.
+const cine = hero ? makeCine((side) => view === 'closeup' || side === 'me') : null; // TAC: my window only
 if (cine) {
   const b = document.createElement('button');
   b.id = 'cine';
@@ -240,8 +234,8 @@ function frame(now) {
   }
   battle.events.length = 0;
   for (const r of VIEWS[view]) r.draw(battle, dtGame);
-  if (hero) { hero.draw(view, battle); hero.step(dtGame); }
-  if (cine) { cine.draw(view); cine.step(dtReal); } // real time: the shot plays through the slow-mo and a pause // step after draw: an impact frame set this frame is drawn HERO.NEG frames
+  if (hero) { hero.draw(view, battle, cine && cine.current()); hero.step(dtGame); } // step after draw: an impact frame set this frame is drawn HERO.NEG frames
+  if (cine) cine.step(dtReal); // real time: the cut plays through the slow-mo and a pause
   picker.draw(battle, dtReal); // nothing unless open (TAC, or the close-up's hero windows)
   hud.draw(battle, paused, dtReal);
   perfPush(perfWork, performance.now() - t0);

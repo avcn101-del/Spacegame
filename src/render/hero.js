@@ -12,6 +12,8 @@ import { DESIGNS } from '../ships/index.js';
 import { isPdc, mountSees } from '../sim/ship.js';
 import { roomColor } from './form.js';
 import { LOOK, drawPlume, glow, hash01, renderDpr } from './look.js';
+import { INTERIOR } from './interior.js';
+import { CINE } from './cine.js';
 
 // Visual-only knobs. Not game numbers.
 export const HERO = {
@@ -401,28 +403,32 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
   }
   // the window rect of a side in a view (css px), or null: for taps
   const rect = (view, battle, side) => (battle && sides(view).includes(side) ? rectFor(view, battle.ships[side === 'me' ? 0 : 1], side) : null);
-  function draw(view, battle) {
-    for (const side of sides(view)) drawOne(view, battle, side);
+  // shot: the CINE cut playing (cine.current()), or null; it is drawn in the window of the ship it is about
+  function draw(view, battle, shot = null) {
+    for (const side of sides(view)) drawOne(view, battle, side, shot && shot.side === side ? shot : null);
   }
-  function drawOne(view, battle, side) {
+  function drawOne(view, battle, side, shot) {
     const cv = canvases[view], ship = battle.ships[side === 'me' ? 0 : 1], r = rectFor(view, ship, side);
     if (!r) return;
     const dpr = renderDpr(), key = `${battle.seed}|${view}|${r.w}x${r.h}@${dpr}|${hullKey(ship)}`;
     if (!cache[side] || cache[side].key !== key) cache[side] = { key, ...bake(ship, r.w, r.h, dpr) };
     const c = cache[side];
     const g = cv.getContext('2d');
+    // a cut: the window grows over the stage (R) and the camera pushes on the impact (cam); the bake stays at r's size
+    const cut = shot ? cutFrame(shot, r, cv.clientWidth, c.info, ship, side) : null, R = cut ? cut.R : r;
     g.save();
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.translate(r.x, r.y);
+    g.translate(R.x, R.y);
     // the window: dark glass, rounded; on the close-up it sits on the stage's edge, square on that side
     const rad = HERO.RADIUS, corners = view !== 'closeup' ? rad : side === 'me' ? [0, rad, rad, 0] : [rad, 0, 0, rad];
     g.beginPath();
-    if (g.roundRect) g.roundRect(0, 0, r.w, r.h, corners); else g.rect(0, 0, r.w, r.h);
-    const bg = g.createLinearGradient(0, 0, 0, r.h);
+    if (g.roundRect) g.roundRect(0, 0, R.w, R.h, corners); else g.rect(0, 0, R.w, R.h);
+    const bg = g.createLinearGradient(0, 0, 0, R.h);
     bg.addColorStop(0, `rgba(10,15,26,${HERO.ALPHA})`); bg.addColorStop(1, `rgba(4,6,11,${HERO.ALPHA})`);
     g.fillStyle = bg; g.fill();
     g.strokeStyle = side === 'me' ? 'rgba(140,165,200,0.28)' : 'rgba(255,160,80,0.32)'; g.lineWidth = 1; g.stroke(); // their window edged in their colour
     g.clip();
+    if (cut) { g.save(); g.translate(cut.A.x - cut.Z * cut.F.x, cut.A.y - cut.Z * cut.F.y); g.scale(cut.Z, cut.Z); }
     const t = battle.t || 0, info = c.info;
     // the idle plume, behind the bell's mouth toward the camera
     if (info.bell) {
@@ -440,7 +446,156 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
       g.fillStyle = css(L.col, Math.min(1, a + 0.3)); g.beginPath(); g.arc(L.x, L.y, 1.1, 0, Math.PI * 2); g.fill();
       glow(g, L.x, L.y, 6, L.col, a * 0.6, false);
     }
+    if (cut) {
+      drawCut(g, shot, cut, info, ship, r, dpr);
+      g.restore();
+      // the flash of the impact, over the whole window
+      if (shot.age < 0.08) { g.fillStyle = `rgba(255,255,255,${0.75 * (1 - shot.age / 0.08)})`; g.fillRect(0, 0, R.w, R.h); }
+    }
     g.restore();
+  }
+
+  // --- the CINE cut (render/cine.js picks the beat; it is drawn here, on the ship it hit) ----------------------------
+  // The window grows from its width to CINE.W of the screen toward the stage, the camera pushes on the room (or the
+  // break), the room's hull rips into pieces (one per half cell, flying out from the impact and along the shot), a
+  // burning hole is left, the room's interior (render/interior.js) flashes through it; a tear: the section that broke
+  // off (baked on its own from the cells that went) drifts away and turns. The live bake under it already shows the
+  // room dead (a room's death rebakes the hull): the flash covers the swap. All in the window's own coordinates.
+  const ease = (x) => x * x * (3 - 2 * x);
+  let cutKey = 0, cutMem = null; // what the cut playing has built once: the chunks, the section's bake
+  function cutFrame(shot, r, cw, info, ship, side) {
+    const a = shot.age, T = CINE.TIME;
+    const grow = ease(clamp(Math.min(a / CINE.GROW, (T - a) / CINE.SHRINK), 0, 1));
+    const v = ease(clamp(Math.min(a / CINE.ZOOM_IN, (T - a) / CINE.ZOOM_OUT), 0, 1));
+    const Z = 1 + ((shot.kind === 'tear' ? CINE.ZOOM_TEAR : CINE.ZOOM) - 1) * v;
+    const maxW = Math.max(r.w, Math.round(cw * CINE.W)), W = r.w + (maxW - r.w) * grow;
+    const R = { x: side === 'me' ? r.x : r.x + r.w - W, y: r.y, w: W, h: r.h }, dx = r.x - R.x;
+    const m = centroidOf(shot.cells), z = shot.kind === 'room' ? HERO.WALL + (HERO.HEIGHT[shot.rk] || 0) : HERO.WALL;
+    const F = info.pr.P(m[0], m[1], z);
+    const A = { x: F.x + dx + (W / 2 - F.x - dx) * v, y: F.y + (r.h * 0.5 - F.y) * v };
+    return { R, Z, F, A, z, m };
+  }
+  const centroidOf = (cs) => [cs.reduce((q, c) => q + c[0] + 0.5, 0) / cs.length, cs.reduce((q, c) => q + c[1] + 0.5, 0) / cs.length];
+  const quad = (P, x, y, z) => [P(x, y, z), P(x + 1, y, z), P(x + 1, y + 1, z), P(x, y + 1, z)];
+  // Built once per cut: the hull pieces (two triangles per cell of the room, or of the break for a tear) and the
+  // section's own bake for a tear.
+  function cutBuild(shot, cut, info, ship, r, dpr) {
+    const P = info.pr.P, hs = (i) => hash01(shot.s * 7919 + i);
+    const [dX, dY] = screenDir(info, cut.m, -shot.bear[0], -shot.bear[1], cut.z); // the way the shot travels
+    // hull plate: steel, a touch of the room's colour
+    const top = shot.kind === 'room' ? mix(STEEL, roomColor(shot.room) || STEEL, 0.2) : STEEL;
+    let src = shot.cells.map((c) => [c[0], c[1], cut.z, 1]);
+    if (shot.kind === 'tear') { const ex = shot.end === 'bow' ? Math.min(...src.map((c) => c[0])) : Math.max(...src.map((c) => c[0])); src = src.filter((c) => c[0] === ex); }
+    else { // the plating round the room peels off too, slower: the hull rips, not one room
+      const inRoom = new Set(shot.cells.map(([x, y]) => `${x},${y}`));
+      for (const [x, y] of shot.cells) for (const [ddx, ddy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + ddx, ny = y + ddy, k = `${nx},${ny}`;
+        if (inRoom.has(k) || !standing(ship, ship.cells[ny] && ship.cells[ny][nx])) continue;
+        inRoom.add(k); if (hs(nx * 31 + ny) < 0.6) src.push([nx, ny, HERO.WALL, 0.55]);
+      }
+    }
+    const chunks = [];
+    src.forEach(([x, y, zz, spd]) => {
+      const q = quad(P, x, y, zz);
+      for (const tri of [[q[0], q[1], q[2]], [q[0], q[2], q[3]]]) {
+        const k = chunks.length, cx = (tri[0].x + tri[1].x + tri[2].x) / 3, cy = (tri[0].y + tri[1].y + tri[2].y) / 3;
+        let rx = cx - cut.F.x, ry = cy - cut.F.y; const rl = Math.hypot(rx, ry);
+        if (rl < 0.5) { const t0 = hs(k) * Math.PI * 2; rx = Math.cos(t0); ry = Math.sin(t0); } else { rx /= rl; ry /= rl; }
+        let vx = rx + dX * 0.7 + (hs(k + 300) - 0.5) * 0.8, vy = ry + dY * 0.7 - 0.5 + (hs(k + 400) - 0.5) * 0.8;
+        const vl = Math.hypot(vx, vy) || 1, sp = (25 + 55 * hs(k + 100)) * spd;
+        chunks.push({ cx, cy, pts: tri.map((p) => [p.x - cx, p.y - cy]), vx: vx / vl * sp, vy: vy / vl * sp, spin: (hs(k + 200) - 0.5) * 9, col: mul(top, 0.65 + 0.6 * hs(k + 500)) });
+      }
+    });
+    let section = null;
+    if (shot.kind === 'tear') { // the cells that went, standing again, baked alone at the window's size
+      const set = new Set(shot.cells.map(([x, y]) => `${x},${y}`));
+      const fake = { ...ship, cells: ship.cells.map((row, y) => row.map((c, x) => (c && set.has(`${x},${y}`) ? { ...c, cut: false } : null))),
+        pieces: Object.fromEntries(Object.entries(ship.pieces).map(([id, p]) => [id, { ...p, torn: false, alive: p.alive || p.torn }])) };
+      section = bake(fake, r.w, r.h, dpr).canvas;
+    }
+    return { chunks, section, dX, dY };
+  }
+  function drawCut(g, shot, cut, info, ship, r, dpr) {
+    if (cutKey !== shot.s || !cutMem) { cutKey = shot.s; cutMem = cutBuild(shot, cut, info, ship, r, dpr); }
+    const M = cutMem, P = info.pr.P, a = shot.age, c = info.pr.c, hs = (i) => hash01(shot.s * 104729 + i);
+    const fade = clamp((CINE.TIME - a) / 0.3, 0, 1), col = shot.kind === 'room' ? (BLAST[shot.rk] || {}).col || [255, 150, 60] : [255, 220, 170];
+    const hf = (i) => hash01(shot.s * 89 + i + Math.floor(a * 25) * 131);
+    // the shot coming in along its real bearing, the first 0.06 s
+    if (a < 0.06 && shot.kind === 'room') {
+      const k = a / 0.06, L = 140, sx = cut.F.x - M.dX * L, sy = cut.F.y - M.dY * L;
+      const hx = sx + (cut.F.x - sx) * k, hy = sy + (cut.F.y - sy) * k;
+      const sc = { rail: [220, 240, 255], torp: [255, 160, 80], pdc: [255, 225, 140] }[shot.cause] || [255, 230, 200];
+      g.strokeStyle = css(sc, 0.9); g.lineWidth = 1.5; g.beginPath(); g.moveTo(hx - M.dX * 30, hy - M.dY * 30); g.lineTo(hx, hy); g.stroke();
+      glow(g, hx, hy, 8, sc, 0.9, false);
+    }
+    if (shot.kind === 'tear' && M.section) {
+      // the section drifts off along its end and turns; sparks and glow on the break
+      const t = Math.max(0, a - 0.04), sgn = shot.end === 'bow' ? 1 : -1;
+      const [ux, uy] = screenDir(info, cut.m, sgn, 0, HERO.WALL), d = 18 * t + 30 * t * t;
+      g.save(); g.translate(cut.F.x + ux * d, cut.F.y + uy * d); g.rotate(sgn * 0.35 * t); g.translate(-cut.F.x, -cut.F.y);
+      g.drawImage(M.section, 0, 0, r.w, r.h); g.restore();
+    } else if (shot.kind === 'room') {
+      // the hole: the room's cells at deck height, dark, fire inside, a hot rim
+      const qs = shot.cells.map(([x, y]) => quad(P, x, y, HERO.WALL));
+      const path = () => { g.beginPath(); for (const q of qs) { g.moveTo(q[0].x, q[0].y); for (let i = 1; i < 4; i++) g.lineTo(q[i].x, q[i].y); g.closePath(); } };
+      path(); g.fillStyle = `rgba(3,4,6,${0.92 * clamp(a / 0.05, 0, 1) * (0.4 + 0.6 * fade)})`; g.fill();
+      // the interior, for a moment, through the hole
+      const w = clamp(Math.min((a - 0.1) / 0.08, (0.6 - a) / 0.15), 0, 1);
+      if (w > 0) {
+        g.save(); path(); g.clip(); g.globalAlpha = w;
+        const xs = shot.cells.map((q) => q[0]), ys = shot.cells.map((q) => q[1]), box = { x0: Math.min(...xs), x1: Math.max(...xs) + 1, y0: Math.min(...ys), y1: Math.max(...ys) + 1 };
+        const cp = 20, O = P(box.x0, box.y0, HERO.WALL), ex = P(box.x0 + 1, box.y0, HERO.WALL), ey = P(box.x0, box.y0 + 1, HERO.WALL);
+        const ax = (ex.x - O.x) / cp, ay = (ex.y - O.y) / cp, bx = (ey.x - O.x) / cp, by = (ey.y - O.y) / cp;
+        g.transform(ax, ay, bx, by, O.x - ax * box.x0 * cp - bx * box.y0 * cp, O.y - ay * box.x0 * cp - by * box.y0 * cp);
+        g.fillStyle = '#26303b'; for (const [x, y] of shot.cells) g.fillRect(x * cp, y * cp, cp + 0.5, cp + 0.5);
+        const bl = Math.hypot(shot.bear[0], shot.bear[1]) || 1;
+        const sh = { s: shot.s, breach: { x: (cut.m[0] + shot.bear[0] / bl) * cp, y: (cut.m[1] + shot.bear[1] / bl) * cp } };
+        (INTERIOR[shot.rk] || INTERIOR.generic)(g, { sh, cells: shot.cells, box, X: (gx) => gx * cp, Y: (gy) => gy * cp, s: cp, a, h: (i) => hash01(shot.s * 97 + i), hf });
+        g.fillStyle = `rgba(255,30,20,${0.2 + 0.12 * Math.sin(a * 18)})`; g.fillRect(box.x0 * cp, box.y0 * cp, (box.x1 - box.x0) * cp, (box.y1 - box.y0) * cp);
+        g.restore();
+      }
+      qs.forEach((q, i) => { const m = { x: (q[0].x + q[2].x) / 2, y: (q[0].y + q[2].y) / 2 }; glow(g, m.x, m.y, c * 1.2, col, (0.15 + 0.3 * hf(i)) * fade, false); }); // fire inside, flickering
+      // a hot, torn rim on the hole's outer edges only (jagged), not a grid
+      const inR = new Set(shot.cells.map(([x, y]) => `${x},${y}`));
+      g.beginPath();
+      shot.cells.forEach(([x, y], i) => {
+        const q = qs[i];
+        [0, 1, 2, 3].forEach((e) => { // quad edge e runs q[e] to q[e+1]; its neighbour cell: (x, y-1), (x+1, y), (x, y+1), (x-1, y)
+          const nb = e === 0 ? [x, y - 1] : e === 1 ? [x + 1, y] : e === 2 ? [x, y + 1] : [x - 1, y];
+          if (inR.has(`${nb[0]},${nb[1]}`)) return;
+          const A = e === 0 ? q[0] : e === 1 ? q[1] : e === 2 ? q[2] : q[3], B = e === 0 ? q[1] : e === 1 ? q[2] : e === 2 ? q[3] : q[0];
+          g.moveTo(A.x, A.y);
+          for (let j = 1; j < 4; j++) { const f = j / 4; g.lineTo(A.x + (B.x - A.x) * f + (hs(i * 40 + e * 8 + j) - 0.5) * c * 0.35, A.y + (B.y - A.y) * f + (hs(i * 40 + e * 8 + j + 4) - 0.5) * c * 0.35); }
+          g.lineTo(B.x, B.y);
+        });
+      });
+      g.strokeStyle = `rgba(255,${120 + 80 * hf(1)},50,${0.85 * fade})`; g.lineWidth = 0.9; g.stroke();
+    }
+    // the hull in pieces: out from the impact and along the shot, turning; hot edges cool
+    const t = Math.max(0, a - 0.03);
+    for (const k of M.chunks) {
+      const x = k.cx + k.vx * t * (1 - 0.2 * t), y = k.cy + k.vy * t * (1 - 0.2 * t), rot = k.spin * t, cs = Math.cos(rot), sn = Math.sin(rot);
+      g.beginPath();
+      k.pts.forEach(([px, py], i) => g[i ? 'lineTo' : 'moveTo'](x + px * cs - py * sn, y + px * sn + py * cs));
+      g.closePath();
+      g.fillStyle = css(k.col, fade); g.fill();
+      g.strokeStyle = `rgba(255,${150 + 80 * clamp(1 - t / 0.5, 0, 1)},80,${clamp(1 - t / 0.6, 0, 1) * fade})`; g.lineWidth = 0.6; g.stroke();
+    }
+    // sparks and a fireball at the impact
+    for (let i = 0; i < 36; i++) {
+      const life = 0.3 + 0.4 * hs(i), k = t / life; if (k >= 1) continue;
+      const an = hs(i + 50) * Math.PI * 2, sp = 50 + 110 * hs(i + 90);
+      const sx = cut.F.x + (Math.cos(an) + M.dX * 0.5) * sp * t, sy = cut.F.y + (Math.sin(an) + M.dY * 0.5) * sp * t;
+      g.strokeStyle = `rgba(255,${190 + 60 * hs(i + 7)},120,${1 - k})`; g.lineWidth = 0.8;
+      g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx - Math.cos(an) * 3, sy - Math.sin(an) * 3); g.stroke();
+    }
+    glow(g, cut.F.x, cut.F.y, c * (4 + 6 * clamp(t / 0.3, 0, 1)), col, 1 - clamp(t / 0.5, 0, 1), true);
+    // smoke rising out of it
+    for (let i = 0; i < 5; i++) {
+      const ph = ((a - 0.25) * 0.8 + i / 5) % 1; if (a < 0.25 || ph < 0) continue;
+      g.fillStyle = `rgba(70,72,78,${0.4 * (1 - ph) * fade})`;
+      g.beginPath(); g.arc(cut.F.x + (hs(i + 600) - 0.5) * c * 3, cut.F.y - ph * c * 6, c * (0.6 + ph * 1.4), 0, Math.PI * 2); g.fill();
+    }
   }
 
   // --- hits: what the sim's events did to each hull, drawn in that hull's window ----------------------------
@@ -600,7 +755,7 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
       g.fillRect(p.x + q.ox - 0.8, p.y + q.oy - 0.8, 1.6, 1.6);
     }
     // the negative impact frame: inverts this window only, one or two frames
-    if (f.neg > 0 && running) { g.save(); g.globalCompositeOperation = 'difference'; g.fillStyle = '#fff'; g.fillRect(0, 0, r.w, r.h); g.restore(); }
+    if (f.neg > 0 && running) { g.save(); g.globalCompositeOperation = 'difference'; g.fillStyle = '#fff'; g.fillRect(-1e4, -1e4, 2e4, 2e4); g.restore(); } // the window's clip bounds it, zoomed or not
   }
 
   // --- incoming: torpedoes and slugs in flight toward a hull, and its own PDC tracers out of the domes ---------
@@ -707,6 +862,6 @@ export function makeHero(canvases, hud, { twin = false } = {}) {
 
   return {
     draw, left, right, rect, onEvent, step,
-    reset() { for (const k in cache) delete cache[k]; seq = 0; tracerSeq = 0; tracerMount = new WeakMap(); fx = { me: newFx(), them: newFx() }; },
+    reset() { for (const k in cache) delete cache[k]; seq = 0; cutKey = 0; cutMem = null; tracerSeq = 0; tracerMount = new WeakMap(); fx = { me: newFx(), them: newFx() }; },
   };
 }

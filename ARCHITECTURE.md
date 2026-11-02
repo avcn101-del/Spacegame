@@ -554,6 +554,17 @@ Presentation only, behind `?hero=1`: reads events, never touches the sim; no per
   (bunks on the walls, tables; loose things pulled out of the breach), sensors (radar sweeps stop, static, crackle),
   pdc (turret, ammo belt cooking off round by round); `generic` for a kind added later. The blast (hole, debris, glow)
   is sized in a unit capped at 40 px, so a one-cell room's hole does not fill the panel.
+- R1 (2026-11-02, the owner after C1 and C2 on the phone: a room blowing up in a panel away from the ship does not read;
+  the impact must be seen on the ship, ripped into pieces). The panel is gone. `cine.js` only picks beats (`makeCine(shows)`,
+  `current()`); a beat the view cannot show (theirs on TAC) is not taken. `hero.draw(view, battle, shot)` draws the cut in
+  the hit ship's window: it grows to `CINE.W` (0.45, the owner's pick) of the screen toward the stage in 0.15 s, the camera
+  pushes x2.6 on the room (x1.5 on a tear's section) and pulls back at the end; the bake stays at the window's own size (a
+  zoomed bitmap, soft). Room: the shot streaks in on its real bearing, flash, the room's cells and some plating round it
+  break into triangles that fly out from the impact and along the shot, turning; a dark hole with a jagged hot rim and
+  fire inside; the room's interior (`render/interior.js`, C2's INTERIOR, laid onto the hull by a local affine of the
+  projection) shows through the hole from 0.1 to 0.6 s; sparks, fireball, smoke. The live bake under it already has the
+  room dead: the flash covers the swap. Tear: the cells that broke off baked on their own (a copy of the ship with only
+  them, standing) drift off along their end and turn, pieces off the break. A tear costs one more bake at the beat.
 - Risks: the panel covers the stage while it plays (the toggle is the way out); a code-drawn crew at 20 to 30 px may
   not read on the phone; unknown until the owner sees C1 and C3.
 
