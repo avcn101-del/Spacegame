@@ -139,6 +139,23 @@ function torpAim(battle, t, target) {
 // its aim point at the closing speed it wants (it never brakes on the run in: a faster closing is
 // kept), at TORP_HOMING at most, and every push costs drive. No speed cap: the launcher's speed and
 // the target's add up. Dry, it flies straight on: past the target it is a miss.
+// EXPERIMENT (EVE-style damage application, off by default): the share of a torpedo's harm that lands. S: the target's
+// size (hull cells over the Tachi's), E: the blast's size, V: the target's speed relative to the launcher, Ve: the blast's
+// speed; min(1, S/E, (S/E * Ve/V)^k). TORP_APPLY_SPEED / TORP_APPLY_SIZE switch each part on.
+let tachiCells = 0;
+const cellsOf = (ship) => ship.cells.reduce((n, row) => n + row.filter(Boolean).length, 0); // the whole form: a hull that lost cells is not a smaller target
+export function torpApply(battle, t, target) {
+  if (!N.TORP_APPLY_SPEED && !N.TORP_APPLY_SIZE) return 1;
+  if (!tachiCells) tachiCells = 158;
+  const shooter = battle.shipById(t.owner);
+  const S = N.TORP_APPLY_SIZE ? cellsOf(target) / tachiCells : 1, E = N.TORP_BLAST_SIZE || 1;
+  const V = Math.hypot(target.vx - shooter.vx, target.vy - shooter.vy), Ve = N.TORP_BLAST_SPEED || 0.5, k = N.TORP_APPLY_K || 0.5;
+  const sp = N.TORP_APPLY_SPEED && V > 1e-6 ? Math.pow((S / E) * (Ve / V), k) : Infinity;
+  const f = Math.min(1, S / E, sp);
+  if (battle.applyLog) battle.applyLog.push(f);
+  return f;
+}
+
 export function stepTorp(battle, t, dt) {
   const target = battle.shipById(t.target);
   t.age += dt;
@@ -164,7 +181,7 @@ export function stepTorp(battle, t, dt) {
       battle.emit({ type: 'torpMiss', x: t.x, y: t.y, ship: target.id });
       return;
     }
-    strike(battle, target, 'torpHit', N.ROOM_HP, t.x, t.y, t.room); // from where it actually is
+    strike(battle, target, 'torpHit', N.ROOM_HP * torpApply(battle, t, target), t.x, t.y, t.room); // from where it actually is
     return;
   }
   // Out of drive and going away from the target: it will never come back. A miss.
