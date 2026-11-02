@@ -580,6 +580,11 @@ Presentation only, behind `?hero=1`: reads events, never touches the sim; no per
   close-up opens that ship's layout (no window to tap). The bake now works per layer in the box a mask covers
   (`devBox`: stack, block tops, rims, the key light), not the whole window: same pixels (checked against main), a bake
   at 844 x 390 dpr 2.6 headless 61 -> 38 ms (standing), 100 -> 44 ms (heropop).
+- SHIP (2026-11-02, the owner: a tab for both ships' status, target from it): under `hero=1` a SHIP button (header,
+  after the view button) toggles `body.ship`, which shows the dock again (`body.hero:not(.ship) #closeup` hides it): the
+  close-up's stage on top, the dock below as before PR 58; taps on the dock target their rooms / inspect mine as they
+  always did. On TAC it switches to the close-up with the dock. The dock is reset when it shows (its scorch only fills
+  while it draws). Header under the flag: 9 columns, the title slot ~97 px at 844.
 - Risks: the panel covers the stage while it plays (the toggle is the way out); a code-drawn crew at 20 to 30 px may
   not read on the phone; unknown until the owner sees C1 and C3.
 

@@ -112,7 +112,8 @@ body.tac #closeup-wrap { display: none; }
 #cu-world { flex: 1 1 auto; min-height: 0; width: 100%; display: block; touch-action: none; }
 #closeup { flex: 0 0 auto; height: clamp(96px, 40%, 150px); width: 100%; display: block; touch-action: none; border-top: 1px solid var(--line); }
 /* ?hero=1: one more header button (CINE, the cut shots' toggle) */
-body.hero header { grid-template-columns: 90px 130px 1fr 110px 84px 56px 84px 60px; }
-body.hero #cine { height: 26px; font-size: 11px; letter-spacing: 0.15em; color: var(--dim); }
+body.hero header { grid-template-columns: 90px 130px 1fr 110px 84px 56px 56px 84px 60px; } /* + SHIP, CINE */
+body.hero #ship.on { border-color: var(--me); color: var(--me); }
+body.hero #ship, body.hero #cine { height: 26px; font-size: 11px; letter-spacing: 0.15em; color: var(--dim); }
 body.hero #cine.on { border-color: var(--ok); color: var(--ok); }
-body.hero #closeup { display: none; } /* ?hero=1: the two hero windows replace the dock; the world stage takes its height */
+body.hero:not(.ship) #closeup { display: none; } /* ?hero=1: the two hero windows replace the dock; the world stage takes its height */
