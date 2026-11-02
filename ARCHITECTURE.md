@@ -585,6 +585,11 @@ Presentation only, behind `?hero=1`: reads events, never touches the sim; no per
   close-up's stage on top, the dock below as before PR 58; taps on the dock target their rooms / inspect mine as they
   always did. On TAC it switches to the close-up with the dock. The dock is reset when it shows (its scorch only fills
   while it draws). Header under the flag: 9 columns, the title slot ~97 px at 844.
+- Tap their ship, consistent (2026-11-02, the owner: on the close-up a tap on mine opened the picker, on theirs not).
+  Cause: at long range the anchored stage keeps them off it, only the wedge and its label on the edge, and a tap
+  counted only round their mark; and AUTO blocked their picker. Now (`tapsThem`, TAC and the close-up, flag or not):
+  their mark, their range label, the wedge's tip or its label open their layout; in AUTO or a replay it opens too, and a
+  room tap shows what it is (no target).
 - Risks: the panel covers the stage while it plays (the toggle is the way out); a code-drawn crew at 20 to 30 px may
   not read on the phone; unknown until the owner sees C1 and C3.
 
